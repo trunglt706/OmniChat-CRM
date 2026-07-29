@@ -25,26 +25,26 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      <div className="w-full max-w-sm space-y-8 animate-fade-in">
+    <div className="min-h-screen flex items-center justify-center login-mesh p-4">
+      <div className="w-full max-w-sm space-y-8 animate-slide-up">
         {/* Logo */}
-        <div className="flex flex-col items-center gap-3">
-          <div className="h-14 w-14 rounded-2xl bg-primary flex items-center justify-center shadow-lg">
-            <Headphones className="h-7 w-7 text-primary-foreground" />
+        <div className="flex flex-col items-center gap-4">
+          <div className="login-logo h-16 w-16 rounded-2xl flex items-center justify-center">
+            <Headphones className="h-8 w-8 text-white" />
           </div>
           <div className="text-center">
-            <h1 className="text-2xl font-bold tracking-tight">OmniChat</h1>
-            <p className="text-sm text-muted-foreground mt-1">
+            <h1 className="text-2xl font-bold tracking-tight bg-gradient-to-r from-foreground to-foreground/60 bg-clip-text">OmniChat</h1>
+            <p className="text-sm text-muted-foreground/60 mt-1.5 font-medium">
               Multi-Channel Customer Support
             </p>
           </div>
         </div>
 
         {/* Login Card */}
-        <div className="border border-border rounded-xl p-6 space-y-6 bg-card">
+        <div className="login-card rounded-2xl p-7 space-y-6">
           <div className="text-center space-y-1">
-            <h2 className="text-lg font-semibold">Đăng nhập</h2>
-            <p className="text-xs text-muted-foreground">
+            <h2 className="text-lg font-bold tracking-tight">Đăng nhập</h2>
+            <p className="text-xs text-muted-foreground/50 font-medium">
               {isGoogleAuth
                 ? 'Đăng nhập bằng tài khoản Google'
                 : 'Chào mừng đến với OmniChat Demo'}
@@ -54,7 +54,7 @@ export default function LoginPage() {
           <Button
             onClick={handleLogin}
             disabled={loading}
-            className="w-full h-11 text-sm font-medium gap-3"
+            className="w-full h-11 text-sm font-semibold gap-3 rounded-xl bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600 shadow-lg shadow-indigo-500/20 hover:shadow-xl hover:shadow-indigo-500/30 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]"
             size="lg"
           >
             {loading ? (
@@ -74,10 +74,10 @@ export default function LoginPage() {
 
           <div className="relative">
             <div className="absolute inset-0 flex items-center">
-              <span className="w-full border-t border-border" />
+              <span className="w-full border-t border-border/40" />
             </div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-card px-2 text-muted-foreground">hoặc</span>
+            <div className="relative flex justify-center text-[11px] uppercase font-medium">
+              <span className="bg-card/80 backdrop-blur-sm px-3 text-muted-foreground/40 rounded-full">hoặc</span>
             </div>
           </div>
 
@@ -85,7 +85,7 @@ export default function LoginPage() {
             variant="outline"
             onClick={handleLogin}
             disabled={loading}
-            className="w-full h-11 text-sm font-medium gap-2"
+            className="w-full h-11 text-sm font-medium gap-2 rounded-xl border-border/40 hover:border-primary/30 hover:bg-primary/5 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]"
           >
             {loading ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -101,14 +101,14 @@ export default function LoginPage() {
           <Button
             variant="ghost"
             size="icon"
-            className="h-8 w-8"
+            className="h-9 w-9 rounded-xl text-muted-foreground/40 hover:text-foreground hover:bg-foreground/5 transition-all duration-200"
             onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
           >
             {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
           </Button>
         </div>
 
-        <p className="text-center text-[11px] text-muted-foreground">
+        <p className="text-center text-[11px] text-muted-foreground/30 font-medium">
           OmniChat CRM v1.0 — Multi-Channel Chat System
         </p>
       </div>

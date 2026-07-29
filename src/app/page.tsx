@@ -62,21 +62,21 @@ function Header() {
   }
 
   return (
-    <header className="h-14 border-b border-border/60 glass flex items-center justify-between px-4 flex-shrink-0 z-50">
+    <header className="h-14 border-b border-border/30 glass flex items-center justify-between px-4 flex-shrink-0 z-50">
       <div className="flex items-center gap-4">
         {/* Brand */}
         <div className="flex items-center gap-2.5">
-          <div className="h-8 w-8 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+          <div className="h-8 w-8 rounded-xl bg-gradient-to-br from-indigo-500 via-violet-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-500/20 transition-transform duration-300 hover:scale-105 hover:shadow-xl hover:shadow-indigo-500/30">
             <Headphones className="h-4 w-4 text-white" />
           </div>
-          <span className="font-bold text-sm tracking-tight hidden sm:inline bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text">OmniChat</span>
+          <span className="font-bold text-sm tracking-tight hidden sm:inline bg-gradient-to-r from-foreground to-foreground/60 bg-clip-text">OmniChat</span>
         </div>
 
         {/* Divider */}
-        <div className="w-px h-6 bg-border/60 hidden sm:block" />
+        <div className="w-px h-5 bg-border/40 hidden sm:block" />
 
         {/* Nav */}
-        <nav className="flex items-center gap-1">
+        <nav className="flex items-center gap-0.5 p-0.5 bg-foreground/[0.03] rounded-xl">
           {navItems.map((item) => {
             const Icon = item.icon
             const active = activeView === item.key
@@ -85,21 +85,21 @@ function Header() {
                 key={item.key}
                 onClick={() => setActiveView(item.key)}
                 className={cn(
-                  'relative flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-all duration-200',
+                  'relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-250',
                   active
                     ? 'text-primary-foreground'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-foreground/5'
+                    : 'text-muted-foreground/70 hover:text-foreground hover:bg-foreground/[0.03]'
                 )}
               >
                 {active && (
-                  <span className="absolute inset-0 rounded-lg bg-primary shadow-md shadow-primary/20" />
+                  <span className="absolute inset-0 rounded-lg bg-gradient-to-r from-indigo-500 to-violet-500 shadow-md shadow-indigo-500/25 animate-scale-in" />
                 )}
-                <Icon className="h-4 w-4 relative z-10" />
+                <Icon className="h-3.5 w-3.5 relative z-10" />
                 <span className="hidden md:inline relative z-10">{item.label}</span>
                 {item.key === 'inbox' && totalOpen > 0 && (
                   <span className={cn(
-                    'relative z-10 min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold flex items-center justify-center',
-                    active ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-rose-500 text-white'
+                    'relative z-10 min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold flex items-center justify-center transition-all duration-250',
+                    active ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-rose-500 text-white shadow-sm shadow-rose-500/30'
                   )}>
                     {totalOpen}
                   </span>
@@ -110,7 +110,7 @@ function Header() {
         </nav>
       </div>
 
-      <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-1">
         {/* Simulation toggle */}
         <TooltipProvider>
           <Tooltip>
@@ -119,10 +119,10 @@ function Header() {
                 variant={simulationRunning ? 'default' : 'ghost'}
                 size="icon"
                 className={cn(
-                  'h-8 w-8 rounded-lg transition-all duration-200',
+                  'h-8 w-8 rounded-xl transition-all duration-300',
                   simulationRunning
-                    ? 'bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white shadow-md shadow-emerald-500/25'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-foreground/5'
+                    ? 'bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white shadow-lg shadow-emerald-500/25 animate-breathe'
+                    : 'text-muted-foreground/60 hover:text-foreground hover:bg-foreground/5'
                 )}
                 onClick={toggleSimulation}
                 disabled={simLoading}
@@ -138,7 +138,7 @@ function Header() {
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-foreground/5 transition-colors" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>
+              <Button variant="ghost" size="icon" className="h-8 w-8 rounded-xl text-muted-foreground/60 hover:text-foreground hover:bg-foreground/5 transition-all duration-200" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>
                 {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
               </Button>
             </TooltipTrigger>
@@ -146,12 +146,11 @@ function Header() {
           </Tooltip>
         </TooltipProvider>
 
-        {/* Panel toggle */
         {activeView === 'inbox' && (
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hidden md:flex text-muted-foreground hover:text-foreground hover:bg-foreground/5 transition-colors" onClick={() => setShowRightPanel(!showRightPanel)}>
+                <Button variant="ghost" size="icon" className="h-8 w-8 rounded-xl hidden md:flex text-muted-foreground/60 hover:text-foreground hover:bg-foreground/5 transition-all duration-200" onClick={() => setShowRightPanel(!showRightPanel)}>
                   {showRightPanel ? <PanelRightClose className="h-4 w-4" /> : <PanelRightOpen className="h-4 w-4" />}
                 </Button>
               </TooltipTrigger>
@@ -161,30 +160,30 @@ function Header() {
         )}
 
         {/* Divider */}
-        <div className="w-px h-6 bg-border/60" />
+        <div className="w-px h-5 bg-border/30 mx-0.5" />
 
         {/* User */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="h-8 pl-1.5 pr-2 gap-2 rounded-lg hover:bg-foreground/5 transition-colors">
-              <Avatar className="h-7 w-7 ring-2 ring-primary/15">
+            <Button variant="ghost" className="h-8 pl-1 pr-2 gap-2 rounded-xl hover:bg-foreground/[0.04] transition-all duration-200">
+              <Avatar className="h-7 w-7 ring-2 ring-primary/10">
                 <AvatarFallback className="text-[10px] bg-gradient-to-br from-indigo-500 to-violet-600 text-white font-semibold">
                   {currentUser?.name?.split(' ').slice(-2).map(n => n[0]).join('') || 'U'}
                 </AvatarFallback>
               </Avatar>
               <div className="hidden sm:flex flex-col items-start">
-                <span className="text-xs font-medium leading-tight">{currentUser?.name || 'User'}</span>
-                <span className="text-[10px] text-muted-foreground leading-tight">Admin</span>
+                <span className="text-xs font-semibold leading-tight">{currentUser?.name || 'User'}</span>
+                <span className="text-[10px] text-muted-foreground/50 leading-tight font-medium">Admin</span>
               </div>
-              <ChevronDown className="h-3 w-3 text-muted-foreground" />
+              <ChevronDown className="h-3 w-3 text-muted-foreground/40" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-52 rounded-xl">
-            <DropdownMenuItem className="rounded-lg"><User className="h-4 w-4 mr-2" /> Profile</DropdownMenuItem>
-            <DropdownMenuItem className="rounded-lg"><Settings className="h-4 w-4 mr-2" /> Cài đặt</DropdownMenuItem>
+          <DropdownMenuContent align="end" className="w-52 rounded-xl p-1">
+            <DropdownMenuItem className="rounded-lg text-xs py-2"><User className="h-3.5 w-3.5 mr-2" /> Profile</DropdownMenuItem>
+            <DropdownMenuItem className="rounded-lg text-xs py-2"><Settings className="h-3.5 w-3.5 mr-2" /> Cài đặt</DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="rounded-lg text-destructive focus:text-destructive" onClick={() => window.location.href = '/api/auth/signout'}>
-              <LogOut className="h-4 w-4 mr-2" /> Đăng xuất
+            <DropdownMenuItem className="rounded-lg text-xs py-2 text-destructive focus:text-destructive" onClick={() => window.location.href = '/api/auth/signout'}>
+              <LogOut className="h-3.5 w-3.5 mr-2" /> Đăng xuất
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -197,8 +196,8 @@ function MobileCustomerPanel() {
   const { setMobileView } = useCRMStore()
   return (
     <div className="md:hidden flex flex-col h-full">
-      <div className="px-4 py-3 border-b border-border/60 glass flex items-center gap-3">
-        <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg" onClick={() => setMobileView('chat')}>
+      <div className="px-4 py-3 border-b border-border/30 glass flex items-center gap-3">
+        <Button variant="ghost" size="icon" className="h-8 w-8 rounded-xl" onClick={() => setMobileView('chat')}>
           <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
         </Button>
         <span className="font-semibold text-sm">Thông tin khách hàng</span>
@@ -260,7 +259,7 @@ export default function CRMPage() {
     <>
       <div className="hidden md:flex flex-1 overflow-hidden">
         <ResizablePanelGroup direction="horizontal">
-          <ResizablePanel defaultSize={26} minSize={20} maxSize={40} className="border-r border-border/40">
+          <ResizablePanel defaultSize={26} minSize={20} maxSize={40} className="border-r border-border/20">
             <ConversationList />
           </ResizablePanel>
           <ResizableHandle withHandle />
@@ -270,7 +269,7 @@ export default function CRMPage() {
           {showRightPanel && selectedConversationId && (
             <>
               <ResizableHandle withHandle />
-              <ResizablePanel defaultSize={24} minSize={20} maxSize={34} className="border-l border-border/40 bg-muted/30">
+              <ResizablePanel defaultSize={24} minSize={20} maxSize={34} className="border-l border-border/20 bg-muted/20">
                 <CustomerPanel />
               </ResizablePanel>
             </>
