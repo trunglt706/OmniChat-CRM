@@ -21,11 +21,17 @@ export async function POST(
   const { id } = await params;
   const { content, isPinned = false, customerId } = await request.json();
 
+  // Use first available agent as author for mock
+  const firstAgent = await db.user.findFirst({ orderBy: { createdAt: 'asc' } });
+  if (!firstAgent) {
+    return NextResponse.json({ error: 'No agent found' }, { status: 500 });
+  }
+
   const note = await db.internalNote.create({
     data: {
       conversationId: id,
       customerId: customerId || null,
-      authorId: 'mock_current_user',
+      authorId: firstAgent.id,
       content,
       isPinned,
     },

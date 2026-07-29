@@ -19,8 +19,8 @@ import {
 import {
   Bell, Settings, PanelRightClose, PanelRightOpen,
   Headphones, LogOut, User, ChevronDown, Moon, Sun,
-  Inbox, LayoutDashboard, Zap, Radio, RadioOff,
-  Loader2, UserCircle,
+  Inbox, LayoutDashboard, Zap, Radio,
+  Loader2,
 } from 'lucide-react'
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
@@ -126,7 +126,7 @@ function Header() {
                 ) : simulationRunning ? (
                   <Radio className="h-4 w-4" />
                 ) : (
-                  <RadioOff className="h-4 w-4" />
+                  <Radio className="h-4 w-4 opacity-40" />
                 )}
               </Button>
             </TooltipTrigger>

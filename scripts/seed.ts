@@ -396,6 +396,45 @@ async function main() {
     }),
   ])
 
+  // Automation Rules
+  await Promise.all([
+    prisma.automationRule.create({
+      data: {
+        name: 'Auto-reply: Giá',
+        keyword: 'giá',
+        replyMessage: 'Cảm ơn bạn đã quan tâm! Để nhận báo giá chi tiết, vui lòng cho chúng tôi biết sản phẩm/dịch vụ bạn quan tâm. Team tư vấn sẽ phản hồi trong vòng 15 phút.',
+        assignToId: agents[2].id,
+        tagId: tags[1].id,
+        enabled: true,
+      },
+    }),
+    prisma.automationRule.create({
+      data: {
+        name: 'Auto-reply: Hỗ trợ',
+        keyword: 'hỗ trợ',
+        replyMessage: 'Chào bạn! Team hỗ trợ đã tiếp nhận yêu cầu của bạn. Một chuyên viên sẽ phản hồi trong thời gian sớm nhất.',
+        enabled: true,
+      },
+    }),
+    prisma.automationRule.create({
+      data: {
+        name: 'Auto-tag: Khiếu nại',
+        keyword: 'khiếu nại',
+        tagId: tags[3].id,
+        assignToId: agents[1].id,
+        enabled: true,
+      },
+    }),
+    prisma.automationRule.create({
+      data: {
+        name: 'Auto-reply: API',
+        keyword: 'api',
+        replyMessage: 'Chào bạn! OmniChat cung cấp REST API cho tích hợp. Tài liệu API có tại: docs.omnichat.vn/api. Nếu cần hỗ trợ kỹ thuật, team API sẽ phản hồi trong 2h.',
+        enabled: true,
+      },
+    }),
+  ])
+
   // Audit Logs
   await Promise.all([
     prisma.auditLog.create({ data: { userId: agents[2].id, action: 'assign', entityType: 'conversation', entityId: conversations[0].id, details: '{"to":"Phạm Minh Tuấn"}' } }),

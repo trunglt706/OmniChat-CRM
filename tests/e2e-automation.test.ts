@@ -144,7 +144,7 @@ async function runTests() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        content: 'Cảm ơn bạn đã hỗ trợ!',
+        content: 'Cam on ban da reply!',
         senderType: 'customer',
         senderName: 'Test Customer',
       }),
