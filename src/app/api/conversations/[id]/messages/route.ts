@@ -19,20 +19,24 @@ export async function POST(
 ) {
   const { id } = await params;
   const body = await request.json();
-  const { content, messageType = 'text' } = body;
+  const { content, messageType = 'text', senderType = 'agent', senderName, triggerAutomation = true } = body;
 
-  // Mark all previous messages as read
-  await db.message.updateMany({
-    where: { conversationId: id, senderType: 'customer', isRead: false },
-    data: { isRead: true },
-  });
+  const actualSenderType = senderType || 'agent';
+  const actualSenderName = senderName || 'Phạm Minh Tuấn';
+
+  if (actualSenderType === 'agent') {
+    await db.message.updateMany({
+      where: { conversationId: id, senderType: 'customer', isRead: false },
+      data: { isRead: true },
+    });
+  }
 
   const message = await db.message.create({
     data: {
       conversationId: id,
-      senderType: 'agent',
-      senderId: 'mock_current_user',
-      senderName: 'Phạm Minh Tuấn',
+      senderType: actualSenderType,
+      senderId: actualSenderType === 'agent' ? 'mock_current_user' : null,
+      senderName: actualSenderName,
       messageType,
       content,
     },
@@ -43,5 +47,49 @@ export async function POST(
     data: { updatedAt: new Date() },
   });
 
-  return NextResponse.json(message, { status: 201 });
+  // Trigger automation rules for customer messages
+  let automationResult = null;
+  if (triggerAutomation && actualSenderType === 'customer' && content) {
+    const rules = await db.automationRule.findMany({ where: { enabled: true } });
+    const matched = rules.find((r) => content.toLowerCase().includes(r.keyword.toLowerCase()));
+
+    if (matched) {
+      const actions: string[] = [];
+
+      // Auto-reply
+      if (matched.replyMessage) {
+        await db.message.create({
+          data: {
+            conversationId: id,
+            senderType: 'bot',
+            senderName: 'Bot',
+            messageType: 'text',
+            content: matched.replyMessage,
+          },
+        });
+        actions.push('auto_reply');
+      }
+
+      // Auto-assign
+      if (matched.assignToId) {
+        await db.conversation.update({
+          where: { id },
+          data: { ownerId: matched.assignToId, updatedAt: new Date() },
+        });
+        actions.push('auto_assign');
+      }
+
+      // Auto-tag
+      if (matched.tagId) {
+        await db.conversationTag.create({
+          data: { conversationId: id, tagId: matched.tagId },
+        }).catch(() => {}); // ignore duplicate
+        actions.push('auto_tag');
+      }
+
+      automationResult = { ruleName: matched.name, actions };
+    }
+  }
+
+  return NextResponse.json({ message, automationResult }, { status: 201 });
 }

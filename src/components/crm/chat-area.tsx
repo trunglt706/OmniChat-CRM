@@ -16,9 +16,12 @@ import {
 import { CHANNEL_CONFIG, STATUS_CONFIG, PRIORITY_CONFIG, type Message } from '@/lib/types'
 import {
   Send, Paperclip, MoreVertical, CheckCircle, Clock, AlertTriangle,
-  Bot, User, Shield, Settings, UserPlus, Tag, Archive, XCircle,
+  Bot, User, Shield, Settings, UserPlus, Tag, Archive, XCircle, Sparkles,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import {
+  Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
+} from '@/components/ui/tooltip'
 
 function formatMessageTime(dateStr: string) {
   const date = new Date(dateStr)
@@ -91,6 +94,7 @@ export default function ChatArea() {
     messages, setMessages, addMessage,
     isSendingMessage, setIsSendingMessage,
     agents, setAgents,
+    botEnabled, setBotEnabled, isBotTyping, setIsBotTyping,
   } = useCRMStore()
 
   const [replyText, setReplyText] = useState('')
@@ -252,6 +256,17 @@ export default function ChatArea() {
               <span>{convo.owner.name.split(' ').slice(-1)[0]}</span>
             </div>
           )}
+          {/* AI Bot toggle */}
+          <Button
+            variant={botEnabled ? "default" : "outline"}
+            size="sm"
+            className={cn("h-7 gap-1 text-[11px] px-2", botEnabled && "bg-violet-600 hover:bg-violet-700")}
+            onClick={() => setBotEnabled(!botEnabled)}
+            title={botEnabled ? "AI ON" : "AI OFF"}
+          >
+            <Sparkles className="h-3 w-3" />
+            <span className="hidden sm:inline">AI</span>
+          </Button>
           {/* Actions dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -305,6 +320,14 @@ export default function ChatArea() {
               </div>
             )
           })}
+          {isBotTyping && (
+            <div className="flex justify-center mb-2">
+              <span className="text-[11px] text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-950/30 px-3 py-1.5 rounded-full flex items-center gap-1.5">
+                <div className="animate-spin h-3 w-3 border-2 border-violet-600 border-t-transparent rounded-full" />
+                AI đang soạn trả lời...
+              </span>
+            </div>
+          )}
           <div ref={bottomRef} />
         </div>
       </ScrollArea>

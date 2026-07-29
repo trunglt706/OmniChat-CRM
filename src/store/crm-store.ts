@@ -49,6 +49,16 @@ interface CRMState {
   setIsLoadingConversations: (v: boolean) => void
   isLoadingConversation: boolean
   setIsLoadingConversation: (v: boolean) => void
+
+  // View
+  activeView: 'inbox' | 'dashboard' | 'automation'
+  setActiveView: (v: 'inbox' | 'dashboard' | 'automation') => void
+
+  // Bot
+  botEnabled: boolean
+  setBotEnabled: (v: boolean) => void
+  isBotTyping: boolean
+  setIsBotTyping: (v: boolean) => void
 }
 
 export const useCRMStore = create<CRMState>((set) => ({
@@ -91,4 +101,12 @@ export const useCRMStore = create<CRMState>((set) => ({
   setIsLoadingConversations: (v) => set({ isLoadingConversations: v }),
   isLoadingConversation: false,
   setIsLoadingConversation: (v) => set({ isLoadingConversation: v }),
+
+  activeView: 'inbox' as const,
+  setActiveView: (v) => set({ activeView: v }),
+
+  botEnabled: false,
+  setBotEnabled: (v) => set({ botEnabled: v }),
+  isBotTyping: false,
+  setIsBotTyping: (v) => set({ isBotTyping: v }),
 }))

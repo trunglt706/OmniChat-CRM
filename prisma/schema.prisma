@@ -28,6 +28,7 @@ model User {
   followedConvos Conversation[]  @relation("Follower")
   notes          InternalNote[]
   ownedLeads     Lead[]          @relation("LeadOwner")
+  autoAssignRules AutomationRule[] @relation("AutoAssign")
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
 }
@@ -113,6 +114,7 @@ model Tag {
   createdAt   DateTime           @default(now())
   updatedAt   DateTime           @updatedAt
   conversations ConversationTag[]
+  autoTagRules  AutomationRule[]  @relation("AutoTag")
 }
 
 model ConversationTag {
@@ -157,6 +159,20 @@ model Lead {
   notes           String?
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
+}
+
+model AutomationRule {
+  id          String   @id @default(cuid())
+  name        String
+  keyword     String
+  replyMessage String?
+  assignToId  String?
+  assignTo    User?   @relation("AutoAssign", fields: [assignToId], references: [id], onDelete: SetNull)
+  tagId       String?
+  tag         Tag?    @relation("AutoTag", fields: [tagId], references: [id], onDelete: SetNull)
+  enabled     Boolean @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 model AuditLog {
