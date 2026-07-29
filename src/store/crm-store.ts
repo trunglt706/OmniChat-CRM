@@ -59,6 +59,31 @@ interface CRMState {
   setBotEnabled: (v: boolean) => void
   isBotTyping: boolean
   setIsBotTyping: (v: boolean) => void
+
+  // Mobile responsive
+  mobileView: 'list' | 'chat' | 'panel'
+  setMobileView: (v: 'list' | 'chat' | 'panel') => void
+  showRightPanel: boolean
+  setShowRightPanel: (v: boolean) => void
+
+  // Simulation
+  simulationRunning: boolean
+  setSimulationRunning: (v: boolean) => void
+  simulationMessages: Message[]
+  addSimulationMessage: (m: Message) => void
+  clearSimulationMessages: () => void
+
+  // Auth
+  isAuthenticated: boolean
+  setAuthenticated: (v: boolean) => void
+  currentUser: { id: string; name: string; email: string; avatar?: string | null } | null
+  setCurrentUser: (u: { id: string; name: string; email: string; avatar?: string | null } | null) => void
+
+  // Unread counts per conversation
+  unreadCounts: Record<string, number>
+  setUnreadCounts: (counts: Record<string, number>) => void
+  incrementUnread: (conversationId: string) => void
+  clearUnread: (conversationId: string) => void
 }
 
 export const useCRMStore = create<CRMState>((set) => ({
@@ -109,4 +134,35 @@ export const useCRMStore = create<CRMState>((set) => ({
   setBotEnabled: (v) => set({ botEnabled: v }),
   isBotTyping: false,
   setIsBotTyping: (v) => set({ isBotTyping: v }),
+
+  // Mobile responsive
+  mobileView: 'list' as const,
+  setMobileView: (v) => set({ mobileView: v }),
+  showRightPanel: true,
+  setShowRightPanel: (v) => set({ showRightPanel: v }),
+
+  // Simulation
+  simulationRunning: false,
+  setSimulationRunning: (v) => set({ simulationRunning: v }),
+  simulationMessages: [],
+  addSimulationMessage: (m) => set((s) => ({ simulationMessages: [...s.simulationMessages, m] })),
+  clearSimulationMessages: () => set({ simulationMessages: [] }),
+
+  // Auth
+  isAuthenticated: true, // MVP: start authenticated, will use NextAuth
+  setAuthenticated: (v) => set({ isAuthenticated: v }),
+  currentUser: { id: 'user_01', name: 'Phạm Minh Tuấn', email: 'tuan.pm@omnichat.vn' },
+  setCurrentUser: (u) => set({ currentUser: u }),
+
+  // Unread counts per conversation
+  unreadCounts: {},
+  setUnreadCounts: (counts) => set({ unreadCounts: counts }),
+  incrementUnread: (conversationId) => set((s) => ({
+    unreadCounts: { ...s.unreadCounts, [conversationId]: (s.unreadCounts[conversationId] || 0) + 1 }
+  })),
+  clearUnread: (conversationId) => set((s) => {
+    const next = { ...s.unreadCounts }
+    delete next[conversationId]
+    return { unreadCounts: next }
+  }),
 }))

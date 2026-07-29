@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input'
 import { CHANNEL_CONFIG, STATUS_CONFIG, PRIORITY_CONFIG, type Conversation } from '@/lib/types'
 import {
   Search, Inbox, User, MessageSquareOff, CheckCircle, Archive, Tag, Hash,
-  Globe, MessageCircle, Phone, Send, ChevronDown, Filter
+  Globe, MessageCircle, Phone, Send, Mail, ChevronDown, Filter,
 } from 'lucide-react'
 import {
   Popover, PopoverContent, PopoverTrigger,
@@ -31,6 +31,7 @@ const CHANNEL_FILTERS = [
   { key: 'zalo', label: 'Zalo', color: '#0068ff' },
   { key: 'telegram', label: 'Telegram', color: '#26a5e4' },
   { key: 'website', label: 'Website', color: '#10b981' },
+  { key: 'email', label: 'Email', color: '#ea4335' },
 ]
 
 function getChannelIcon(channel: string) {
@@ -40,7 +41,20 @@ function getChannelIcon(channel: string) {
     case 'zalo': return <Phone className="h-3.5 w-3.5" />
     case 'telegram': return <Send className="h-3.5 w-3.5" />
     case 'website': return <Globe className="h-3.5 w-3.5" />
+    case 'email': return <Mail className="h-3.5 w-3.5" />
     default: return <Hash className="h-3.5 w-3.5" />
+  }
+}
+
+function getChannelLetter(channel: string) {
+  switch (channel) {
+    case 'facebook_messenger': return 'M'
+    case 'facebook_comment': return 'C'
+    case 'zalo': return 'Z'
+    case 'telegram': return 'T'
+    case 'website': return 'W'
+    case 'email': return 'E'
+    default: return '?'
   }
 }
 
@@ -68,19 +82,28 @@ function getSLAStatus(convo: Conversation) {
   return 'active'
 }
 
-function ConversationItem({ convo }: { convo: Conversation }) {
+function ConversationItem({ convo, isNew }: { convo: Conversation; isNew?: boolean }) {
   const selectedId = useCRMStore((s) => s.selectedConversationId)
   const setSelected = useCRMStore((s) => s.setSelectedConversationId)
+  const setMobileView = useCRMStore((s) => s.setMobileView)
+  const unreadCounts = useCRMStore((s) => s.unreadCounts)
   const isSelected = selectedId === convo.id
   const slaStatus = getSLAStatus(convo)
   const channelCfg = CHANNEL_CONFIG[convo.channel as keyof typeof CHANNEL_CONFIG]
+  const unread = unreadCounts[convo.id] || 0
+
+  const handleClick = () => {
+    setSelected(convo.id)
+    setMobileView('chat')
+  }
 
   return (
     <button
-      onClick={() => setSelected(convo.id)}
+      onClick={handleClick}
       className={cn(
-        'w-full text-left p-3 border-b border-border/50 hover:bg-accent/50 transition-colors flex gap-3',
-        isSelected && 'bg-accent border-l-2 border-l-primary'
+        'conversation-item w-full text-left p-3 border-b border-border/50 hover:bg-accent/50 flex gap-3 relative',
+        isSelected && 'bg-accent border-l-2 border-l-primary',
+        isNew && 'animate-slide-in-up',
       )}
     >
       <div className="relative flex-shrink-0">
@@ -95,7 +118,7 @@ function ConversationItem({ convo }: { convo: Conversation }) {
           title={channelCfg?.label || convo.channel}
         >
           <span className="text-[8px] text-white font-bold">
-            {convo.channel === 'facebook_messenger' ? 'M' : convo.channel === 'zalo' ? 'Z' : convo.channel === 'telegram' ? 'T' : convo.channel === 'website' ? 'W' : '?'}
+            {getChannelLetter(convo.channel)}
           </span>
         </div>
         {slaStatus === 'breached' && (
@@ -104,7 +127,7 @@ function ConversationItem({ convo }: { convo: Conversation }) {
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between gap-2">
-          <span className="font-medium text-sm truncate">{convo.customer.name}</span>
+          <span className={cn('font-medium text-sm truncate', unread > 0 && 'font-bold')}>{convo.customer.name}</span>
           <span className="text-[11px] text-muted-foreground flex-shrink-0">
             {formatTime(convo.updatedAt)}
           </span>
@@ -133,6 +156,12 @@ function ConversationItem({ convo }: { convo: Conversation }) {
           )}
         </div>
       </div>
+      {/* Unread count badge */}
+      {unread > 0 && (
+        <div className="absolute right-3 top-3 h-5 min-w-5 px-1 rounded-full bg-primary text-primary-foreground text-[10px] font-bold flex items-center justify-center animate-notification-pulse">
+          {unread}
+        </div>
+      )}
     </button>
   )
 }
@@ -142,6 +171,7 @@ export default function ConversationList() {
     conversations, setConversations, totalConversations, setTotalConversations,
     activeFilter, setActiveFilter, activeChannel, setActiveChannel,
     searchQuery, setSearchQuery, tags, isLoadingConversations, setIsLoadingConversations,
+    simulationRunning,
   } = useCRMStore()
 
   const fetchConversations = useCallback(async () => {
@@ -168,6 +198,19 @@ export default function ConversationList() {
     fetchConversations()
   }, [fetchConversations])
 
+  // Listen for real-time updates
+  useEffect(() => {
+    const handleNewMessage = () => fetchConversations()
+    window.addEventListener('crm:new_message', handleNewMessage)
+    window.addEventListener('crm:conversation_update', handleNewMessage)
+    window.addEventListener('crm:refresh_list', handleNewMessage)
+    return () => {
+      window.removeEventListener('crm:new_message', handleNewMessage)
+      window.removeEventListener('crm:conversation_update', handleNewMessage)
+      window.removeEventListener('crm:refresh_list', handleNewMessage)
+    }
+  }, [fetchConversations])
+
   const searchRef = useRef<HTMLInputElement>(null)
   const debounceRef = useRef<NodeJS.Timeout>()
 
@@ -183,7 +226,15 @@ export default function ConversationList() {
       <div className="p-3 border-b border-border">
         <div className="flex items-center justify-between mb-3">
           <h2 className="font-semibold text-sm">Inbox</h2>
-          <span className="text-xs text-muted-foreground">{totalConversations} hội thoại</span>
+          <div className="flex items-center gap-2">
+            {simulationRunning && (
+              <Badge className="bg-emerald-100 text-emerald-700 text-[10px] px-1.5 py-0 h-4 gap-1 sim-badge-active">
+                <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                LIVE
+              </Badge>
+            )}
+            <span className="text-xs text-muted-foreground">{totalConversations} hội thoại</span>
+          </div>
         </div>
         {/* Search */}
         <div className="relative mb-3">
@@ -191,7 +242,7 @@ export default function ConversationList() {
           <Input
             ref={searchRef}
             placeholder="Tìm tên, SĐT, email..."
-            className="pl-8 h-8 text-sm"
+            className="pl-8 h-8 text-sm focus-ring-transition"
             value={searchQuery}
             onChange={(e) => handleSearch(e.target.value)}
           />
@@ -205,17 +256,17 @@ export default function ConversationList() {
                 key={tab.key}
                 onClick={() => setActiveFilter(tab.key)}
                 className={cn(
-                  'flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-colors',
+                  'flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-all duration-150',
                   activeFilter === tab.key
-                    ? 'bg-primary text-primary-foreground'
+                    ? 'bg-primary text-primary-foreground shadow-sm'
                     : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
                 )}
               >
                 <Icon className="h-3 w-3" />
                 {tab.label}
               </button>
-            )
-          })}
+            )}
+          )}
         </div>
       </div>
 
@@ -226,9 +277,9 @@ export default function ConversationList() {
             key={ch.key}
             onClick={() => setActiveChannel(ch.key)}
             className={cn(
-              'flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium whitespace-nowrap transition-colors',
+              'flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium whitespace-nowrap transition-all duration-150',
               activeChannel === ch.key
-                ? 'bg-accent text-accent-foreground border border-border'
+                ? 'bg-accent text-accent-foreground border border-border shadow-sm'
                 : 'text-muted-foreground hover:bg-accent/50'
             )}
           >
@@ -241,12 +292,19 @@ export default function ConversationList() {
       {/* Conversation list */}
       <ScrollArea className="flex-1">
         {isLoadingConversations ? (
-          <div className="flex items-center justify-center py-10 text-muted-foreground text-sm">
-            <div className="animate-spin h-4 w-4 border-2 border-primary border-t-transparent rounded-full mr-2" />
-            Đang tải...
+          <div className="p-3 space-y-3">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className="flex gap-3 animate-fade-in" style={{ animationDelay: `${i * 50}ms` }}>
+                <div className="skeleton-line h-10 w-10 rounded-full flex-shrink-0" />
+                <div className="flex-1 space-y-2">
+                  <div className="skeleton-line h-3.5 w-3/4" />
+                  <div className="skeleton-line h-3 w-1/2" />
+                </div>
+              </div>
+            ))}
           </div>
         ) : conversations.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-10 text-muted-foreground">
+          <div className="flex flex-col items-center justify-center py-10 text-muted-foreground animate-fade-in">
             <Inbox className="h-8 w-8 mb-2 opacity-50" />
             <p className="text-sm">Không có hội thoại nào</p>
           </div>

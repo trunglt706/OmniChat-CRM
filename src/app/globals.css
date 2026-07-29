@@ -120,3 +120,155 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* ===== Animation Utilities ===== */
+@keyframes slideInRight {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+@keyframes slideInLeft {
+  from { transform: translateX(-100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+@keyframes slideInUp {
+  from { transform: translateY(16px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes scaleIn {
+  from { transform: scale(0.95); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+@keyframes messageBubbleIn {
+  from { transform: translateY(8px) scale(0.96); opacity: 0; }
+  to { transform: translateY(0) scale(1); opacity: 1; }
+}
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+@keyframes dotBounce {
+  0%, 80%, 100% { transform: translateY(0); }
+  40% { transform: translateY(-6px); }
+}
+@keyframes glowPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+  50% { box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); }
+}
+@keyframes notificationPulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+
+.animate-slide-in-right { animation: slideInRight 0.25s ease-out; }
+.animate-slide-in-left { animation: slideInLeft 0.25s ease-out; }
+.animate-slide-in-up { animation: slideInUp 0.2s ease-out; }
+.animate-fade-in { animation: fadeIn 0.2s ease-out; }
+.animate-scale-in { animation: scaleIn 0.2s ease-out; }
+.animate-message-bubble { animation: messageBubbleIn 0.25s ease-out; }
+.animate-shimmer {
+  background: linear-gradient(90deg, transparent 25%, rgba(255,255,255,0.08) 50%, transparent 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+.animate-dot-bounce { animation: dotBounce 1.4s infinite ease-in-out; }
+.animate-dot-bounce:nth-child(1) { animation-delay: 0s; }
+.animate-dot-bounce:nth-child(2) { animation-delay: 0.16s; }
+.animate-dot-bounce:nth-child(3) { animation-delay: 0.32s; }
+.animate-glow-pulse { animation: glowPulse 2s infinite; }
+.animate-notification-pulse { animation: notificationPulse 0.4s ease-out; }
+
+/* Typing indicator dots */
+.typing-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background-color: currentColor; opacity: 0.6;
+  animation: dotBounce 1.4s infinite ease-in-out both;
+}
+
+/* Conversation item hover effect */
+.conversation-item {
+  transition: all 0.15s ease;
+}
+.conversation-item:hover {
+  transform: translateX(2px);
+}
+.conversation-item:active {
+  transform: scale(0.99);
+}
+
+/* Smooth scroll for message area */
+.messages-scroll {
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Skeleton loading effect */
+.skeleton-line {
+  border-radius: 4px;
+  background: linear-gradient(90deg, hsl(var(--muted)) 25%, hsl(var(--muted-foreground) / 0.08) 50%, hsl(var(--muted)) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+/* Simulation badge glow */
+.sim-badge-active {
+  animation: glowPulse 2s infinite;
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.5);
+}
+
+/* Mobile slide transitions */
+.mobile-slide-enter {
+  animation: slideInRight 0.25s ease-out forwards;
+}
+.mobile-slide-back {
+  animation: slideInLeft 0.25s ease-out forwards;
+}
+
+/* Message send button animation */
+.send-btn:hover:not(:disabled) {
+  transform: scale(1.08);
+}
+.send-btn:active:not(:disabled) {
+  transform: scale(0.95);
+}
+.send-btn {
+  transition: all 0.15s ease;
+}
+
+/* Panel resize handle styling */
+[data-panel-group-direction="horizontal"] > [data-resize-handle-active] {
+  background-color: hsl(var(--primary) / 0.2);
+}
+
+/* Custom scrollbar for webkit */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background-color: hsl(var(--muted-foreground) / 0.2);
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: hsl(var(--muted-foreground) / 0.35);
+}
+
+/* Toast notification animation */
+.toast-notification {
+  animation: slideInUp 0.3s ease-out, fadeIn 0.3s ease-out;
+}
+
+/* Focus ring animation */
+.focus-ring-transition {
+ transition: box-shadow 0.2s ease;
+}
+.focus-ring-transition:focus-visible {
+  box-shadow: 0 0 0 2px hsl(var(--background)), 0 0 0 4px hsl(var(--ring));
+}

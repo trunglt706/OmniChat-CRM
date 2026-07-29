@@ -65,10 +65,16 @@ async function main() {
         gender: 'female', company: 'Công ty ABC', address: 'Quận 1, TP.HCM',
         note: 'Khách VIP, ưu tiên hỗ trợ nhanh',
         identities: {
-          create: {
-            platform: 'facebook', platformUserId: 'fb_1001', platformPageId: 'page_001',
-            platformUserName: 'ha.nguyenthanh',
-          },
+          create: [
+            {
+              platform: 'facebook', platformUserId: 'fb_1001', platformPageId: 'page_001',
+              platformUserName: 'ha.nguyenthanh',
+            },
+            {
+              platform: 'email', platformUserId: 'hah.nt@email.com',
+              platformUserName: 'hah.nt@email.com',
+            },
+          ],
         },
       },
     }),
@@ -147,10 +153,16 @@ async function main() {
         name: 'Bùi Quang Huy', phone: '0978901234', email: 'huy.bq@email.com',
         gender: 'male', company: 'HuyBui Solutions',
         identities: {
-          create: {
-            platform: 'facebook', platformUserId: 'fb_8001', platformPageId: 'page_001',
-            platformUserName: 'huy.buiquang',
-          },
+          create: [
+            {
+              platform: 'facebook', platformUserId: 'fb_8001', platformPageId: 'page_001',
+              platformUserName: 'huy.buiquang',
+            },
+            {
+              platform: 'email', platformUserId: 'huy.bq@email.com',
+              platformUserName: 'huy.bq@email.com',
+            },
+          ],
         },
       },
     }),
@@ -193,6 +205,8 @@ async function main() {
     { customerIdx: 9, channel: 'website', status: 'spam', priority: 'low', ownerIdx: null, unread: false, tagIdxs: [4], subject: null, slaViolated: false },
     { customerIdx: 0, channel: 'zalo', status: 'open', priority: 'medium', ownerIdx: 3, unread: true, tagIdxs: [0], subject: 'Hỏi giá qua Zalo', slaViolated: false },
     { customerIdx: 1, channel: 'facebook_messenger', status: 'resolved', priority: 'low', ownerIdx: 4, unread: false, tagIdxs: [], subject: null, slaViolated: false },
+    { customerIdx: 0, channel: 'email', status: 'open', priority: 'high', ownerIdx: 2, unread: true, tagIdxs: [0, 2], subject: 'Yêu cầu hỗ trợ tích hợp API - TechVN Solutions', slaViolated: false },
+    { customerIdx: 7, channel: 'email', status: 'open', priority: 'medium', ownerIdx: null, unread: true, tagIdxs: [1, 6], subject: 'Hỏi đáp về báo giá dịch vụ CRM', slaViolated: false },
   ]
 
   const messageTemplates: Record<string, Array<{ senderType: string; senderName: string; content: string; messageType?: string; minutesAgo: number }>> = {
@@ -261,6 +275,13 @@ async function main() {
       { senderType: 'customer', senderName: 'Trần Quốc Bảo', content: 'Ok thanks', minutesAgo: 1500 },
       { senderType: 'agent', senderName: 'Lê Hoàng Hoa', content: 'Không có gì ạ!', minutesAgo: 1498 },
       { senderType: 'system', senderName: 'Hệ thống', content: 'Hội thoại đã được đánh dấu là Resolved', messageType: 'event', minutesAgo: 1490 },
+    ],
+    12: [
+      { senderType: 'customer', senderName: 'Nguyễn Thanh Hà', content: 'Kính gửi bộ phận kỹ thuật OmniChat,\n\nTôi là Nguyễn Thanh Hà, Giám đốc kỹ thuật tại Công ty ABC. Chúng tôi đang sử dụng gói Enterprise và muốn tích hợp API của OmniChat vào hệ thống nội bộ.\n\nCụ thể, chúng tôi cần:\n1. REST API endpoint cho gửi/nhận tin nhắn\n2. Webhook callback cho event realtime\n3. SDK cho Node.js\n\nXin vui lòng cung cấp tài liệu API và hướng dẫn tích hợp.\n\nTrân trọng,\nNguyễn Thanh Hà', minutesAgo: 25 },
+      { senderType: 'agent', senderName: 'Phạm Minh Tuấn', content: 'Dạ chị Hà ơi, cảm ơn chị đã liên hệ. Em đã chuyển yêu cầu đến team API. Dự kiến trong vòng 2h sẽ có phản hồi chi tiết về tài liệu và endpoint ạ.', minutesAgo: 20 },
+    ],
+    13: [
+      { senderType: 'customer', senderName: 'Bùi Quang Huy', content: 'Chào OmniChat team,\n\nTôi là Bùi Quang Huy từ HuyBui Solutions. Tôi muốn hỏi về báo giá dịch vụ CRM cho doanh nghiệp.\n\nChúng tôi có đội ngũ sales khoảng 50 người và đang tìm kiếm giải pháp quản lý khách hàng đa kênh.\n\nXin vui lòng gửi báo giá chi tiết qua email này.\n\nBest regards,\nBùi Quang Huy', minutesAgo: 40 },
     ],
   }
 
