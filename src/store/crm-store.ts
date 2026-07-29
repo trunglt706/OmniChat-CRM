@@ -1,6 +1,44 @@
 import { create } from 'zustand'
 import type { Conversation, ConversationDetail, Message, Tag, Agent, InternalNote } from '@/lib/types'
 
+// ─── Notification Types ───
+export type NotificationType = 'new_message' | 'assignment' | 'sla_breach' | 'mention' | 'system' | 'automation'
+export interface AppNotification {
+  id: string
+  type: NotificationType
+  title: string
+  body: string
+  conversationId?: string
+  read: boolean
+  createdAt: string
+}
+
+// ─── User Profile (extended) ───
+export interface UserProfile {
+  id: string
+  name: string
+  email: string
+  phone: string
+  role: string
+  avatar: string | null
+  status: 'online' | 'busy' | 'away' | 'offline'
+  bio: string
+}
+
+// ─── Settings ───
+export interface AppSettings {
+  soundEnabled: boolean
+  desktopNotifEnabled: boolean
+  emailNotifEnabled: boolean
+  compactMode: boolean
+  showPreview: boolean
+  autoAssign: boolean
+  language: 'vi' | 'en'
+}
+
+// ─── UI Sheet state ───
+export type OpenSheet = null | 'notifications' | 'profile' | 'settings'
+
 interface CRMState {
   // Conversations list
   conversations: Conversation[]
@@ -76,17 +114,57 @@ interface CRMState {
   // Auth
   isAuthenticated: boolean
   setAuthenticated: (v: boolean) => void
-  currentUser: { id: string; name: string; email: string; avatar?: string | null } | null
-  setCurrentUser: (u: { id: string; name: string; email: string; avatar?: string | null } | null) => void
+  currentUser: UserProfile | null
+  setCurrentUser: (u: UserProfile | null) => void
 
   // Unread counts per conversation
   unreadCounts: Record<string, number>
   setUnreadCounts: (counts: Record<string, number>) => void
   incrementUnread: (conversationId: string) => void
   clearUnread: (conversationId: string) => void
+
+  // ─── Notifications ───
+  notifications: AppNotification[]
+  addNotification: (n: Omit<AppNotification, 'id' | 'read' | 'createdAt'>) => void
+  markNotificationRead: (id: string) => void
+  markAllNotificationsRead: () => void
+  clearNotification: (id: string) => void
+  clearAllNotifications: () => void
+  unreadNotificationCount: () => number
+
+  // ─── Settings ───
+  settings: AppSettings
+  updateSettings: (patch: Partial<AppSettings>) => void
+
+  // ─── UI Sheets ───
+  openSheet: OpenSheet
+  setOpenSheet: (s: OpenSheet) => void
 }
 
-export const useCRMStore = create<CRMState>((set) => ({
+const DEFAULT_SETTINGS: AppSettings = {
+  soundEnabled: true,
+  desktopNotifEnabled: true,
+  emailNotifEnabled: false,
+  compactMode: false,
+  showPreview: true,
+  autoAssign: true,
+  language: 'vi',
+}
+
+const DEFAULT_USER: UserProfile = {
+  id: 'user_01',
+  name: 'Pham Minh Tuan',
+  email: 'tuan.pm@omnichat.vn',
+  phone: '0901 234 567',
+  role: 'admin',
+  avatar: null,
+  status: 'online',
+  bio: 'Senior Customer Support Agent',
+}
+
+let _notifCounter = 0
+
+export const useCRMStore = create<CRMState>((set, get) => ({
   conversations: [],
   setConversations: (data) => set({ conversations: data }),
   totalConversations: 0,
@@ -149,9 +227,9 @@ export const useCRMStore = create<CRMState>((set) => ({
   clearSimulationMessages: () => set({ simulationMessages: [] }),
 
   // Auth
-  isAuthenticated: true, // MVP: start authenticated, will use NextAuth
+  isAuthenticated: true,
   setAuthenticated: (v) => set({ isAuthenticated: v }),
-  currentUser: { id: 'user_01', name: 'Phạm Minh Tuấn', email: 'tuan.pm@omnichat.vn' },
+  currentUser: DEFAULT_USER,
   setCurrentUser: (u) => set({ currentUser: u }),
 
   // Unread counts per conversation
@@ -165,4 +243,64 @@ export const useCRMStore = create<CRMState>((set) => ({
     delete next[conversationId]
     return { unreadCounts: next }
   }),
+
+  // ─── Notifications ───
+  notifications: [],
+  addNotification: (n) => {
+    _notifCounter++
+    const notif: AppNotification = {
+      ...n,
+      id: `notif_${Date.now()}_${_notifCounter}`,
+      read: false,
+      createdAt: new Date().toISOString(),
+    }
+    set((s) => ({ notifications: [notif, ...s.notifications] }))
+    // Play sound if enabled
+    if (get().settings.soundEnabled) {
+      try {
+        const audio = new Audio('/notification.mp3')
+        audio.volume = 0.3
+        audio.play().catch(() => {})
+      } catch {}
+    }
+    // Desktop notification
+    if (get().settings.desktopNotifEnabled && typeof window !== 'undefined' && 'Notification' in window) {
+      try {
+        if (Notification.permission === 'granted') {
+          new Notification(n.title, { body: n.body, icon: '/icon.png' })
+        } else if (Notification.permission !== 'denied') {
+          Notification.requestPermission().then(perm => {
+            if (perm === 'granted') new Notification(n.title, { body: n.body })
+          })
+        }
+      } catch {}
+    }
+  },
+  markNotificationRead: (id) => set((s) => ({
+    notifications: s.notifications.map(n => n.id === id ? { ...n, read: true } : n)
+  })),
+  markAllNotificationsRead: () => set((s) => ({
+    notifications: s.notifications.map(n => ({ ...n, read: true }))
+  })),
+  clearNotification: (id) => set((s) => ({
+    notifications: s.notifications.filter(n => n.id !== id)
+  })),
+  clearAllNotifications: () => set({ notifications: [] }),
+  unreadNotificationCount: () => get().notifications.filter(n => !n.read).length,
+
+  // ─── Settings ───
+  settings: DEFAULT_SETTINGS,
+  updateSettings: (patch) => {
+    set((s) => ({ settings: { ...s.settings, ...patch } }))
+    // Persist to localStorage
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('omnichat_settings', JSON.stringify({ ...get().settings, ...patch }))
+      }
+    } catch {}
+  },
+
+  // ─── UI Sheets ───
+  openSheet: null,
+  setOpenSheet: (s) => set({ openSheet: s }),
 }))

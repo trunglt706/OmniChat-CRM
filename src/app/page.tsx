@@ -7,6 +7,9 @@ import ChatArea from '@/components/crm/chat-area'
 import CustomerPanel from '@/components/crm/customer-panel'
 import Dashboard from '@/components/crm/dashboard'
 import AutomationPanel from '@/components/crm/automation-panel'
+import NotificationPanel from '@/components/crm/notification-panel'
+import ProfilePanel from '@/components/crm/profile-panel'
+import SettingsPanel from '@/components/crm/settings-panel'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
@@ -17,17 +20,23 @@ import {
   ResizableHandle, ResizablePanel, ResizablePanelGroup,
 } from '@/components/ui/resizable'
 import {
+  Sheet, SheetContent,
+} from '@/components/ui/sheet'
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import {
   Settings, PanelRightClose, PanelRightOpen,
   Headphones, LogOut, User, ChevronDown, Moon, Sun,
-  Inbox, LayoutDashboard, Zap, Radio,
-  Loader2, Activity,
+  Inbox, LayoutDashboard, Zap,
+  Loader2, Activity, Bell,
 } from 'lucide-react'
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { useTheme } from 'next-themes'
 import { cn } from '@/lib/utils'
-import type { Message } from '@/lib/types'
+import { signOut } from 'next-auth/react'
 
 function Header() {
   const { theme, setTheme } = useTheme()
@@ -39,7 +48,14 @@ function Header() {
   const currentUser = useCRMStore((s) => s.currentUser)
   const simulationRunning = useCRMStore((s) => s.simulationRunning)
   const setSimulationRunning = useCRMStore((s) => s.setSimulationRunning)
+  const notifications = useCRMStore((s) => s.notifications)
+  const openSheet = useCRMStore((s) => s.openSheet)
+  const setOpenSheet = useCRMStore((s) => s.setOpenSheet)
   const [simLoading, setSimLoading] = useState(false)
+  const [showLogoutDialog, setShowLogoutDialog] = useState(false)
+  const [loggingOut, setLoggingOut] = useState(false)
+
+  const unreadNotifCount = notifications.filter(n => !n.read).length
 
   const navItems: { key: 'inbox' | 'dashboard' | 'automation'; label: string; icon: React.ElementType }[] = [
     { key: 'inbox', label: 'Inbox', icon: Inbox },
@@ -59,6 +75,15 @@ function Header() {
       }
     } catch (e) { console.error('Simulation error', e) }
     finally { setSimLoading(false) }
+  }
+
+  const handleLogout = async () => {
+    setLoggingOut(true)
+    try {
+      await signOut({ callbackUrl: '/login' })
+    } catch {
+      window.location.href = '/login'
+    }
   }
 
   return (
@@ -130,7 +155,29 @@ function Header() {
                 {simLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Activity className="h-4 w-4" />}
               </Button>
             </TooltipTrigger>
-            <TooltipContent>{simulationRunning ? 'Dừng mô phỏng' : 'Bắt đầu mô phỏng realtime'}</TooltipContent>
+            <TooltipContent>{simulationRunning ? 'Dung mo phong' : 'Bat dau mo phong realtime'}</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+
+        {/* Notification Bell */}
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="relative h-8 w-8 rounded-xl text-muted-foreground/60 hover:text-foreground hover:bg-foreground/5 transition-all duration-200"
+                onClick={() => setOpenSheet('notifications')}
+              >
+                <Bell className="h-4 w-4" />
+                {unreadNotifCount > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-gradient-to-r from-rose-500 to-pink-500 text-white text-[9px] font-bold flex items-center justify-center shadow-sm shadow-rose-500/30 animate-scale-bounce">
+                    {unreadNotifCount > 9 ? '9+' : unreadNotifCount}
+                  </span>
+                )}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Thong bao</TooltipContent>
           </Tooltip>
         </TooltipProvider>
 
@@ -154,7 +201,7 @@ function Header() {
                   {showRightPanel ? <PanelRightClose className="h-4 w-4" /> : <PanelRightOpen className="h-4 w-4" />}
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>Thông tin khách hàng</TooltipContent>
+              <TooltipContent>Thong tin khach hang</TooltipContent>
             </Tooltip>
           </TooltipProvider>
         )}
@@ -162,31 +209,72 @@ function Header() {
         {/* Divider */}
         <div className="w-px h-5 bg-border/30 mx-0.5" />
 
-        {/* User */}
+        {/* User Dropdown */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="h-8 pl-1 pr-2 gap-2 rounded-xl hover:bg-foreground/[0.04] transition-all duration-200">
-              <Avatar className="h-7 w-7 ring-2 ring-primary/10">
-                <AvatarFallback className="text-[10px] bg-gradient-to-br from-indigo-500 to-violet-600 text-white font-semibold">
-                  {currentUser?.name?.split(' ').slice(-2).map(n => n[0]).join('') || 'U'}
-                </AvatarFallback>
-              </Avatar>
+              <div className="relative">
+                <Avatar className="h-7 w-7 ring-2 ring-primary/10">
+                  <AvatarFallback className="text-[10px] bg-gradient-to-br from-indigo-500 to-violet-600 text-white font-semibold">
+                    {currentUser?.name?.split(' ').slice(-2).map(n => n[0]).join('') || 'U'}
+                  </AvatarFallback>
+                </Avatar>
+                <span className={cn(
+                  'absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-background',
+                  currentUser?.status === 'online' ? 'bg-emerald-500' : currentUser?.status === 'busy' ? 'bg-amber-500' : 'bg-gray-400'
+                )} />
+              </div>
               <div className="hidden sm:flex flex-col items-start">
                 <span className="text-xs font-semibold leading-tight">{currentUser?.name || 'User'}</span>
-                <span className="text-[10px] text-muted-foreground/50 leading-tight font-medium">Admin</span>
+                <span className="text-[10px] text-muted-foreground/50 leading-tight font-medium">{currentUser?.role === 'admin' ? 'Quan tri vien' : currentUser?.role || 'Agent'}</span>
               </div>
               <ChevronDown className="h-3 w-3 text-muted-foreground/40" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-52 rounded-xl p-1">
-            <DropdownMenuItem className="rounded-lg text-xs py-2"><User className="h-3.5 w-3.5 mr-2" /> Profile</DropdownMenuItem>
-            <DropdownMenuItem className="rounded-lg text-xs py-2"><Settings className="h-3.5 w-3.5 mr-2" /> Cài đặt</DropdownMenuItem>
+          <DropdownMenuContent align="end" className="w-56 rounded-xl p-1.5">
+            <div className="px-2 py-1.5 mb-1">
+              <p className="text-xs font-semibold truncate">{currentUser?.name}</p>
+              <p className="text-[11px] text-muted-foreground/60 truncate">{currentUser?.email}</p>
+            </div>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="rounded-lg text-xs py-2 text-destructive focus:text-destructive" onClick={() => window.location.href = '/api/auth/signout'}>
-              <LogOut className="h-3.5 w-3.5 mr-2" /> Đăng xuất
+            <DropdownMenuItem className="rounded-lg text-xs py-2.5" onClick={() => setOpenSheet('profile')}>
+              <User className="h-3.5 w-3.5 mr-2.5" /> Ho so cua toi
+            </DropdownMenuItem>
+            <DropdownMenuItem className="rounded-lg text-xs py-2.5" onClick={() => setOpenSheet('settings')}>
+              <Settings className="h-3.5 w-3.5 mr-2.5" /> Cai dat
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              className="rounded-lg text-xs py-2.5 text-destructive focus:text-destructive"
+              onClick={() => setShowLogoutDialog(true)}
+            >
+              <LogOut className="h-3.5 w-3.5 mr-2.5" /> Dang xuat
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+
+        {/* Logout Confirmation Dialog */}
+        <AlertDialog open={showLogoutDialog} onOpenChange={setShowLogoutDialog}>
+          <AlertDialogContent className="rounded-2xl max-w-sm">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="text-base">Xac nhan dang xuat</AlertDialogTitle>
+              <AlertDialogDescription className="text-sm text-muted-foreground/70">
+                Ban co chac chan muon dang xuat khong? Cac hoi thoai chua xu ly se van duoc giu nguyen.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter className="gap-2">
+              <AlertDialogCancel className="rounded-xl h-9 text-xs font-medium" disabled={loggingOut}>Huy</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleLogout}
+                disabled={loggingOut}
+                className="rounded-xl h-9 text-xs font-medium bg-destructive hover:bg-destructive/90"
+              >
+                {loggingOut ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <LogOut className="h-3.5 w-3.5 mr-1.5" />}
+                Dang xuat
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </header>
   )
@@ -200,7 +288,7 @@ function MobileCustomerPanel() {
         <Button variant="ghost" size="icon" className="h-8 w-8 rounded-xl" onClick={() => setMobileView('chat')}>
           <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
         </Button>
-        <span className="font-semibold text-sm">Thông tin khách hàng</span>
+        <span className="font-semibold text-sm">Thong tin khach hang</span>
       </div>
       <div className="flex-1 overflow-hidden"><CustomerPanel /></div>
     </div>
@@ -213,7 +301,35 @@ export default function CRMPage() {
   const mobileView = useCRMStore((s) => s.mobileView)
   const showRightPanel = useCRMStore((s) => s.showRightPanel)
   const incrementUnread = useCRMStore((s) => s.incrementUnread)
+  const addNotification = useCRMStore((s) => s.addNotification)
+  const openSheet = useCRMStore((s) => s.openSheet)
+  const setOpenSheet = useCRMStore((s) => s.setOpenSheet)
   const sseRef = useRef<EventSource | null>(null)
+
+  // Load settings from localStorage on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('omnichat_settings')
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        useCRMStore.getState().updateSettings(parsed)
+      }
+    } catch {}
+
+    // Request desktop notification permission
+    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission().catch(() => {})
+    }
+
+    // Welcome notification
+    setTimeout(() => {
+      addNotification({
+        type: 'system',
+        title: 'Chao mung ban quay lai!',
+        body: 'OmniChat CRM san sang phuc vu ban.',
+      })
+    }, 1500)
+  }, [])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -225,7 +341,15 @@ export default function CRMPage() {
           const data = JSON.parse(e.data)
           ;(data.messages || []).forEach((msg: any) => {
             window.dispatchEvent(new CustomEvent('crm:conversation_update', { detail: { conversationId: msg.conversationId } }))
-            if (msg.conversationId !== useCRMStore.getState().selectedConversationId) incrementUnread(msg.conversationId)
+            if (msg.conversationId !== useCRMStore.getState().selectedConversationId) {
+              incrementUnread(msg.conversationId)
+              addNotification({
+                type: 'new_message',
+                title: 'Tin nhan moi',
+                body: 'Ban co tin nhan moi tu khach hang',
+                conversationId: msg.conversationId,
+              })
+            }
           })
         } catch {}
       })
@@ -245,7 +369,15 @@ export default function CRMPage() {
           const data = JSON.parse(e.data)
           ;(data.messages || []).forEach((msg: any) => {
             window.dispatchEvent(new CustomEvent('crm:conversation_update', { detail: { conversationId: msg.conversationId } }))
-            if (msg.conversationId !== useCRMStore.getState().selectedConversationId) incrementUnread(msg.conversationId)
+            if (msg.conversationId !== useCRMStore.getState().selectedConversationId) {
+              incrementUnread(msg.conversationId)
+              addNotification({
+                type: 'new_message',
+                title: 'Tin nhan moi',
+                body: 'Ban co tin nhan moi tu khach hang',
+                conversationId: msg.conversationId,
+              })
+            }
           })
         } catch {}
       })
@@ -253,7 +385,7 @@ export default function CRMPage() {
     } else if (!simulationRunning && sseRef.current) {
       sseRef.current.close(); sseRef.current = null
     }
-  }, [simulationRunning, incrementUnread])
+  }, [simulationRunning, incrementUnread, addNotification])
 
   const renderInbox = () => (
     <>
@@ -292,6 +424,27 @@ export default function CRMPage() {
         {activeView === 'dashboard' && <Dashboard />}
         {activeView === 'automation' && <AutomationPanel />}
       </div>
+
+      {/* Notification Sheet */}
+      <Sheet open={openSheet === 'notifications'} onOpenChange={(open) => { if (!open) setOpenSheet(null) }}>
+        <SheetContent side="right" className="w-full sm:w-[400px] p-0 rounded-l-2xl">
+          <NotificationPanel />
+        </SheetContent>
+      </Sheet>
+
+      {/* Profile Sheet */}
+      <Sheet open={openSheet === 'profile'} onOpenChange={(open) => { if (!open) setOpenSheet(null) }}>
+        <SheetContent side="right" className="w-full sm:w-[440px] p-0 rounded-l-2xl">
+          <ProfilePanel />
+        </SheetContent>
+      </Sheet>
+
+      {/* Settings Sheet */}
+      <Sheet open={openSheet === 'settings'} onOpenChange={(open) => { if (!open) setOpenSheet(null) }}>
+        <SheetContent side="right" className="w-full sm:w-[440px] p-0 rounded-l-2xl">
+          <SettingsPanel />
+        </SheetContent>
+      </Sheet>
     </div>
   )
 }
