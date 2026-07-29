@@ -1,0 +1,172 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  users     User[]
+}
+
+model User {
+  id             String         @id @default(cuid())
+  email          String         @unique
+  name           String
+  avatar         String?
+  role           String         @default("agent") // admin, supervisor, agent, viewer
+  status         String         @default("online") // online, offline, busy
+  organizationId String?
+  organization   Organization?  @relation(fields: [organizationId], references: [id])
+  assignedConvos Conversation[]  @relation("Owner")
+  followedConvos Conversation[]  @relation("Follower")
+  notes          InternalNote[]
+  ownedLeads     Lead[]          @relation("LeadOwner")
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+}
+
+model Customer {
+  id        String             @id @default(cuid())
+  name      String
+  phone     String?
+  email     String?
+  avatar    String?
+  gender    String?
+  birthday  String?
+  company   String?
+  address   String?
+  note      String?
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+  identities  CustomerIdentity[]
+  conversations Conversation[]
+  leads         Lead[]
+  notes         InternalNote[]
+}
+
+model CustomerIdentity {
+  id                String   @id @default(cuid())
+  customerId        String
+  customer          Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  platform          String   // facebook, zalo, telegram, chatwork, website, email
+  platformUserId    String?  // facebook_psid, zalo_user_id, telegram_chat_id, etc.
+  platformPageId    String?  // facebook_page, oa_id, etc.
+  platformUserName  String?
+  platformAvatar    String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([platform, platformUserId])
+}
+
+model Conversation {
+  id          String    @id @default(cuid())
+  customerId  String
+  customer    Customer  @relation(fields: [customerId], references: [id])
+  channel     String    // website, facebook_messenger, facebook_comment, zalo, telegram, chatwork, email
+  status      String    @default("open") // open, pending, resolved, closed, spam, archived
+  priority    String    @default("medium") // low, medium, high, urgent
+  subject     String?
+  slaFirstResponse DateTime?
+  slaResolve      DateTime?
+  ownerId    String?
+  owner      User?    @relation("Owner", fields: [ownerId], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  messages    Message[]
+  tags       ConversationTag[]
+  followers  User[]   @relation("Follower")
+  notes      InternalNote[]
+  leads      Lead[]
+}
+
+model Message {
+  id                String       @id @default(cuid())
+  conversationId    String
+  conversation      Conversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderType        String       // customer, agent, bot, system
+  senderId          String?
+  senderName        String?
+  messageType       String       @default("text") // text, image, video, audio, file, sticker, location, system, event
+  content           String?
+  attachmentUrl     String?
+  attachmentName    String?
+  attachmentType    String?
+  platformMessageId String?
+  isRead            Boolean      @default(false)
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+}
+
+model Tag {
+  id          String             @id @default(cuid())
+  name        String             @unique
+  color       String             @default("#6b7280")
+  description String?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  conversations ConversationTag[]
+}
+
+model ConversationTag {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  tagId          String
+  tag            Tag          @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  createdAt      DateTime     @default(now())
+
+  @@unique([conversationId, tagId])
+}
+
+model InternalNote {
+  id             String       @id @default(cuid())
+  conversationId String?
+  conversation   Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  customerId     String?
+  customer       Customer?     @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  authorId       String
+  author         User          @relation(fields: [authorId], references: [id])
+  content        String
+  isPinned       Boolean       @default(false)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+}
+
+model Lead {
+  id              String       @id @default(cuid())
+  customerId      String?
+  customer        Customer?    @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  conversationId  String?
+  conversation    Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  source          String?      // facebook_ads, google_ads, website, referral, organic
+  campaign        String?
+  status          String       @default("new") // new, contacted, qualified, proposal, negotiation, won, lost
+  value           Float?
+  ownerId         String?
+  owner           User?        @relation("LeadOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  nextFollowup    DateTime?
+  probability     Int?         // 0-100
+  notes           String?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+}
+
+model AuditLog {
+  id            String   @id @default(cuid())
+  userId        String?
+  action        String   // assign, transfer, reply, delete, merge, tag, status_change, login
+  entityType    String?  // conversation, customer, message, tag, lead
+  entityId      String?
+  details       String?  // JSON string
+  ipAddress     String?
+  userAgent     String?
+  createdAt     DateTime @default(now())
+}
