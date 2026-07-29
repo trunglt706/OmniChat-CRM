@@ -343,7 +343,7 @@ export default function CustomerPanel() {
   ]
 
   return (
-    <div className="flex flex-col h-full animate-fade-in">
+    <div className="flex flex-col h-full min-h-0 animate-fade-in">
       <div className="px-4 pt-3 pb-0">
         <div className="flex gap-1 p-1 bg-foreground/[0.03] rounded-xl">
           {tabs.map((tab) => (
@@ -362,7 +362,7 @@ export default function CustomerPanel() {
           ))}
         </div>
       </div>
-      <ScrollArea className="flex-1">
+      <ScrollArea className="flex-1 min-h-0">
         <div className="p-4">
           {rightPanelTab === 'info' && <InfoTab />}
           {rightPanelTab === 'notes' && <NotesTab />}

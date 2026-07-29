@@ -41,7 +41,7 @@ export default function SettingsPanel() {
   const { theme, setTheme } = useTheme()
 
   return (
-    <div className="flex flex-col h-full animate-slide-up">
+    <div className="flex flex-col h-full min-h-0 animate-slide-up">
       <div className="px-5 pt-5 pb-3">
         <h2 className="text-base font-bold tracking-tight">Cai dat</h2>
       </div>

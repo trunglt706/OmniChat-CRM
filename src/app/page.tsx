@@ -87,8 +87,8 @@ function Header() {
   }
 
   return (
-    <header className="h-14 border-b border-border/30 glass flex items-center justify-between px-4 flex-shrink-0 z-50">
-      <div className="flex items-center gap-4">
+    <header className="h-12 md:h-14 border-b border-border/30 glass flex items-center justify-between px-2 md:px-4 flex-shrink-0 z-50">
+      <div className="flex items-center gap-2 md:gap-4 min-w-0">
         {/* Brand */}
         <div className="flex items-center gap-2.5">
           <div className="h-8 w-8 rounded-xl bg-gradient-to-br from-indigo-500 via-violet-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-500/20 transition-transform duration-300 hover:scale-105 hover:shadow-xl hover:shadow-indigo-500/30">
@@ -98,7 +98,7 @@ function Header() {
         </div>
 
         {/* Divider */}
-        <div className="w-px h-5 bg-border/40 hidden sm:block" />
+        <div className="w-px h-5 bg-border/40 hidden sm:block flex-shrink-0" />
 
         {/* Nav */}
         <nav className="flex items-center gap-0.5 p-0.5 bg-foreground/[0.03] rounded-xl">
@@ -135,7 +135,7 @@ function Header() {
         </nav>
       </div>
 
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-0.5 md:gap-1 flex-shrink-0">
         {/* Simulation toggle */}
         <TooltipProvider>
           <Tooltip>
@@ -283,14 +283,14 @@ function Header() {
 function MobileCustomerPanel() {
   const { setMobileView } = useCRMStore()
   return (
-    <div className="md:hidden flex flex-col h-full">
-      <div className="px-4 py-3 border-b border-border/30 glass flex items-center gap-3">
+    <div className="md:hidden flex flex-col h-full min-h-0">
+      <div className="px-3 py-2.5 border-b border-border/30 glass flex items-center gap-2 flex-shrink-0">
         <Button variant="ghost" size="icon" className="h-8 w-8 rounded-xl" onClick={() => setMobileView('chat')}>
           <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
         </Button>
         <span className="font-semibold text-sm">Thong tin khach hang</span>
       </div>
-      <div className="flex-1 overflow-hidden"><CustomerPanel /></div>
+      <div className="flex-1 min-h-0 overflow-hidden"><CustomerPanel /></div>
     </div>
   )
 }
@@ -409,9 +409,9 @@ export default function CRMPage() {
         </ResizablePanelGroup>
       </div>
       <div className="md:hidden flex-1 overflow-hidden">
-        {mobileView === 'list' && <div className="h-full mobile-slide-enter"><ConversationList /></div>}
-        {mobileView === 'chat' && <div className="h-full mobile-slide-enter"><ChatArea /></div>}
-        {mobileView === 'panel' && <div className="h-full mobile-slide-enter"><MobileCustomerPanel /></div>}
+        {mobileView === 'list' && <div className="h-full min-h-0 mobile-slide-enter"><ConversationList /></div>}
+        {mobileView === 'chat' && <div className="h-full min-h-0 mobile-slide-enter"><ChatArea /></div>}
+        {mobileView === 'panel' && <div className="h-full min-h-0 mobile-slide-enter"><MobileCustomerPanel /></div>}
       </div>
     </>
   )
@@ -427,21 +427,21 @@ export default function CRMPage() {
 
       {/* Notification Sheet */}
       <Sheet open={openSheet === 'notifications'} onOpenChange={(open) => { if (!open) setOpenSheet(null) }}>
-        <SheetContent side="right" className="w-full sm:w-[400px] p-0 rounded-l-2xl">
+        <SheetContent side="right" className="w-full sm:max-w-[400px] p-0 rounded-l-2xl">
           <NotificationPanel />
         </SheetContent>
       </Sheet>
 
       {/* Profile Sheet */}
       <Sheet open={openSheet === 'profile'} onOpenChange={(open) => { if (!open) setOpenSheet(null) }}>
-        <SheetContent side="right" className="w-full sm:w-[440px] p-0 rounded-l-2xl">
+        <SheetContent side="right" className="w-full sm:max-w-[440px] p-0 rounded-l-2xl">
           <ProfilePanel />
         </SheetContent>
       </Sheet>
 
       {/* Settings Sheet */}
       <Sheet open={openSheet === 'settings'} onOpenChange={(open) => { if (!open) setOpenSheet(null) }}>
-        <SheetContent side="right" className="w-full sm:w-[440px] p-0 rounded-l-2xl">
+        <SheetContent side="right" className="w-full sm:max-w-[440px] p-0 rounded-l-2xl">
           <SettingsPanel />
         </SheetContent>
       </Sheet>

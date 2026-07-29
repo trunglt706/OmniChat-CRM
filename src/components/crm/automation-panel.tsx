@@ -135,16 +135,16 @@ export default function AutomationPanel() {
   }
 
   return (
-    <ScrollArea className="h-full">
-      <div className="p-6 max-w-[900px] mx-auto space-y-6">
-        <div className="flex items-center justify-between">
+    <ScrollArea className="h-full min-h-0">
+      <div className="p-4 md:p-6 max-w-[900px] mx-auto space-y-4 md:space-y-6">
+        <div className="flex items-center justify-between gap-3">
           <div>
-            <h1 className="text-xl font-bold flex items-center gap-2">
+            <h1 className="text-lg md:text-xl font-bold flex items-center gap-2">
               <Zap className="h-5 w-5" /> Automation Rules
             </h1>
             <p className="text-sm text-muted-foreground mt-0.5">Tự động phản hồi, phân công và gắn tag theo từ khóa</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-shrink-0">
             {rules.length === 0 && (
               <Button variant="outline" size="sm" onClick={seedRules} className="text-xs">
                 Tạo mẫu

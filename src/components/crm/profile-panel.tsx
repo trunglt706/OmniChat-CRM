@@ -55,7 +55,7 @@ export default function ProfilePanel() {
   if (!currentUser) return null
 
   return (
-    <div className="flex flex-col h-full animate-slide-up">
+    <div className="flex flex-col h-full min-h-0 animate-slide-up">
       <div className="px-5 pt-5 pb-3">
         <h2 className="text-base font-bold tracking-tight">Ho so cua toi</h2>
       </div>

@@ -71,3 +71,32 @@ Stage Summary:
 - New files: auth.ts, login/page.tsx, 3 mock auth endpoints, simulation API, E2E test suite
 - Updated files: store, globals.css, page.tsx, conversation-list.tsx, chat-area.tsx, seed.ts, notes API
 - Production build successful
+---
+Task ID: 1
+Agent: main
+Task: Fix mobile scroll issues across all list components
+
+Work Log:
+- Analyzed all 8 CRM components for mobile scroll overflow issues
+- Fixed ConversationList: added min-h-0, flex-shrink-0 on header, scrollbar-none on filter tabs, compact mobile spacing
+- Fixed ChatArea: added min-h-0 on root and ScrollArea
+- Fixed CustomerPanel: added min-h-0 on root and ScrollArea
+- Fixed MobileCustomerPanel: added min-h-0 on both container and child wrapper, flex-shrink-0 on header
+- Fixed NotificationPanel: added min-h-0 on root and ScrollArea
+- Fixed ProfilePanel: added min-h-0 on root
+- Fixed SettingsPanel: added min-h-0 on root
+- Fixed Dashboard: responsive stat cards, agent table converted to mobile card layout, compact spacing
+- Fixed AutomationPanel: compact mobile padding, min-h-0 on ScrollArea
+- Fixed Header: compact mobile height (h-12 vs h-14 md), tighter padding, flex-shrink-0 on action area
+- Fixed Sheet component: removed gap-4, added overflow-hidden
+- Fixed Sheet widths in page.tsx: w-full sm:max-w-[Npx] for proper mobile full-width
+- Added mobile CSS utilities: scrollbar-none, overscroll-behavior: contain, safe area insets
+- Cleaned CSS file artifact from edit tool
+- Production build verified passing
+
+Stage Summary:
+- All lists now scroll properly on mobile via min-h-0 flex constraint chain
+- Filter tabs in ConversationList are horizontally scrollable with hidden scrollbar
+- Dashboard agent performance table shows compact card layout on mobile
+- Sheet panels (notifications, profile, settings) fill screen height and scroll on mobile
+- Header is more compact on mobile to maximize content area

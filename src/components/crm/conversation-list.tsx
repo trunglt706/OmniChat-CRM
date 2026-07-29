@@ -187,9 +187,9 @@ export default function ConversationList() {
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full min-h-0">
       {/* Header */}
-      <div className="px-4 pt-4 pb-3">
+      <div className="px-3 md:px-4 pt-3 md:pt-4 pb-2 flex-shrink-0">
         <div className="flex items-center justify-between mb-3">
           <div className="animate-slide-down" style={{ animationDelay: '50ms' }}>
             <h2 className="text-sm font-bold tracking-tight">Hội thoại</h2>
@@ -206,24 +206,24 @@ export default function ConversationList() {
           )}
         </div>
         {/* Search */}
-        <div className="relative mb-3 animate-slide-down" style={{ animationDelay: '100ms' }}>
+        <div className="relative mb-2 animate-slide-down" style={{ animationDelay: '100ms' }}>
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/40" />
           <Input
             placeholder="Tìm tên, SĐT, email..."
-            className="pl-9 h-9 text-[13px] rounded-xl glass-input focus-visible:ring-0 focus-visible:border-primary/30"
+            className="pl-9 h-8 md:h-9 text-[13px] rounded-xl glass-input focus-visible:ring-0 focus-visible:border-primary/30"
             value={searchQuery}
             onChange={(e) => handleSearch(e.target.value)}
           />
         </div>
         {/* Status tabs */}
-        <div className="flex gap-1 animate-slide-down" style={{ animationDelay: '150ms' }}>
+        <div className="flex gap-1 overflow-x-auto scrollbar-none animate-slide-down" style={{ animationDelay: '150ms' }}>
           {FILTER_TABS.map((tab, idx) => {
             const Icon = tab.icon
             const active = activeFilter === tab.key
             return (
               <button key={tab.key} onClick={() => setActiveFilter(tab.key)}
                 className={cn(
-                  'flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[11px] font-medium transition-all duration-250',
+                  'flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[11px] font-medium transition-all duration-250 whitespace-nowrap flex-shrink-0',
                   active
                     ? 'bg-primary text-primary-foreground shadow-md shadow-primary/20 scale-[1.02]'
                     : 'text-muted-foreground hover:text-foreground hover:bg-foreground/[0.05]'
@@ -236,7 +236,7 @@ export default function ConversationList() {
         </div>
       </div>
       {/* Channels */}
-      <div className="px-4 py-2 border-b border-border/30 flex gap-1 overflow-x-auto animate-slide-down" style={{ animationDelay: '200ms' }}>
+      <div className="px-3 md:px-4 py-2 border-b border-border/30 flex gap-1 overflow-x-auto scrollbar-none animate-slide-down flex-shrink-0" style={{ animationDelay: '200ms' }}>
         {CHANNEL_FILTERS.map((ch) => {
           const active = activeChannel === ch.key
           return (
@@ -257,7 +257,7 @@ export default function ConversationList() {
         })}
       </div>
       {/* List */}
-      <ScrollArea className="flex-1">
+      <ScrollArea className="flex-1 min-h-0">
         {isLoadingConversations ? (
           <div className="p-4 space-y-4">
             {[1, 2, 3, 4, 5].map((i) => (

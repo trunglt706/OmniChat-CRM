@@ -88,7 +88,7 @@ export default function NotificationPanel() {
   }
 
   return (
-    <div className="flex flex-col h-full animate-slide-up">
+    <div className="flex flex-col h-full min-h-0 animate-slide-up">
       {/* Header */}
       <div className="px-5 pt-5 pb-3">
         <div className="flex items-center justify-between mb-1">
@@ -128,7 +128,7 @@ export default function NotificationPanel() {
       <Separator className="opacity-40" />
 
       {/* List */}
-      <ScrollArea className="flex-1">
+      <ScrollArea className="flex-1 min-h-0">
         {notifications.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-muted-foreground/40 animate-fade-in">
             <div className="h-16 w-16 rounded-2xl bg-foreground/[0.02] flex items-center justify-center mb-4">
