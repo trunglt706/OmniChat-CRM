@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useCRMStore } from '@/store/crm-store'
 import ConversationList from '@/components/crm/conversation-list'
 import ChatArea from '@/components/crm/chat-area'
@@ -17,10 +17,10 @@ import {
   ResizableHandle, ResizablePanel, ResizablePanelGroup,
 } from '@/components/ui/resizable'
 import {
-  Bell, Settings, PanelRightClose, PanelRightOpen,
+  Settings, PanelRightClose, PanelRightOpen,
   Headphones, LogOut, User, ChevronDown, Moon, Sun,
   Inbox, LayoutDashboard, Zap, Radio,
-  Loader2,
+  Loader2, Activity,
 } from 'lucide-react'
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
@@ -51,96 +51,94 @@ function Header() {
     setSimLoading(true)
     try {
       if (simulationRunning) {
-        await fetch('/api/simulation', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'stop_auto' }),
-        })
+        await fetch('/api/simulation', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'stop_auto' }) })
         setSimulationRunning(false)
       } else {
-        await fetch('/api/simulation', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'start_auto' }),
-        })
+        await fetch('/api/simulation', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'start_auto' }) })
         setSimulationRunning(true)
       }
-    } catch (e) {
-      console.error('Simulation error', e)
-    } finally {
-      setSimLoading(false)
-    }
+    } catch (e) { console.error('Simulation error', e) }
+    finally { setSimLoading(false) }
   }
 
   return (
-    <header className="h-12 border-b border-border flex items-center justify-between px-3 bg-background flex-shrink-0">
-      <div className="flex items-center gap-3">
-        <div className="flex items-center gap-2">
-          <div className="h-7 w-7 rounded-lg bg-primary flex items-center justify-center">
-            <Headphones className="h-4 w-4 text-primary-foreground" />
+    <header className="h-14 border-b border-border/60 glass flex items-center justify-between px-4 flex-shrink-0 z-50">
+      <div className="flex items-center gap-4">
+        {/* Brand */}
+        <div className="flex items-center gap-2.5">
+          <div className="h-8 w-8 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+            <Headphones className="h-4 w-4 text-white" />
           </div>
-          <span className="font-bold text-sm tracking-tight hidden sm:inline">OmniChat</span>
+          <span className="font-bold text-sm tracking-tight hidden sm:inline bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text">OmniChat</span>
         </div>
-        {/* Nav tabs */}
-        <div className="flex items-center gap-1 ml-2">
+
+        {/* Divider */}
+        <div className="w-px h-6 bg-border/60 hidden sm:block" />
+
+        {/* Nav */}
+        <nav className="flex items-center gap-1">
           {navItems.map((item) => {
             const Icon = item.icon
+            const active = activeView === item.key
             return (
               <button
                 key={item.key}
                 onClick={() => setActiveView(item.key)}
                 className={cn(
-                  'flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-all duration-150',
-                  activeView === item.key
-                    ? 'bg-primary text-primary-foreground shadow-sm'
-                    : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                  'relative flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-all duration-200',
+                  active
+                    ? 'text-primary-foreground'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-foreground/5'
                 )}
               >
-                <Icon className="h-3.5 w-3.5" />
-                <span className="hidden md:inline">{item.label}</span>
+                {active && (
+                  <span className="absolute inset-0 rounded-lg bg-primary shadow-md shadow-primary/20" />
+                )}
+                <Icon className="h-4 w-4 relative z-10" />
+                <span className="hidden md:inline relative z-10">{item.label}</span>
                 {item.key === 'inbox' && totalOpen > 0 && (
-                  <Badge className={cn('h-4 px-1 text-[10px] min-w-4 justify-center transition-transform', activeView === 'inbox' ? 'bg-primary-foreground text-primary' : 'bg-destructive text-destructive-foreground')}>
+                  <span className={cn(
+                    'relative z-10 min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold flex items-center justify-center',
+                    active ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-rose-500 text-white'
+                  )}>
                     {totalOpen}
-                  </Badge>
+                  </span>
                 )}
               </button>
             )
           })}
-        </div>
+        </nav>
       </div>
 
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-1.5">
         {/* Simulation toggle */}
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
-                variant={simulationRunning ? 'default' : 'outline'}
+                variant={simulationRunning ? 'default' : 'ghost'}
                 size="icon"
-                className={cn('h-8 w-8', simulationRunning && 'bg-emerald-600 hover:bg-emerald-700')}
+                className={cn(
+                  'h-8 w-8 rounded-lg transition-all duration-200',
+                  simulationRunning
+                    ? 'bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white shadow-md shadow-emerald-500/25'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-foreground/5'
+                )}
                 onClick={toggleSimulation}
                 disabled={simLoading}
               >
-                {simLoading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : simulationRunning ? (
-                  <Radio className="h-4 w-4" />
-                ) : (
-                  <Radio className="h-4 w-4 opacity-40" />
-                )}
+                {simLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Activity className="h-4 w-4" />}
               </Button>
             </TooltipTrigger>
-            <TooltipContent>
-              {simulationRunning ? 'Dừng mô phỏng realtime' : 'Bắt đầu mô phỏng realtime'}
-            </TooltipContent>
+            <TooltipContent>{simulationRunning ? 'Dừng mô phỏng' : 'Bắt đầu mô phỏng realtime'}</TooltipContent>
           </Tooltip>
         </TooltipProvider>
 
-        {/* Theme toggle */}
+        {/* Theme */}
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>
+              <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-foreground/5 transition-colors" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>
                 {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
               </Button>
             </TooltipTrigger>
@@ -148,16 +146,12 @@ function Header() {
           </Tooltip>
         </TooltipProvider>
 
-        {/* Panel toggle (desktop only) */}
+        {/* Panel toggle */
         {activeView === 'inbox' && (
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button
-                  variant="ghost" size="icon"
-                  className="h-8 w-8 hidden md:flex"
-                  onClick={() => setShowRightPanel(!showRightPanel)}
-                >
+                <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hidden md:flex text-muted-foreground hover:text-foreground hover:bg-foreground/5 transition-colors" onClick={() => setShowRightPanel(!showRightPanel)}>
                   {showRightPanel ? <PanelRightClose className="h-4 w-4" /> : <PanelRightOpen className="h-4 w-4" />}
                 </Button>
               </TooltipTrigger>
@@ -166,25 +160,31 @@ function Header() {
           </TooltipProvider>
         )}
 
-        {/* User dropdown */}
+        {/* Divider */}
+        <div className="w-px h-6 bg-border/60" />
+
+        {/* User */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="h-8 px-2 gap-2">
-              <Avatar className="h-6 w-6">
-                <AvatarFallback className="text-[10px] bg-primary text-primary-foreground">
+            <Button variant="ghost" className="h-8 pl-1.5 pr-2 gap-2 rounded-lg hover:bg-foreground/5 transition-colors">
+              <Avatar className="h-7 w-7 ring-2 ring-primary/15">
+                <AvatarFallback className="text-[10px] bg-gradient-to-br from-indigo-500 to-violet-600 text-white font-semibold">
                   {currentUser?.name?.split(' ').slice(-2).map(n => n[0]).join('') || 'U'}
                 </AvatarFallback>
               </Avatar>
-              <span className="text-xs font-medium hidden sm:inline">{currentUser?.name || 'User'}</span>
+              <div className="hidden sm:flex flex-col items-start">
+                <span className="text-xs font-medium leading-tight">{currentUser?.name || 'User'}</span>
+                <span className="text-[10px] text-muted-foreground leading-tight">Admin</span>
+              </div>
               <ChevronDown className="h-3 w-3 text-muted-foreground" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-48">
-            <DropdownMenuItem><User className="h-3.5 w-3.5 mr-2" /> Profile</DropdownMenuItem>
-            <DropdownMenuItem><Settings className="h-3.5 w-3.5 mr-2" /> Cài đặt</DropdownMenuItem>
+          <DropdownMenuContent align="end" className="w-52 rounded-xl">
+            <DropdownMenuItem className="rounded-lg"><User className="h-4 w-4 mr-2" /> Profile</DropdownMenuItem>
+            <DropdownMenuItem className="rounded-lg"><Settings className="h-4 w-4 mr-2" /> Cài đặt</DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => window.location.href = '/api/auth/signout'}>
-              <LogOut className="h-3.5 w-3.5 mr-2" /> Đăng xuất
+            <DropdownMenuItem className="rounded-lg text-destructive focus:text-destructive" onClick={() => window.location.href = '/api/auth/signout'}>
+              <LogOut className="h-4 w-4 mr-2" /> Đăng xuất
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -194,19 +194,16 @@ function Header() {
 }
 
 function MobileCustomerPanel() {
-  const { setMobileView, selectedConversationId } = useCRMStore()
-  if (!selectedConversationId) return null
+  const { setMobileView } = useCRMStore()
   return (
     <div className="md:hidden flex flex-col h-full">
-      <div className="px-4 py-3 border-b border-border flex items-center gap-3">
-        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setMobileView('chat')}>
+      <div className="px-4 py-3 border-b border-border/60 glass flex items-center gap-3">
+        <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg" onClick={() => setMobileView('chat')}>
           <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
         </Button>
         <span className="font-semibold text-sm">Thông tin khách hàng</span>
       </div>
-      <div className="flex-1 overflow-hidden">
-        <CustomerPanel />
-      </div>
+      <div className="flex-1 overflow-hidden"><CustomerPanel /></div>
     </div>
   )
 }
@@ -216,127 +213,77 @@ export default function CRMPage() {
   const activeView = useCRMStore((s) => s.activeView)
   const mobileView = useCRMStore((s) => s.mobileView)
   const showRightPanel = useCRMStore((s) => s.showRightPanel)
-  const addMessage = useCRMStore((s) => s.addMessage)
   const incrementUnread = useCRMStore((s) => s.incrementUnread)
   const sseRef = useRef<EventSource | null>(null)
 
-  // SSE connection for real-time simulation updates
   useEffect(() => {
     if (typeof window === 'undefined') return
-
     const connectSSE = () => {
-      const evtSource = new EventSource('/api/simulation')
-      sseRef.current = evtSource
-
-      evtSource.addEventListener('new_messages', (e) => {
+      const es = new EventSource('/api/simulation')
+      sseRef.current = es
+      es.addEventListener('new_messages', (e) => {
         try {
           const data = JSON.parse(e.data)
-          const msgs: Message[] = data.messages || []
-          msgs.forEach((msg: any) => {
-            // Dispatch to update conversation list
-            window.dispatchEvent(new CustomEvent('crm:conversation_update', {
-              detail: { conversationId: msg.conversationId }
-            }))
-            // Increment unread count for conversations not currently selected
-            const selectedId = useCRMStore.getState().selectedConversationId
-            if (msg.conversationId !== selectedId) {
-              incrementUnread(msg.conversationId)
-            }
+          ;(data.messages || []).forEach((msg: any) => {
+            window.dispatchEvent(new CustomEvent('crm:conversation_update', { detail: { conversationId: msg.conversationId } }))
+            if (msg.conversationId !== useCRMStore.getState().selectedConversationId) incrementUnread(msg.conversationId)
           })
         } catch {}
       })
-
-      evtSource.onerror = () => {
- evtSource.close()
-        // Reconnect after 3s
-        setTimeout(connectSSE, 3000)
-      }
+      es.onerror = () => { es.close(); setTimeout(connectSSE, 3000) }
     }
+    if (useCRMStore.getState().simulationRunning) connectSSE()
+    return () => { sseRef.current?.close() }
+  }, [])
 
-    // Only connect SSE when simulation is running
-    const simulationRunning = useCRMStore.getState().simulationRunning
-    if (simulationRunning) connectSSE()
-
-    return () => {
-      sseRef.current?.close()
-    }
-  }, []) // Connect once on mount
-
-  // Manage SSE lifecycle based on simulation state
   const simulationRunning = useCRMStore((s) => s.simulationRunning)
   useEffect(() => {
     if (simulationRunning && !sseRef.current) {
-      const evtSource = new EventSource('/api/simulation')
-      sseRef.current = evtSource
-      evtSource.addEventListener('new_messages', (e) => {
+      const es = new EventSource('/api/simulation')
+      sseRef.current = es
+      es.addEventListener('new_messages', (e) => {
         try {
           const data = JSON.parse(e.data)
-          const msgs: Message[] = data.messages || []
-          msgs.forEach((msg: any) => {
-            window.dispatchEvent(new CustomEvent('crm:conversation_update', {
-              detail: { conversationId: msg.conversationId }
-            }))
-            const selectedId = useCRMStore.getState().selectedConversationId
-            if (msg.conversationId !== selectedId) {
-              incrementUnread(msg.conversationId)
-            }
+          ;(data.messages || []).forEach((msg: any) => {
+            window.dispatchEvent(new CustomEvent('crm:conversation_update', { detail: { conversationId: msg.conversationId } }))
+            if (msg.conversationId !== useCRMStore.getState().selectedConversationId) incrementUnread(msg.conversationId)
           })
         } catch {}
       })
-      evtSource.onerror = () => { evtSource.close(); sseRef.current = null }
+      es.onerror = () => { es.close(); sseRef.current = null }
     } else if (!simulationRunning && sseRef.current) {
-      sseRef.current.close()
-      sseRef.current = null
+      sseRef.current.close(); sseRef.current = null
     }
   }, [simulationRunning, incrementUnread])
 
-  // Desktop: 3-column resizable layout
-  // Mobile: single panel with slide transitions
-  const renderInbox = () => {
-    return (
-      <>
-        {/* Desktop layout */}
-        <div className="hidden md:flex flex-1 overflow-hidden">
-          <ResizablePanelGroup direction="horizontal">
-            <ResizablePanel defaultSize={25} minSize={20} maxSize={40} className="border-r border-border">
-              <ConversationList />
-            </ResizablePanel>
-            <ResizableHandle withHandle />
-            <ResizablePanel defaultSize={selectedConversationId ? 50 : 75} minSize={30}>
-              <ChatArea />
-            </ResizablePanel>
-            {showRightPanel && selectedConversationId && (
-              <>
-                <ResizableHandle withHandle />
-                <ResizablePanel defaultSize={25} minSize={20} maxSize={35} className="border-l border-border bg-muted/20">
-                  <CustomerPanel />
-                </ResizablePanel>
-              </>
-            )}
-          </ResizablePanelGroup>
-        </div>
-
-        {/* Mobile layout */}
-        <div className="md:hidden flex-1 overflow-hidden">
-          {mobileView === 'list' && (
-            <div className="h-full mobile-slide-enter">
-              <ConversationList />
-            </div>
+  const renderInbox = () => (
+    <>
+      <div className="hidden md:flex flex-1 overflow-hidden">
+        <ResizablePanelGroup direction="horizontal">
+          <ResizablePanel defaultSize={26} minSize={20} maxSize={40} className="border-r border-border/40">
+            <ConversationList />
+          </ResizablePanel>
+          <ResizableHandle withHandle />
+          <ResizablePanel defaultSize={selectedConversationId ? 50 : 74} minSize={30}>
+            <ChatArea />
+          </ResizablePanel>
+          {showRightPanel && selectedConversationId && (
+            <>
+              <ResizableHandle withHandle />
+              <ResizablePanel defaultSize={24} minSize={20} maxSize={34} className="border-l border-border/40 bg-muted/30">
+                <CustomerPanel />
+              </ResizablePanel>
+            </>
           )}
-          {mobileView === 'chat' && (
-            <div className="h-full mobile-slide-enter">
-              <ChatArea />
-            </div>
-          )}
-          {mobileView === 'panel' && (
-            <div className="h-full mobile-slide-enter">
-              <MobileCustomerPanel />
-            </div>
-          )}
-        </div>
-      </>
-    )
-  }
+        </ResizablePanelGroup>
+      </div>
+      <div className="md:hidden flex-1 overflow-hidden">
+        {mobileView === 'list' && <div className="h-full mobile-slide-enter"><ConversationList /></div>}
+        {mobileView === 'chat' && <div className="h-full mobile-slide-enter"><ChatArea /></div>}
+        {mobileView === 'panel' && <div className="h-full mobile-slide-enter"><MobileCustomerPanel /></div>}
+      </div>
+    </>
+  )
 
   return (
     <div className="h-screen flex flex-col bg-background overflow-hidden">
