@@ -417,9 +417,9 @@ export default function CRMPage() {
   )
 
   return (
-    <div className="h-screen flex flex-col bg-background overflow-hidden">
+    <div className="h-dvh h-screen flex flex-col bg-background overflow-hidden">
       <Header />
-      <div className="flex-1 overflow-hidden">
+      <div className="flex-1 min-h-0 overflow-hidden">
         {activeView === 'inbox' && renderInbox()}
         {activeView === 'dashboard' && <Dashboard />}
         {activeView === 'automation' && <AutomationPanel />}

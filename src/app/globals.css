@@ -641,10 +641,9 @@
 }
 
 /* Ensure touch scroll works on mobile flex children */
-@supports (overscroll-behavior: contain) {
-  .scroll-area-viewport {
-    overscroll-behavior: contain;
-  }
+[data-slot="scroll-area-viewport"] {
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* Prevent body scroll when sheet is open on mobile */
