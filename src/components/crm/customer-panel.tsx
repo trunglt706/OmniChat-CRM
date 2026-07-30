@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import { ScrollArea } from '@/components/ui/scroll-area'
+// Native scroll
 import { Separator } from '@/components/ui/separator'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
@@ -362,13 +362,13 @@ export default function CustomerPanel() {
           ))}
         </div>
       </div>
-      <ScrollArea className="flex-1 min-h-0">
+      <div className="flex-1 min-h-0 overflow-y-auto">
         <div className="p-4">
           {rightPanelTab === 'info' && <InfoTab />}
           {rightPanelTab === 'notes' && <NotesTab />}
           {rightPanelTab === 'lead' && <LeadTab />}
         </div>
-      </ScrollArea>
+      </div>
     </div>
   )
 }

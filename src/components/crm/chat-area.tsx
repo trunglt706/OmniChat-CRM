@@ -6,23 +6,31 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import {
+  Popover, PopoverContent, PopoverTrigger,
+} from '@/components/ui/popover'
 import { CHANNEL_CONFIG, STATUS_CONFIG, PRIORITY_CONFIG, type Message } from '@/lib/types'
 import {
   Send, Paperclip, MoreVertical, CheckCircle, Clock, AlertTriangle,
   Bot, User, Shield, Settings, UserPlus, Tag, Archive, XCircle, Sparkles,
-  ArrowLeft, Info, SmilePlus, ImagePlus, Mic,
+  ArrowLeft, Info, SmilePlus, ImagePlus, Mic, X, Upload,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import {
   Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
 } from '@/components/ui/tooltip'
+
+const EMOJI_LIST = [
+  '😀','😂','🥰','😍','🤩','😎','🤔','😮','😢','😤',
+  '👍','👋','🙌','👏','🙏','✅','❤️','🔥','💯','🎉',
+  '📧','📎','🖼️','🛒','💰','⭐','🔔','💬','🤝','👋',
+]
 
 function formatMessageTime(dateStr: string) {
   const date = new Date(dateStr)
@@ -69,7 +77,7 @@ function MessageBubble({ message, isLastInGroup, showAvatar, gradientIdx }: { me
 
   if (isEvent) {
     return (
-      <div className="flex justify-center my-3 animate-fade-in">
+      <div className="flex justify-center my-3">
         <span className="text-[11px] text-muted-foreground/70 bg-muted/60 backdrop-blur-sm px-4 py-1.5 rounded-full shadow-sm">
           {message.content}
         </span>
@@ -80,7 +88,7 @@ function MessageBubble({ message, isLastInGroup, showAvatar, gradientIdx }: { me
   const gradient = GRADIENT_CLASSES[gradientIdx % GRADIENT_CLASSES.length]
 
   return (
-    <div className={cn('flex gap-2.5 mb-1 animate-message-in', isCustomer ? 'flex-row' : 'flex-row-reverse')}>
+    <div className={cn('flex gap-2.5 mb-1', isCustomer ? 'flex-row' : 'flex-row-reverse')}>
       {showAvatar && (
         <Avatar className={cn(
           'h-7 w-7 flex-shrink-0 mt-1 transition-transform duration-200',
@@ -117,7 +125,7 @@ function MessageBubble({ message, isLastInGroup, showAvatar, gradientIdx }: { me
             </div>
           )}
           {message.content?.split('\n').map((line, i) => (
-            <p key={i} className={line ? 'mb-1' : 'mb-1'}>{line || ' '}</p>
+            <p key={i} className={line ? 'mb-1' : 'mb-1'}>{line || '\u00a0'}</p>
           ))}
         </div>
         <div className={cn('flex items-center gap-1.5 mt-1 px-1', isCustomer ? '' : 'flex-row-reverse')}>
@@ -148,9 +156,14 @@ export default function ChatArea() {
 
   const [replyText, setReplyText] = useState('')
   const [isFocused, setIsFocused] = useState(false)
+  const [emojiOpen, setEmojiOpen] = useState(false)
+  const [attachedFiles, setAttachedFiles] = useState<{name: string; size: number; type: string}[]>([])
   const bottomRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const imageInputRef = useRef<HTMLInputElement>(null)
   const prevMessageCountRef = useRef(messages.length)
+  const messagesEndRef = useRef<HTMLDivElement>(null)
 
   // Fetch conversation detail + messages
   const fetchConversation = useCallback(async () => {
@@ -185,6 +198,13 @@ export default function ChatArea() {
     prevMessageCountRef.current = messages.length
   }, [messages.length])
 
+  // Scroll to bottom on initial load
+  useEffect(() => {
+    if (messages.length > 0 && messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView()
+    }
+  }, [selectedConversationId])
+
   // Listen for real-time messages in current conversation
   useEffect(() => {
     if (!selectedConversationId) return
@@ -211,18 +231,24 @@ export default function ChatArea() {
 
   // Send message
   const handleSend = async () => {
-    if (!replyText.trim() || !selectedConversationId) return
+    if ((!replyText.trim() && attachedFiles.length === 0) || !selectedConversationId) return
     setIsSendingMessage(true)
     try {
+      let content = replyText.trim()
+      if (attachedFiles.length > 0) {
+        const fileNames = attachedFiles.map(f => `📎 ${f.name}`).join('\n')
+        content = (content ? content + '\n' : '') + fileNames
+      }
       const res = await fetch(`/api/conversations/${selectedConversationId}/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: replyText.trim() }),
+        body: JSON.stringify({ content }),
       })
       const data = await res.json()
       const newMsg = data.message || data
       addMessage(newMsg)
       setReplyText('')
+      setAttachedFiles([])
       textareaRef.current?.focus()
 
       if (data.automationResult) {
@@ -237,6 +263,30 @@ export default function ChatArea() {
     } finally {
       setIsSendingMessage(false)
     }
+  }
+
+  // File handling
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || [])
+    if (files.length === 0) return
+    const newFiles = files.map(f => ({
+      name: f.name,
+      size: f.size,
+      type: f.type.startsWith('image/') ? 'image' : 'file',
+    }))
+    setAttachedFiles(prev => [...prev, ...newFiles])
+    e.target.value = ''
+    textareaRef.current?.focus()
+  }
+
+  const removeFile = (index: number) => {
+    setAttachedFiles(prev => prev.filter((_, i) => i !== index))
+  }
+
+  const insertEmoji = (emoji: string) => {
+    setReplyText(prev => prev + emoji)
+    setEmojiOpen(false)
+    textareaRef.current?.focus()
   }
 
   // Change status
@@ -278,9 +328,15 @@ export default function ChatArea() {
     }
   }
 
+  function formatFileSize(bytes: number) {
+    if (bytes < 1024) return bytes + ' B'
+    if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB'
+    return (bytes / 1048576).toFixed(1) + ' MB'
+  }
+
   if (!selectedConversationId || !conversationDetail) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-muted/20 animate-fade-in">
+      <div className="flex-1 flex items-center justify-center bg-muted/20">
         <div className="text-center text-muted-foreground/50 animate-float">
           <div className="h-20 w-20 mx-auto mb-5 rounded-3xl bg-gradient-to-br from-primary/10 to-primary/5 flex items-center justify-center shadow-lg shadow-primary/5">
             <Send className="h-9 w-9 text-primary/30" />
@@ -299,16 +355,14 @@ export default function ChatArea() {
   const now = new Date()
   const slaBreached = convo.slaFirstResponse && new Date(convo.slaFirstResponse) < now && convo.status === 'open'
 
-  // Group messages for avatar display
   let agentMsgCount = 0
   let customerMsgCount = 0
 
   return (
-    <div className="flex flex-col h-full min-h-0 animate-fade-in">
+    <div className="flex flex-col h-full min-h-0">
       {/* Chat Header */}
-      <div className="px-4 py-3 border-b border-border/40 glass flex items-center justify-between gap-3">
+      <div className="px-4 py-3 border-b border-border/40 glass flex items-center justify-between gap-3 flex-shrink-0">
         <div className="flex items-center gap-3 min-w-0">
-          {/* Mobile back button */}
           <Button
             variant="ghost" size="icon" className="h-8 w-8 flex-shrink-0 md:hidden rounded-xl hover:bg-foreground/5"
             onClick={() => setMobileView('list')}
@@ -409,8 +463,8 @@ export default function ChatArea() {
         </div>
       </div>
 
-      {/* Messages area */}
-      <ScrollArea className="flex-1 min-h-0">
+      {/* Messages area — native scroll */}
+      <div className="flex-1 min-h-0 overflow-y-auto">
         <div className="max-w-3xl mx-auto px-4 py-4 space-y-1">
           {messages.map((msg, idx) => {
             const showDate = shouldShowDate(messages, idx)
@@ -429,7 +483,7 @@ export default function ChatArea() {
             return (
               <div key={msg.id}>
                 {showDate && (
-                  <div className="flex justify-center my-4 animate-fade-in">
+                  <div className="flex justify-center my-4">
                     <span className="date-separator text-[11px] text-muted-foreground/70 px-4 py-1.5 rounded-full font-medium">
                       {formatFullDate(msg.createdAt)}
                     </span>
@@ -442,7 +496,23 @@ export default function ChatArea() {
           {isBotTyping && <TypingIndicator />}
           <div ref={bottomRef} className="h-1" />
         </div>
-      </ScrollArea>
+      </div>
+
+      {/* Attached files preview */}
+      {attachedFiles.length > 0 && (
+        <div className="px-3 pt-2 flex gap-2 flex-wrap">
+          {attachedFiles.map((file, i) => (
+            <div key={i} className="flex items-center gap-1.5 bg-muted/80 rounded-lg px-2.5 py-1.5 text-xs animate-fade-in">
+              <Upload className="h-3.5 w-3.5 text-muted-foreground/60" />
+              <span className="max-w-[120px] truncate">{file.name}</span>
+              <span className="text-muted-foreground/50">{formatFileSize(file.size)}</span>
+              <button onClick={() => removeFile(i)} className="ml-0.5 text-muted-foreground/40 hover:text-foreground transition-colors">
+                <X className="h-3 w-3" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Message input composer */}
       {convo.status !== 'resolved' && convo.status !== 'closed' && convo.status !== 'spam' ? (
@@ -460,7 +530,8 @@ export default function ChatArea() {
                 <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 rounded-xl text-muted-foreground/60 hover:text-muted-foreground hover:bg-foreground/5 transition-all duration-200">
+                      <Button variant="ghost" size="icon" className="h-8 w-8 rounded-xl text-muted-foreground/60 hover:text-muted-foreground hover:bg-foreground/5 transition-all duration-200"
+                        onClick={() => fileInputRef.current?.click()}>
                         <Paperclip className="h-4 w-4" />
                       </Button>
                     </TooltipTrigger>
@@ -470,13 +541,17 @@ export default function ChatArea() {
                 <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 rounded-xl text-muted-foreground/60 hover:text-muted-foreground hover:bg-foreground/5 transition-all duration-200">
+                      <Button variant="ghost" size="icon" className="h-8 w-8 rounded-xl text-muted-foreground/60 hover:text-muted-foreground hover:bg-foreground/5 transition-all duration-200"
+                        onClick={() => imageInputRef.current?.click()}>
                         <ImagePlus className="h-4 w-4" />
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent>Gửi hình ảnh</TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
+                {/* Hidden file inputs */}
+                <input ref={fileInputRef} type="file" className="hidden" multiple onChange={handleFileSelect} />
+                <input ref={imageInputRef} type="file" className="hidden" accept="image/*" multiple onChange={handleFileSelect} />
               </div>
               <Textarea
                 ref={textareaRef}
@@ -490,22 +565,32 @@ export default function ChatArea() {
                 rows={1}
               />
               <div className="flex gap-0.5 pr-0.5 pb-0.5">
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 rounded-xl text-muted-foreground/60 hover:text-muted-foreground hover:bg-foreground/5 transition-all duration-200">
-                        <SmilePlus className="h-4 w-4" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>Biểu tượng cảm xúc</TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
+                <Popover open={emojiOpen} onOpenChange={setEmojiOpen}>
+                  <PopoverTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-xl text-muted-foreground/60 hover:text-muted-foreground hover:bg-foreground/5 transition-all duration-200">
+                      <SmilePlus className="h-4 w-4" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent side="top" align="end" className="w-[280px] p-2 rounded-xl">
+                    <div className="grid grid-cols-8 gap-0.5">
+                      {EMOJI_LIST.map((emoji) => (
+                        <button
+                          key={emoji}
+                          onClick={() => insertEmoji(emoji)}
+                          className="h-8 w-8 flex items-center justify-center rounded-lg text-base hover:bg-foreground/[0.06] transition-colors"
+                        >
+                          {emoji}
+                        </button>
+                      ))}
+                    </div>
+                  </PopoverContent>
+                </Popover>
                 <Button
                   onClick={handleSend}
-                  disabled={!replyText.trim() || isSendingMessage}
+                  disabled={(!replyText.trim() && attachedFiles.length === 0) || isSendingMessage}
                   size="icon" className={cn(
                     'h-9 w-9 flex-shrink-0 rounded-xl send-btn',
-                    replyText.trim() && 'bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600'
+                    (replyText.trim() || attachedFiles.length > 0) && 'bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600'
                   )}
                 >
                   {isSendingMessage ? (
@@ -522,7 +607,7 @@ export default function ChatArea() {
           </div>
         </div>
       ) : (
-        <div className="composer-area p-4 animate-fade-in">
+        <div className="composer-area p-4">
           <div className="max-w-3xl mx-auto flex items-center justify-between">
             <span className="text-xs text-muted-foreground/60">
               Hội thoại đã {convo.status === 'resolved' ? 'được giải quyết' : convo.status === 'closed' ? 'đóng' : 'đánh dấu spam'}

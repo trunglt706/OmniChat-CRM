@@ -4,12 +4,10 @@ import { useEffect, useCallback, useRef } from 'react'
 import { useCRMStore } from '@/store/crm-store'
 import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import { Input } from '@/components/ui/input'
 import { CHANNEL_CONFIG, type Conversation } from '@/lib/types'
 import {
   Search, Inbox, User, MessageSquareOff, CheckCircle, Archive,
-  Globe, MessageCircle, Phone, Send, Mail, Hash,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -68,10 +66,9 @@ function ConversationItem({ convo, index }: { convo: Conversation; index: number
     <button
       onClick={() => { setSelected(convo.id); setMobileView('chat') }}
       className={cn(
-        'convo-item w-full text-left px-4 py-3.5 flex gap-3 relative stagger-item group',
+        'convo-item w-full text-left px-4 py-3.5 flex gap-3 relative group',
         isSelected && 'active'
       )}
-      style={{ animationDelay: `${index * 30}ms` }}
     >
       <div className="relative flex-shrink-0">
         <Avatar className={cn(
@@ -191,7 +188,7 @@ export default function ConversationList() {
       {/* Header */}
       <div className="px-3 md:px-4 pt-3 md:pt-4 pb-2 flex-shrink-0">
         <div className="flex items-center justify-between mb-3">
-          <div className="animate-slide-down" style={{ animationDelay: '50ms' }}>
+          <div>
             <h2 className="text-sm font-bold tracking-tight">Hội thoại</h2>
             <p className="text-[11px] text-muted-foreground/60 mt-0.5 font-medium">{totalConversations} cuộc trò chuyện</p>
           </div>
@@ -206,7 +203,7 @@ export default function ConversationList() {
           )}
         </div>
         {/* Search */}
-        <div className="relative mb-2 animate-slide-down" style={{ animationDelay: '100ms' }}>
+        <div className="relative mb-2">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/40" />
           <Input
             placeholder="Tìm tên, SĐT, email..."
@@ -216,7 +213,7 @@ export default function ConversationList() {
           />
         </div>
         {/* Status tabs */}
-        <div className="flex gap-1 overflow-x-auto scrollbar-none animate-slide-down" style={{ animationDelay: '150ms' }}>
+        <div className="flex gap-1 overflow-x-auto scrollbar-none">
           {FILTER_TABS.map((tab, idx) => {
             const Icon = tab.icon
             const active = activeFilter === tab.key
@@ -236,7 +233,7 @@ export default function ConversationList() {
         </div>
       </div>
       {/* Channels */}
-      <div className="px-3 md:px-4 py-2 border-b border-border/30 flex gap-1 overflow-x-auto scrollbar-none animate-slide-down flex-shrink-0" style={{ animationDelay: '200ms' }}>
+      <div className="px-3 md:px-4 py-2 border-b border-border/30 flex gap-1 overflow-x-auto scrollbar-none flex-shrink-0">
         {CHANNEL_FILTERS.map((ch) => {
           const active = activeChannel === ch.key
           return (
@@ -256,12 +253,12 @@ export default function ConversationList() {
           )
         })}
       </div>
-      {/* List */}
-      <ScrollArea className="flex-1 min-h-0">
+      {/* List — native scroll for reliable behavior in flex & resizable containers */}
+      <div className="flex-1 min-h-0 overflow-y-auto">
         {isLoadingConversations ? (
           <div className="p-4 space-y-4">
             {[1, 2, 3, 4, 5].map((i) => (
-              <div key={i} className="flex gap-3 stagger-item" style={{ animationDelay: `${i * 60}ms` }}>
+              <div key={i} className="flex gap-3">
                 <div className="skeleton-line h-11 w-11 rounded-full flex-shrink-0" />
                 <div className="flex-1 space-y-2.5 pt-1">
                   <div className="skeleton-line h-3.5 w-2/3" />
@@ -271,7 +268,7 @@ export default function ConversationList() {
             ))}
           </div>
         ) : conversations.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 text-muted-foreground/50 animate-fade-in">
+          <div className="flex flex-col items-center justify-center py-20 text-muted-foreground/50">
             <div className="empty-state-icon h-16 w-16 rounded-2xl flex items-center justify-center mb-4">
               <Inbox className="h-7 w-7" />
             </div>
@@ -281,7 +278,7 @@ export default function ConversationList() {
         ) : (
           conversations.map((convo, i) => <ConversationItem key={convo.id} convo={convo} index={i} />)
         )}
-      </ScrollArea>
+      </div>
     </div>
   )
 }

@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Badge } from '@/components/ui/badge'
-import { ScrollArea } from '@/components/ui/scroll-area'
+// Native scroll
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
@@ -135,7 +135,7 @@ export default function AutomationPanel() {
   }
 
   return (
-    <ScrollArea className="h-full min-h-0">
+    <div className="h-full min-h-0 overflow-y-auto">
       <div className="p-4 md:p-6 max-w-[900px] mx-auto space-y-4 md:space-y-6">
         <div className="flex items-center justify-between gap-3">
           <div>
@@ -269,6 +269,6 @@ export default function AutomationPanel() {
           </div>
         )}
       </div>
-    </ScrollArea>
+    </div>
   )
 }

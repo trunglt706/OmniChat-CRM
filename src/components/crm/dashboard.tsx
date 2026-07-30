@@ -16,7 +16,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { CHANNEL_CONFIG } from '@/lib/types'
-import { ScrollArea } from '@/components/ui/scroll-area'
+// Native scroll
 
 const CHANNEL_COLORS: Record<string, string> = {
   facebook_messenger: '#1877f2',
@@ -124,7 +124,7 @@ export default function Dashboard() {
   }))
 
   return (
-    <ScrollArea className="h-full min-h-0">
+    <div className="h-full min-h-0 overflow-y-auto">
       <div className="p-4 md:p-6 max-w-[1400px] mx-auto space-y-4 md:space-y-6">
         {/* Header */}
         <div>
@@ -310,6 +310,6 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
-    </ScrollArea>
+    </div>
   )
 }

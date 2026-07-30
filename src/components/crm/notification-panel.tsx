@@ -2,7 +2,7 @@
 
 import { useCRMStore, type AppNotification, type NotificationType } from '@/store/crm-store'
 import { Button } from '@/components/ui/button'
-import { ScrollArea } from '@/components/ui/scroll-area'
+// Native scroll
 import { Separator } from '@/components/ui/separator'
 import { cn } from '@/lib/utils'
 import {
@@ -128,7 +128,7 @@ export default function NotificationPanel() {
       <Separator className="opacity-40" />
 
       {/* List */}
-      <ScrollArea className="flex-1 min-h-0">
+      <div className="flex-1 min-h-0 overflow-y-auto">
         {notifications.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-muted-foreground/40 animate-fade-in">
             <div className="h-16 w-16 rounded-2xl bg-foreground/[0.02] flex items-center justify-center mb-4">
@@ -144,7 +144,7 @@ export default function NotificationPanel() {
             ))}
           </div>
         )}
-      </ScrollArea>
+      </div>
     </div>
   )
 }
