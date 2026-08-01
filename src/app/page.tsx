@@ -238,10 +238,10 @@ function Header() {
               <p className="text-[11px] text-muted-foreground/60 truncate">{currentUser?.email}</p>
             </div>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="rounded-lg text-xs py-2.5" onClick={() => setOpenSheet('profile')}>
+            <DropdownMenuItem className="rounded-lg text-xs py-2.5" onClick={() => window.location.href = '/settings?tab=profile'}>
               <User className="h-3.5 w-3.5 mr-2.5" /> Ho so cua toi
             </DropdownMenuItem>
-            <DropdownMenuItem className="rounded-lg text-xs py-2.5" onClick={() => setOpenSheet('settings')}>
+            <DropdownMenuItem className="rounded-lg text-xs py-2.5" onClick={() => window.location.href = '/settings?tab=system'}>
               <Settings className="h-3.5 w-3.5 mr-2.5" /> Cai dat
             </DropdownMenuItem>
             <DropdownMenuSeparator />

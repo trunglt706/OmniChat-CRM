@@ -202,7 +202,7 @@ export default function ConversationList() {
   }
 
   return (
-    <div className="flex flex-col flex-1 min-h-0">
+    <div className="flex flex-col h-full min-h-0">
       {/* Header */}
       <div className="px-3 md:px-4 pt-3 md:pt-4 pb-2 flex-shrink-0">
         <div className="flex items-center justify-between mb-3">

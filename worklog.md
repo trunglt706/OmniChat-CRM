@@ -20,6 +20,29 @@ Stage Summary:
 - Scroll fix: CSS override ensures panels act as flex-column containers, allowing inner overflow-y:auto to work
 - Build passes successfully
 ---
+Task ID: 3
+Agent: main
+Task: Fix scroll (overflow:clip), create /settings page with 4 tabs, redirect Header
+
+Work Log:
+- Diagnosed scroll root cause: react-resizable-panels v3.0.6 sets `overflow: hidden` via inline styles on both PanelGroup and Panel, which creates a scroll context that interferes with child `overflow-y: auto`
+- Fixed globals.css: Changed CSS override from `overflow: hidden` to `overflow: clip !important` on both `[data-slot="resizable-panel-group"]` and `[data-slot="resizable-panel"]`. `overflow: clip` clips content but does NOT create a scroll context, allowing children to scroll independently
+- Changed component root divs from `flex-1 min-h-0` to `h-full min-h-0` in conversation-list.tsx, chat-area.tsx, customer-panel.tsx for explicit height
+- Created `/settings/page.tsx` with 4 tabs: Ho so (Profile), He thong (System), Kenh chat (Channels), Nhan vien (Staff)
+- Profile tab: avatar upload, status selector, editable form (name/email/phone/bio), activity stats
+- System tab: theme toggle, compact mode, preview, language, sound/desktop/email notifications, auto-assign, reset to defaults
+- Channels tab: 5 channels (FB Messenger, Zalo OA, Telegram Bot, Website Widget, Email IMAP), enable/disable toggle, per-channel config forms with save, connection status badges
+- Staff tab: load from /api/agents, invite form (email + role select), staff list with avatars, role badges, status indicators
+- Updated Header in page.tsx: "Ho so cua toi" redirects to `/settings?tab=profile`, "Cai dat" redirects to `/settings?tab=system` (using window.location.href)
+- Responsive: Desktop has left sidebar nav, mobile has horizontal tab bar on top
+- Workaround: `</script>` inside string literal caused Turbopack parse error, split into concatenation `{...}</` + `script>`
+
+Stage Summary:
+- Scroll fix: `overflow: clip !important` on resizable panels resolves the scroll issue without breaking resize behavior
+- Settings page: Full page at /settings with sidebar navigation, 4 functional tabs with glassmorphism styling
+- Header redirect: Profile and Settings dropdown items now navigate to /settings instead of opening Sheet overlays
+- Build passes cleanly
+
 Task ID: 1
 Agent: main
 Task: Fix scroll on sidebar & chat + implement lazy load, image upload, socket realtime, state optimization
