@@ -336,7 +336,7 @@ export default function ChatArea() {
 
   if (!selectedConversationId || !conversationDetail) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-muted/20">
+      <div className="flex-1 h-full flex items-center justify-center bg-muted/20">
         <div className="text-center text-muted-foreground/50 animate-float">
           <div className="h-20 w-20 mx-auto mb-5 rounded-3xl bg-gradient-to-br from-primary/10 to-primary/5 flex items-center justify-center shadow-lg shadow-primary/5">
             <Send className="h-9 w-9 text-primary/30" />
@@ -359,7 +359,7 @@ export default function ChatArea() {
   let customerMsgCount = 0
 
   return (
-    <div className="flex flex-col h-full min-h-0 flex-1">
+    <div className="flex flex-col h-full min-h-0">
       {/* Chat Header */}
       <div className="px-4 py-3 border-b border-border/40 glass flex items-center justify-between gap-3 flex-shrink-0">
         <div className="flex items-center gap-3 min-w-0">

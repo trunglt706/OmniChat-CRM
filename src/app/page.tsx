@@ -391,18 +391,18 @@ export default function CRMPage() {
     <>
       <div className="hidden md:flex flex-1 overflow-hidden">
         <ResizablePanelGroup direction="horizontal">
-          <ResizablePanel defaultSize={26} minSize={20} maxSize={40} className="border-r border-border/20">
-            <ConversationList />
+          <ResizablePanel defaultSize={26} minSize={20} maxSize={40} className="relative border-r border-border/20">
+            <div className="absolute inset-0"><ConversationList /></div>
           </ResizablePanel>
           <ResizableHandle withHandle />
-          <ResizablePanel defaultSize={selectedConversationId ? 50 : 74} minSize={30}>
-            <ChatArea />
+          <ResizablePanel defaultSize={selectedConversationId ? 50 : 74} minSize={30} className="relative">
+            <div className="absolute inset-0"><ChatArea /></div>
           </ResizablePanel>
           {showRightPanel && selectedConversationId && (
             <>
               <ResizableHandle withHandle />
-              <ResizablePanel defaultSize={24} minSize={20} maxSize={34} className="border-l border-border/20 bg-muted/20">
-                <CustomerPanel />
+              <ResizablePanel defaultSize={24} minSize={20} maxSize={34} className="relative border-l border-border/20 bg-muted/20">
+                <div className="absolute inset-0"><CustomerPanel /></div>
               </ResizablePanel>
             </>
           )}
@@ -419,7 +419,7 @@ export default function CRMPage() {
   return (
     <div className="h-dvh h-screen flex flex-col bg-background overflow-hidden">
       <Header />
-      <div className="flex-1 min-h-0 overflow-hidden">
+      <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
         {activeView === 'inbox' && renderInbox()}
         {activeView === 'dashboard' && <Dashboard />}
         {activeView === 'automation' && <AutomationPanel />}
