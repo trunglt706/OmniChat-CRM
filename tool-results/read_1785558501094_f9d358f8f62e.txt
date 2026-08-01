@@ -336,7 +336,7 @@
    336→   336→
    337→   337→  if (!selectedConversationId || !conversationDetail) {
    338→   338→    return (
-   339→   339→      <div className="flex-1 flex items-center justify-center bg-muted/20">
+   339→   339→      <div className="flex-1 h-full flex items-center justify-center bg-muted/20">
    340→   340→        <div className="text-center text-muted-foreground/50 animate-float">
    341→   341→          <div className="h-20 w-20 mx-auto mb-5 rounded-3xl bg-gradient-to-br from-primary/10 to-primary/5 flex items-center justify-center shadow-lg shadow-primary/5">
    342→   342→            <Send className="h-9 w-9 text-primary/30" />

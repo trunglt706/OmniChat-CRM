@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState } from 'react'
 import { useCRMStore } from '@/store/crm-store'
+import { socket } from '@/lib/socket'
 import ConversationList from '@/components/crm/conversation-list'
 import ChatArea from '@/components/crm/chat-area'
 import CustomerPanel from '@/components/crm/customer-panel'
@@ -304,7 +305,7 @@ export default function CRMPage() {
   const addNotification = useCRMStore((s) => s.addNotification)
   const openSheet = useCRMStore((s) => s.openSheet)
   const setOpenSheet = useCRMStore((s) => s.setOpenSheet)
-  const sseRef = useRef<EventSource | null>(null)
+  const simulationRunning = useCRMStore((s) => s.simulationRunning)
 
   // Load settings from localStorage on mount
   useEffect(() => {
@@ -331,78 +332,50 @@ export default function CRMPage() {
     }, 1500)
   }, [])
 
+  // Socket: connect/disconnect based on simulation state
   useEffect(() => {
-    if (typeof window === 'undefined') return
-    const connectSSE = () => {
-      const es = new EventSource('/api/simulation')
-      sseRef.current = es
-      es.addEventListener('new_messages', (e) => {
-        try {
-          const data = JSON.parse(e.data)
-          ;(data.messages || []).forEach((msg: any) => {
-            window.dispatchEvent(new CustomEvent('crm:conversation_update', { detail: { conversationId: msg.conversationId } }))
-            if (msg.conversationId !== useCRMStore.getState().selectedConversationId) {
-              incrementUnread(msg.conversationId)
-              addNotification({
-                type: 'new_message',
-                title: 'Tin nhan moi',
-                body: 'Ban co tin nhan moi tu khach hang',
-                conversationId: msg.conversationId,
-              })
-            }
-          })
-        } catch {}
-      })
-      es.onerror = () => { es.close(); setTimeout(connectSSE, 3000) }
+    if (simulationRunning) {
+      socket.connect()
+    } else {
+      socket.disconnect()
     }
-    if (useCRMStore.getState().simulationRunning) connectSSE()
-    return () => { sseRef.current?.close() }
-  }, [])
+    return () => { socket.disconnect() }
+  }, [simulationRunning])
 
-  const simulationRunning = useCRMStore((s) => s.simulationRunning)
+  // Socket: listen for new messages from OTHER conversations → unread + notification
   useEffect(() => {
-    if (simulationRunning && !sseRef.current) {
-      const es = new EventSource('/api/simulation')
-      sseRef.current = es
-      es.addEventListener('new_messages', (e) => {
-        try {
-          const data = JSON.parse(e.data)
-          ;(data.messages || []).forEach((msg: any) => {
-            window.dispatchEvent(new CustomEvent('crm:conversation_update', { detail: { conversationId: msg.conversationId } }))
-            if (msg.conversationId !== useCRMStore.getState().selectedConversationId) {
-              incrementUnread(msg.conversationId)
-              addNotification({
-                type: 'new_message',
-                title: 'Tin nhan moi',
-                body: 'Ban co tin nhan moi tu khach hang',
-                conversationId: msg.conversationId,
-              })
-            }
+    const unsub = socket.on('new_messages', (data: { messages: any[] }) => {
+      ;(data.messages || []).forEach((msg: any) => {
+        if (msg.conversationId !== useCRMStore.getState().selectedConversationId) {
+          incrementUnread(msg.conversationId)
+          addNotification({
+            type: 'new_message',
+            title: 'Tin nhan moi',
+            body: 'Ban co tin nhan moi tu khach hang',
+            conversationId: msg.conversationId,
           })
-        } catch {}
+        }
       })
-      es.onerror = () => { es.close(); sseRef.current = null }
-    } else if (!simulationRunning && sseRef.current) {
-      sseRef.current.close(); sseRef.current = null
-    }
-  }, [simulationRunning, incrementUnread, addNotification])
+    })
+    return unsub
+  }, [incrementUnread, addNotification])
 
   const renderInbox = () => (
     <>
       <div className="hidden md:flex flex-1 overflow-hidden">
         <ResizablePanelGroup direction="horizontal">
-          <ResizablePanel defaultSize={26} minSize={20} maxSize={40} className="relative border-r border-border/20">
-            <div className="absolute inset-0"><ConversationList /></div>
+          <ResizablePanel defaultSize={26} minSize={20} maxSize={40} className="border-r border-border/20 overflow-hidden">
+            <ConversationList />
           </ResizablePanel>
           <ResizableHandle withHandle />
-          <ResizablePanel defaultSize={selectedConversationId ? 50 : 74} minSize={30} className="relative">
-            <div className="absolute inset-0"><ChatArea /></div>
+          <ResizablePanel defaultSize={selectedConversationId ? 50 : 74} minSize={30} className="overflow-hidden">
+            <ChatArea />
           </ResizablePanel>
           {showRightPanel && selectedConversationId && (
             <>
               <ResizableHandle withHandle />
-              <ResizablePanel defaultSize={24} minSize={20} maxSize={34} className="relative border-l border-border/20 bg-muted/20">
-                <div className="absolute inset-0"><CustomerPanel /></div>
+              <ResizablePanel defaultSize={24} minSize={20} maxSize={34} className="border-l border-border/20 bg-muted/20 overflow-hidden">
+                <CustomerPanel />
               </ResizablePanel>
             </>
           )}

@@ -63,9 +63,16 @@ interface CRMState {
   // Messages
   messages: Message[]
   setMessages: (m: Message[]) => void
+  prependMessages: (m: Message[]) => void
   addMessage: (m: Message) => void
   isSendingMessage: boolean
   setIsSendingMessage: (v: boolean) => void
+
+  // Message pagination
+  hasMoreMessages: boolean
+  setHasMoreMessages: (v: boolean) => void
+  isLoadingMoreMessages: boolean
+  setIsLoadingMoreMessages: (v: boolean) => void
 
   // Right panel
   rightPanelTab: 'info' | 'notes' | 'lead'
@@ -139,6 +146,10 @@ interface CRMState {
   // ─── UI Sheets ───
   openSheet: OpenSheet
   setOpenSheet: (s: OpenSheet) => void
+
+  // ─── Socket ───
+  socketConnected: boolean
+  setSocketConnected: (v: boolean) => void
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -178,15 +189,31 @@ export const useCRMStore = create<CRMState>((set, get) => ({
   setSearchQuery: (q) => set({ searchQuery: q }),
 
   selectedConversationId: null,
-  setSelectedConversationId: (id) => set({ selectedConversationId: id, conversationDetail: null, messages: [], notes: [] }),
+  setSelectedConversationId: (id) => set({
+    selectedConversationId: id,
+    conversationDetail: null,
+    messages: [],
+    notes: [],
+    hasMoreMessages: false,
+    isLoadingMoreMessages: false,
+  }),
   conversationDetail: null,
   setConversationDetail: (d) => set({ conversationDetail: d }),
 
   messages: [],
   setMessages: (m) => set({ messages: m }),
+  prependMessages: (newMsgs) => set((s) => ({
+    messages: [...newMsgs, ...s.messages],
+  })),
   addMessage: (m) => set((state) => ({ messages: [...state.messages, m] })),
   isSendingMessage: false,
   setIsSendingMessage: (v) => set({ isSendingMessage: v }),
+
+  // Message pagination
+  hasMoreMessages: false,
+  setHasMoreMessages: (v) => set({ hasMoreMessages: v }),
+  isLoadingMoreMessages: false,
+  setIsLoadingMoreMessages: (v) => set({ isLoadingMoreMessages: v }),
 
   rightPanelTab: 'info',
   setRightPanelTab: (t) => set({ rightPanelTab: t }),
@@ -255,7 +282,6 @@ export const useCRMStore = create<CRMState>((set, get) => ({
       createdAt: new Date().toISOString(),
     }
     set((s) => ({ notifications: [notif, ...s.notifications] }))
-    // Play sound if enabled
     if (get().settings.soundEnabled) {
       try {
         const audio = new Audio('/notification.mp3')
@@ -263,7 +289,6 @@ export const useCRMStore = create<CRMState>((set, get) => ({
         audio.play().catch(() => {})
       } catch {}
     }
-    // Desktop notification
     if (get().settings.desktopNotifEnabled && typeof window !== 'undefined' && 'Notification' in window) {
       try {
         if (Notification.permission === 'granted') {
@@ -292,7 +317,6 @@ export const useCRMStore = create<CRMState>((set, get) => ({
   settings: DEFAULT_SETTINGS,
   updateSettings: (patch) => {
     set((s) => ({ settings: { ...s.settings, ...patch } }))
-    // Persist to localStorage
     try {
       if (typeof window !== 'undefined') {
         localStorage.setItem('omnichat_settings', JSON.stringify({ ...get().settings, ...patch }))
@@ -303,4 +327,8 @@ export const useCRMStore = create<CRMState>((set, get) => ({
   // ─── UI Sheets ───
   openSheet: null,
   setOpenSheet: (s) => set({ openSheet: s }),
+
+  // ─── Socket ───
+  socketConnected: false,
+  setSocketConnected: (v) => set({ socketConnected: v }),
 }))

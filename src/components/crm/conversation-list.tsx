@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useCallback, useRef } from 'react'
+import { useEffect, useCallback, useRef, memo } from 'react'
 import { useCRMStore } from '@/store/crm-store'
 import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
@@ -10,17 +10,18 @@ import {
   Search, Inbox, User, MessageSquareOff, CheckCircle, Archive,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { socket } from '@/lib/socket'
 
 const FILTER_TABS = [
-  { key: 'open', label: 'Mở', icon: Inbox },
-  { key: 'unassigned', label: 'Chưa phân', icon: User },
+  { key: 'open', label: 'Mo', icon: Inbox },
+  { key: 'unassigned', label: 'Chua phan', icon: User },
   { key: 'resolved', label: 'Xong', icon: CheckCircle },
   { key: 'spam', label: 'Spam', icon: MessageSquareOff },
-  { key: 'archived', label: 'Lưu trữ', icon: Archive },
+  { key: 'archived', label: 'Luu tru', icon: Archive },
 ]
 
 const CHANNEL_FILTERS = [
-  { key: 'all', label: 'Tất cả' },
+  { key: 'all', label: 'Tat ca' },
   { key: 'facebook_messenger', label: 'FB', color: '#1877f2' },
   { key: 'zalo', label: 'Zalo', color: '#0068ff' },
   { key: 'telegram', label: 'TG', color: '#26a5e4' },
@@ -38,7 +39,7 @@ function getChannelLetter(ch: string) {
 function formatTime(d: string) {
   const date = new Date(d), now = new Date(), diff = now.getTime() - date.getTime()
   const m = Math.floor(diff / 60000), h = Math.floor(diff / 3600000), days = Math.floor(diff / 86400000)
-  if (m < 1) return 'vừa xong'
+  if (m < 1) return 'vua xong'
   if (m < 60) return `${m}p`
   if (h < 24) return `${h}h`
   if (days < 7) return `${days}d`
@@ -51,7 +52,13 @@ function getSLA(convo: Conversation) {
   return new Date() > new Date(convo.slaFirstResponse) ? 'breached' : 'active'
 }
 
-function ConversationItem({ convo, index }: { convo: Conversation; index: number }) {
+// ─── Memoized Conversation Item ───
+interface ConvoItemProps {
+  convo: Conversation
+  index: number
+}
+
+const ConversationItem = memo(function ConversationItem({ convo, index }: ConvoItemProps) {
   const selectedId = useCRMStore((s) => s.selectedConversationId)
   const setSelected = useCRMStore((s) => s.setSelectedConversationId)
   const setMobileView = useCRMStore((s) => s.setMobileView)
@@ -119,7 +126,7 @@ function ConversationItem({ convo, index }: { convo: Conversation; index: number
               convo.priority === 'high' ? 'bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400 badge-glow-amber' :
               'bg-slate-50 text-slate-500 dark:bg-slate-800/40 dark:text-slate-400'
             )}>
-              {convo.priority === 'urgent' ? 'Khẩn' : convo.priority === 'high' ? 'Cao' : convo.priority === 'low' ? 'Thấp' : ''}
+              {convo.priority === 'urgent' ? 'Khan' : convo.priority === 'high' ? 'Cao' : convo.priority === 'low' ? 'Thap' : ''}
             </span>
           )}
           {convo.tags.slice(0, 2).map((ct) => (
@@ -142,15 +149,24 @@ function ConversationItem({ convo, index }: { convo: Conversation; index: number
       )}
     </button>
   )
-}
+})
 
 export default function ConversationList() {
-  const {
-    conversations, setConversations, totalConversations, setTotalConversations,
-    activeFilter, setActiveFilter, activeChannel, setActiveChannel,
-    searchQuery, setSearchQuery, isLoadingConversations, setIsLoadingConversations,
-    simulationRunning,
-  } = useCRMStore()
+  const activeFilter = useCRMStore((s) => s.activeFilter)
+  const activeChannel = useCRMStore((s) => s.activeChannel)
+  const searchQuery = useCRMStore((s) => s.searchQuery)
+  const simulationRunning = useCRMStore((s) => s.simulationRunning)
+  const conversations = useCRMStore((s) => s.conversations)
+  const totalConversations = useCRMStore((s) => s.totalConversations)
+  const isLoadingConversations = useCRMStore((s) => s.isLoadingConversations)
+  const setConversations = useCRMStore((s) => s.setConversations)
+  const setTotalConversations = useCRMStore((s) => s.setTotalConversations)
+  const setActiveFilter = useCRMStore((s) => s.setActiveFilter)
+  const setActiveChannel = useCRMStore((s) => s.setActiveChannel)
+  const setSearchQuery = useCRMStore((s) => s.setSearchQuery)
+  const setIsLoadingConversations = useCRMStore((s) => s.setIsLoadingConversations)
+  const incrementUnread = useCRMStore((s) => s.incrementUnread)
+  const addNotification = useCRMStore((s) => s.addNotification)
 
   const fetchConversations = useCallback(async () => {
     setIsLoadingConversations(true)
@@ -169,11 +185,13 @@ export default function ConversationList() {
   }, [activeFilter, activeChannel, searchQuery, setConversations, setTotalConversations, setIsLoadingConversations])
 
   useEffect(() => { fetchConversations() }, [fetchConversations])
+
+  // Socket: listen for conversation updates
   useEffect(() => {
-    const h = () => fetchConversations()
-    window.addEventListener('crm:conversation_update', h)
-    window.addEventListener('crm:refresh_list', h)
-    return () => { window.removeEventListener('crm:conversation_update', h); window.removeEventListener('crm:refresh_list', h) }
+    const unsub = socket.on('conversation_update', () => {
+ fetchConversations()
+    })
+    return unsub
   }, [fetchConversations])
 
   const debounceRef = useRef<NodeJS.Timeout>()
@@ -184,13 +202,13 @@ export default function ConversationList() {
   }
 
   return (
-    <div className="flex flex-col h-full min-h-0">
+    <div className="flex flex-col flex-1 min-h-0">
       {/* Header */}
       <div className="px-3 md:px-4 pt-3 md:pt-4 pb-2 flex-shrink-0">
         <div className="flex items-center justify-between mb-3">
           <div>
-            <h2 className="text-sm font-bold tracking-tight">Hội thoại</h2>
-            <p className="text-[11px] text-muted-foreground/60 mt-0.5 font-medium">{totalConversations} cuộc trò chuyện</p>
+            <h2 className="text-sm font-bold tracking-tight">Hoi thoai</h2>
+            <p className="text-[11px] text-muted-foreground/60 mt-0.5 font-medium">{totalConversations} cuoc tro chuyen</p>
           </div>
           {simulationRunning && (
             <span className="sim-live flex items-center gap-1.5 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2.5 py-1 rounded-full shadow-sm shadow-emerald-500/10 animate-scale-bounce">
@@ -206,7 +224,7 @@ export default function ConversationList() {
         <div className="relative mb-2">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/40" />
           <Input
-            placeholder="Tìm tên, SĐT, email..."
+            placeholder="Tim ten, SDT, email..."
             className="pl-9 h-8 md:h-9 text-[13px] rounded-xl glass-input focus-visible:ring-0 focus-visible:border-primary/30"
             value={searchQuery}
             onChange={(e) => handleSearch(e.target.value)}
@@ -253,7 +271,7 @@ export default function ConversationList() {
           )
         })}
       </div>
-      {/* List — native scroll for reliable behavior in flex & resizable containers */}
+      {/* List — native scroll */}
       <div className="flex-1 min-h-0 overflow-y-auto">
         {isLoadingConversations ? (
           <div className="p-4 space-y-4">
@@ -272,8 +290,8 @@ export default function ConversationList() {
             <div className="empty-state-icon h-16 w-16 rounded-2xl flex items-center justify-center mb-4">
               <Inbox className="h-7 w-7" />
             </div>
-            <p className="text-sm font-semibold">Không có hội thoại nào</p>
-            <p className="text-xs mt-1 text-muted-foreground/40">Cuộc trò chuyện mới sẽ xuất hiện ở đây</p>
+            <p className="text-sm font-semibold">Khong co hoi thoai nao</p>
+            <p className="text-xs mt-1 text-muted-foreground/40">Cuoc tro chuyen moi se xuat hien o day</p>
           </div>
         ) : (
           conversations.map((convo, i) => <ConversationItem key={convo.id} convo={convo} index={i} />)
