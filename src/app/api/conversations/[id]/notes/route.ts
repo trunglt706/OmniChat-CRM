@@ -40,3 +40,41 @@ export async function POST(
 
   return NextResponse.json(note, { status: 201 });
 }
+
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id: conversationId } = await params;
+  const body = await request.json();
+  const { noteId, content, isPinned } = body;
+  if (!noteId) return NextResponse.json({ error: 'noteId required' }, { status: 400 });
+
+  const data: Record<string, unknown> = {};
+  if (content !== undefined) data.content = content;
+  if (isPinned !== undefined) data.isPinned = isPinned;
+
+  const note = await db.internalNote.update({
+    where: { id: noteId, conversationId },
+    data,
+    include: { author: { select: { id: true, name: true, avatar: true } } },
+  });
+
+  return NextResponse.json(note);
+}
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id: conversationId } = await params;
+  const { searchParams } = new URL(request.url);
+  const noteId = searchParams.get('noteId');
+  if (!noteId) return NextResponse.json({ error: 'noteId required' }, { status: 400 });
+
+  await db.internalNote.delete({
+    where: { id: noteId, conversationId },
+  });
+
+  return NextResponse.json({ success: true });
+}

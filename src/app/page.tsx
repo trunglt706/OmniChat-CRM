@@ -364,17 +364,17 @@ export default function CRMPage() {
     <>
       <div className="hidden md:flex flex-1 overflow-hidden">
         <ResizablePanelGroup direction="horizontal">
-          <ResizablePanel defaultSize={26} minSize={20} maxSize={40} className="border-r border-border/20 overflow-hidden">
+          <ResizablePanel defaultSize={26} minSize={20} maxSize={40} className="border-r border-border/20">
             <ConversationList />
           </ResizablePanel>
           <ResizableHandle withHandle />
-          <ResizablePanel defaultSize={selectedConversationId ? 50 : 74} minSize={30} className="overflow-hidden">
+          <ResizablePanel defaultSize={selectedConversationId ? 50 : 74} minSize={30}>
             <ChatArea />
           </ResizablePanel>
           {showRightPanel && selectedConversationId && (
             <>
               <ResizableHandle withHandle />
-              <ResizablePanel defaultSize={24} minSize={20} maxSize={34} className="border-l border-border/20 bg-muted/20 overflow-hidden">
+              <ResizablePanel defaultSize={24} minSize={20} maxSize={34} className="border-l border-border/20 bg-muted/20">
                 <CustomerPanel />
               </ResizablePanel>
             </>

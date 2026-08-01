@@ -88,6 +88,8 @@ interface CRMState {
   notes: InternalNote[]
   setNotes: (n: InternalNote[]) => void
   addNote: (n: InternalNote) => void
+  updateNote: (id: string, patch: Partial<InternalNote>) => void
+  deleteNote: (id: string) => void
 
   // Loading
   isLoadingConversations: boolean
@@ -226,6 +228,10 @@ export const useCRMStore = create<CRMState>((set, get) => ({
   notes: [],
   setNotes: (n) => set({ notes: n }),
   addNote: (n) => set((state) => ({ notes: [n, ...state.notes] })),
+  updateNote: (id, patch) => set((s) => ({
+    notes: s.notes.map(n => n.id === id ? { ...n, ...patch } : n),
+  })),
+  deleteNote: (id) => set((s) => ({ notes: s.notes.filter(n => n.id !== id) })),
 
   isLoadingConversations: false,
   setIsLoadingConversations: (v) => set({ isLoadingConversations: v }),

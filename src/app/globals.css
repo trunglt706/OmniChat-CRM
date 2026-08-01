@@ -646,6 +646,12 @@
   -webkit-overflow-scrolling: touch;
 }
 
+/* Fix scroll inside react-resizable-panels */
+[data-slot="resizable-panel"] {
+  display: flex !important;
+  flex-direction: column !important;
+}
+
 /* Prevent body scroll when sheet is open on mobile */
 body.sheet-open {
   overflow: hidden;

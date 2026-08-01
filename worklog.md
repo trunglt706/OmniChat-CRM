@@ -1,4 +1,25 @@
 ---
+Task ID: 2
+Agent: main
+Task: Edit/delete notes, quick-assign staff, enhanced automation rules, scroll fix
+
+Work Log:
+- Added PUT and DELETE handlers to /api/conversations/[id]/notes/route.ts for edit and delete notes
+- Added `updateNote` and `deleteNote` actions to crm-store.ts Zustand store
+- Rewrote NotesTab in customer-panel.tsx with inline edit, delete confirmation, pin/unpin toggle
+- Added quick-assign Popover in chat-area.tsx header with agent list, online status, current owner indicator
+- Removed duplicate assign section from the MoreVertical dropdown menu
+- Enhanced automation-panel.tsx with: action type selector (5 types), stats cards, search, create-by-type popover, delete confirmation, polished glass-card design
+- Fixed scroll: Added CSS override `[data-slot="resizable-panel"] { display: flex !important; flex-direction: column !important; }` in globals.css
+- Removed redundant `overflow-hidden` classes from ResizablePanel in page.tsx
+
+Stage Summary:
+- Notes: full CRUD (create, edit, delete, pin/unpin) with inline UI
+- Quick-assign: Popover in chat header showing agents with online status, current owner checkmark, unassign option
+- Automation: 5 action types, stats dashboard, search, glass-card UI, create-by-type workflow
+- Scroll fix: CSS override ensures panels act as flex-column containers, allowing inner overflow-y:auto to work
+- Build passes successfully
+---
 Task ID: 1
 Agent: main
 Task: Fix scroll on sidebar & chat + implement lazy load, image upload, socket realtime, state optimization

@@ -19,6 +19,7 @@ import {
   User, Phone, Mail, Building, MapPin, Calendar, MessageCircle, Send,
   Globe, Pin, Plus, Loader2, X, ChevronRight, ExternalLink,
   Copy, CheckCircle2, Clock, Sparkles, Target, TrendingUp,
+  Pencil, Trash2, MoreHorizontal, PinOff, Check, Ban,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -146,9 +147,13 @@ function InfoTab() {
 }
 
 function NotesTab() {
-  const { selectedConversationId, conversationDetail, notes, setNotes, addNote } = useCRMStore()
+  const { selectedConversationId, conversationDetail, notes, setNotes, addNote, updateNote, deleteNote } = useCRMStore()
   const [newNote, setNewNote] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editContent, setEditContent] = useState('')
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
+  const [actionLoadingId, setActionLoadingId] = useState<string | null>(null)
 
   const fetchNotes = async () => {
     if (!selectedConversationId) return
@@ -184,55 +189,170 @@ function NotesTab() {
     }
   }
 
+  const handleEdit = (note: InternalNote) => {
+    setEditingId(note.id)
+    setEditContent(note.content)
+  }
+
+  const handleSaveEdit = async () => {
+    if (!editingId || !editContent.trim() || !selectedConversationId) return
+    setActionLoadingId(editingId)
+    try {
+      const res = await fetch(`/api/conversations/${selectedConversationId}/notes`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ noteId: editingId, content: editContent.trim() }),
+      })
+      const updated = await res.json()
+      updateNote(editingId, updated)
+      setEditingId(null)
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setActionLoadingId(null)
+    }
+  }
+
+  const handleCancelEdit = () => {
+    setEditingId(null)
+    setEditContent('')
+  }
+
+  const handleTogglePin = async (note: InternalNote) => {
+    if (!selectedConversationId) return
+    setActionLoadingId(note.id)
+    try {
+      const res = await fetch(`/api/conversations/${selectedConversationId}/notes`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ noteId: note.id, isPinned: !note.isPinned }),
+      })
+      const updated = await res.json()
+      updateNote(note.id, updated)
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setActionLoadingId(null)
+    }
+  }
+
+  const handleDelete = async (noteId: string) => {
+    if (!selectedConversationId) return
+    setActionLoadingId(noteId)
+    try {
+      await fetch(`/api/conversations/${selectedConversationId}/notes?noteId=${noteId}`, { method: 'DELETE' })
+      deleteNote(noteId)
+      setDeleteConfirmId(null)
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setActionLoadingId(null)
+    }
+  }
+
+  const renderNoteCard = (note: InternalNote, idx: number) => {
+    const isEditing = editingId === note.id
+    const isLoading = actionLoadingId === note.id
+
+    return (
+      <div
+        key={note.id}
+        className={cn(
+          'rounded-xl p-3.5 transition-all duration-200 animate-slide-up group',
+          note.isPinned
+            ? 'bg-amber-50/80 dark:bg-amber-950/20 border border-amber-200/60 dark:border-amber-800/30 hover:shadow-sm hover:shadow-amber-500/5'
+            : 'bg-foreground/[0.02] hover:bg-foreground/[0.04]'
+        )}
+        style={{ animationDelay: `${idx * 50}ms` }}
+      >
+        {isEditing ? (
+          <div className="space-y-2.5">
+            <Textarea
+              value={editContent}
+              onChange={(e) => setEditContent(e.target.value)}
+              className="text-[13px] min-h-[60px] resize-none rounded-lg glass-input focus-visible:ring-0"
+              autoFocus
+            />
+            <div className="flex gap-1.5 justify-end">
+              <Button variant="ghost" size="sm" className="h-7 text-[11px] rounded-lg" onClick={handleCancelEdit}>
+                <Ban className="h-3 w-3 mr-1" /> Huỷ
+              </Button>
+              <Button size="sm" className="h-7 text-[11px] rounded-lg bg-gradient-to-r from-indigo-500 to-violet-500" onClick={handleSaveEdit} disabled={!editContent.trim() || isLoading}>
+                {isLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3 mr-1" />}
+                Lưu
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <>
+            {note.isPinned && (
+              <div className="flex items-center gap-1 text-[10px] text-amber-600 dark:text-amber-400 font-bold uppercase tracking-wider mb-1.5">
+                <Pin className="h-2.5 w-2.5" /> Đã ghim
+              </div>
+            )}
+            <p className="text-[13px] leading-relaxed text-foreground/80 whitespace-pre-wrap">{note.content}</p>
+            <div className="flex items-center justify-between mt-2">
+              <p className="text-[10px] text-muted-foreground/50 font-medium">{note.author.name} · {new Date(note.createdAt).toLocaleString('vi-VN')}</p>
+              <div className={cn('flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200', deleteConfirmId === note.id && 'opacity-100')}>
+                {deleteConfirmId === note.id ? (
+                  <>
+                    <span className="text-[10px] text-destructive font-medium mr-1">Xoá?</span>
+                    <Button variant="ghost" size="icon" className="h-6 w-6 rounded-lg" onClick={() => handleDelete(note.id)} disabled={isLoading}>
+                      {isLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3 text-destructive" />}
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-6 w-6 rounded-lg" onClick={() => setDeleteConfirmId(null)}>
+                      <Ban className="h-3 w-3" />
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <Button variant="ghost" size="icon" className="h-6 w-6 rounded-lg hover:bg-amber-100 dark:hover:bg-amber-950/40" onClick={() => handleTogglePin(note)} disabled={isLoading} title={note.isPinned ? 'Bỏ ghim' : 'Ghim'}>
+                      {note.isPinned ? <PinOff className="h-3 w-3 text-amber-500" /> : <Pin className="h-3 w-3 text-muted-foreground/50" />}
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-6 w-6 rounded-lg" onClick={() => handleEdit(note)} disabled={isLoading} title="Sửa">
+                      <Pencil className="h-3 w-3" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-6 w-6 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/40" onClick={() => setDeleteConfirmId(note.id)} disabled={isLoading} title="Xoá">
+                      <Trash2 className="h-3 w-3 text-muted-foreground/50 hover:text-destructive" />
+                    </Button>
+                  </>
+                )}
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    )
+  }
+
+  const pinnedNotes = notes.filter(n => n.isPinned)
+  const regularNotes = notes.filter(n => !n.isPinned)
+
   return (
     <div className="space-y-3 animate-fade-in">
-      {/* Pinned notes */}
-      {notes.filter(n => n.isPinned).length > 0 && (
+      {pinnedNotes.length > 0 && (
         <div className="space-y-2">
-          <div className="flex items-center gap-1.5 text-[10px] text-amber-600 dark:text-amber-400 font-bold uppercase tracking-wider px-1">
-            <Pin className="h-3 w-3" /> Đã ghim
-          </div>
-          {notes.filter(n => n.isPinned).map((note) => (
-            <div key={note.id} className={cn(
-              'rounded-xl p-3.5 transition-all duration-200 animate-slide-up',
-              'bg-amber-50/80 dark:bg-amber-950/20 border border-amber-200/60 dark:border-amber-800/30',
-              'hover:shadow-sm hover:shadow-amber-500/5'
-            )}>
-              <p className="text-[13px] leading-relaxed">{note.content}</p>
-              <p className="text-[10px] text-muted-foreground/50 mt-2 font-medium">{note.author.name} · {new Date(note.createdAt).toLocaleString('vi-VN')}</p>
-            </div>
-          ))}
+          {pinnedNotes.map((note, idx) => renderNoteCard(note, idx))}
         </div>
       )}
-
-      {/* All notes */}
       <div className="space-y-2">
-        {notes.filter(n => !n.isPinned).map((note, idx) => (
-          <div key={note.id} className={cn(
-            'bg-foreground/[0.02] rounded-xl p-3.5 transition-all duration-200 stagger-item hover:bg-foreground/[0.04]',
-          )} style={{ animationDelay: `${idx * 50}ms` }}>
-            <p className="text-[13px] leading-relaxed text-foreground/80">{note.content}</p>
-            <p className="text-[10px] text-muted-foreground/50 mt-2 font-medium">{note.author.name} · {new Date(note.createdAt).toLocaleString('vi-VN')}</p>
-          </div>
-        ))}
+        {regularNotes.length > 0 && pinnedNotes.length > 0 && (
+          <h4 className="text-[10px] font-bold text-muted-foreground/40 uppercase tracking-[0.15em] px-1">Tất cả</h4>
+        )}
+        {regularNotes.map((note, idx) => renderNoteCard(note, idx))}
       </div>
-
-      {/* Add note */}
+      {notes.length === 0 && !isSubmitting && (
+        <div className="flex flex-col items-center justify-center py-8 text-muted-foreground/40">
+          <div className="h-12 w-12 rounded-xl bg-foreground/[0.02] flex items-center justify-center mb-3">
+            <MessageCircle className="h-5 w-5" />
+          </div>
+          <p className="text-xs font-medium">Chưa có ghi chú nào</p>
+          <p className="text-[10px] mt-0.5 text-muted-foreground/30">Thêm ghi chú nội bộ về hội thoại</p>
+        </div>
+      )}
       <div className="space-y-2.5 pt-3 border-t border-border/30">
-        <Textarea
-          value={newNote}
-          onChange={(e) => setNewNote(e.target.value)}
-          placeholder="Thêm ghi chú nội bộ..."
-          className="text-[13px] min-h-[70px] resize-none rounded-xl glass-input focus-visible:ring-0"
-        />
-        <Button
-          onClick={handleAddNote}
-          disabled={!newNote.trim() || isSubmitting}
-          size="sm" className={cn(
-            'w-full text-xs h-9 rounded-xl font-medium transition-all duration-200',
-            newNote.trim() && 'bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600 shadow-md shadow-indigo-500/20'
-          )}
-        >
+        <Textarea value={newNote} onChange={(e) => setNewNote(e.target.value)} placeholder="Thêm ghi chú nội bộ..." className="text-[13px] min-h-[70px] resize-none rounded-xl glass-input focus-visible:ring-0" />
+        <Button onClick={handleAddNote} disabled={!newNote.trim() || isSubmitting} size="sm" className={cn('w-full text-xs h-9 rounded-xl font-medium transition-all duration-200', newNote.trim() && 'bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600 shadow-md shadow-indigo-500/20')}>
           {isSubmitting ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Plus className="h-3.5 w-3.5 mr-1.5" />}
           Thêm ghi chú
         </Button>

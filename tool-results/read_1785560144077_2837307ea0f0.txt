@@ -1,0 +1,700 @@
+   180→export default function ChatArea() {
+   181→  // Granular selectors to minimize re-renders
+   182→  const selectedConversationId = useCRMStore((s) => s.selectedConversationId)
+   183→  const conversationDetail = useCRMStore((s) => s.conversationDetail)
+   184→  const setConversationDetail = useCRMStore((s) => s.setConversationDetail)
+   185→  const messages = useCRMStore((s) => s.messages)
+   186→  const setMessages = useCRMStore((s) => s.setMessages)
+   187→  const prependMessages = useCRMStore((s) => s.prependMessages)
+   188→  const addMessage = useCRMStore((s) => s.addMessage)
+   189→  const isSendingMessage = useCRMStore((s) => s.isSendingMessage)
+   190→  const setIsSendingMessage = useCRMStore((s) => s.setIsSendingMessage)
+   191→  const hasMoreMessages = useCRMStore((s) => s.hasMoreMessages)
+   192→  const setHasMoreMessages = useCRMStore((s) => s.setHasMoreMessages)
+   193→  const isLoadingMoreMessages = useCRMStore((s) => s.isLoadingMoreMessages)
+   194→  const setIsLoadingMoreMessages = useCRMStore((s) => s.setIsLoadingMoreMessages)
+   195→  const agents = useCRMStore((s) => s.agents)
+   196→  const setAgents = useCRMStore((s) => s.setAgents)
+   197→  const botEnabled = useCRMStore((s) => s.botEnabled)
+   198→  const setBotEnabled = useCRMStore((s) => s.setBotEnabled)
+   199→  const isBotTyping = useCRMStore((s) => s.isBotTyping)
+   200→  const setMobileView = useCRMStore((s) => s.setMobileView)
+   201→  const showRightPanel = useCRMStore((s) => s.showRightPanel)
+   202→
+   203→  const [replyText, setReplyText] = useState('')
+   204→  const [isFocused, setIsFocused] = useState(false)
+   205→  const [emojiOpen, setEmojiOpen] = useState(false)
+   206→  const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([])
+   207→  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null)
+   208→  const bottomRef = useRef<HTMLDivElement>(null)
+   209→  const topSentinelRef = useRef<HTMLDivElement>(null)
+   210→  const textareaRef = useRef<HTMLTextAreaElement>(null)
+   211→  const fileInputRef = useRef<HTMLInputElement>(null)
+   212→  const imageInputRef = useRef<HTMLInputElement>(null)
+   213→  const scrollContainerRef = useRef<HTMLDivElement>(null)
+   214→  const prevMessageCountRef = useRef(0)
+   215→  const isInitialLoadRef = useRef(true)
+   216→  const loadingMoreRef = useRef(false)
+   217→
+   218→  // ─── Fetch messages with pagination ───
+   219→  const fetchMessages = useCallback(async (conversationId: string, before?: string) => {
+   220→    if (!conversationId) return
+   221→    const params = new URLSearchParams({ limit: String(MESSAGES_PER_PAGE) })
+   222→    if (before) params.set('before', before)
+   223→    try {
+   224→      const res = await fetch(`/api/conversations/${conversationId}/messages?${params}`)
+   225→      const json = await res.json()
+   226→      return json // { data: Message[], total, hasMore }
+   227→    } catch (e) {
+   228→      console.error('Failed to fetch messages', e)
+   229→      return null
+   230→    }
+   231→  }, [])
+   232→
+   233→  // Initial load: fetch conversation detail + last 15 messages
+   234→  useEffect(() => {
+   235→    if (!selectedConversationId) return
+   236→    isInitialLoadRef.current = true
+   237→    prevMessageCountRef.current = 0
+   238→
+   239→    const loadInitial = async () => {
+   240→      try {
+   241→        const [detailRes, msgsRes, agentsRes] = await Promise.all([
+   242→          fetch(`/api/conversations/${selectedConversationId}`),
+   243→          fetch(`/api/conversations/${selectedConversationId}/messages?limit=${MESSAGES_PER_PAGE}`),
+   244→          fetch('/api/agents'),
+   245→        ])
+   246→        const detail = await detailRes.json()
+   247→        const msgsJson = await msgsRes.json()
+   248→        const agentsData = await agentsRes.json()
+   249→
+   250→        setConversationDetail(detail)
+   251→        setMessages(msgsJson.data || [])
+   252→        setHasMoreMessages(msgsJson.hasMore || false)
+   253→        if (agentsData.length) setAgents(agentsData)
+   254→
+   255→        // Scroll to bottom after render
+   256→        requestAnimationFrame(() => {
+   257→          bottomRef.current?.scrollIntoView()
+   258→          isInitialLoadRef.current = false
+   259→        })
+   260→      } catch (e) {
+   261→        console.error('Failed to fetch conversation', e)
+   262→      }
+   263→    }
+   264→    loadInitial()
+   265→  }, [selectedConversationId, setConversationDetail, setMessages, setHasMoreMessages, setAgents, fetchMessages])
+   266→
+   267→  // Auto scroll to bottom on NEW messages (not on initial load or prepend)
+   268→  useEffect(() => {
+   269→    if (isInitialLoadRef.current) return
+   270→    if (messages.length > prevMessageCountRef.current) {
+   271→      bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+   272→    }
+   273→    prevMessageCountRef.current = messages.length
+   274→  }, [messages.length])
+   275→
+   276→  // ─── Load older messages on scroll up ───
+   277→  const loadOlderMessages = useCallback(async () => {
+   278→    if (!selectedConversationId || !hasMoreMessages || isLoadingMoreMessages || loadingMoreRef.current) return
+   279→    if (messages.length === 0) return
+   280→
+   281→    loadingMoreRef.current = true
+   282→    setIsLoadingMoreMessages(true)
+   283→
+   284→    try {
+   285→      // Save current scroll position
+   286→      const container = scrollContainerRef.current
+   287→      const prevScrollHeight = container?.scrollHeight || 0
+   288→      const prevScrollTop = container?.scrollTop || 0
+   289→
+   290→      const oldestMsg = messages[0]
+   291→      const result = await fetchMessages(selectedConversationId, oldestMsg.createdAt)
+   292→
+   293→      if (result && result.data && result.data.length > 0) {
+   294→        prependMessages(result.data)
+   295→        setHasMoreMessages(result.hasMore || false)
+   296→
+   297→        // Restore scroll position after prepend
+   298→        requestAnimationFrame(() => {
+   299→          if (container) {
+   300→            const newScrollHeight = container.scrollHeight
+   301→            container.scrollTop = newScrollHeight - prevScrollHeight + prevScrollTop
+   302→          }
+   303→        })
+   304→      } else {
+   305→        setHasMoreMessages(false)
+   306→      }
+   307→    } catch (e) {
+   308→      console.error('Failed to load older messages', e)
+   309→    } finally {
+   310→      loadingMoreRef.current = false
+   311→      setIsLoadingMoreMessages(false)
+   312→    }
+   313→  }, [selectedConversationId, hasMoreMessages, isLoadingMoreMessages, messages, fetchMessages, prependMessages, setHasMoreMessages, setIsLoadingMoreMessages])
+   314→
+   315→  // Intersection observer for scroll-to-top loading
+   316→  useEffect(() => {
+   317→    const sentinel = topSentinelRef.current
+   318→    if (!sentinel) return
+   319→
+   320→    const observer = new IntersectionObserver(
+   321→      (entries) => {
+   322→        if (entries[0].isIntersecting && hasMoreMessages && !isLoadingMoreMessages) {
+   323→          loadOlderMessages()
+   324→        }
+   325→      },
+   326→      { root: scrollContainerRef.current, threshold: 0.1 }
+   327→    )
+   328→
+   329→    observer.observe(sentinel)
+   330→    return () => observer.disconnect()
+   331→  }, [hasMoreMessages, isLoadingMoreMessages, loadOlderMessages])
+   332→
+   333→  // ─── Socket: realtime messages for current conversation ───
+   334→  useEffect(() => {
+   335→    if (!selectedConversationId) return
+   336→
+   337→    const handleNewMessage = (data: { message: any }) => {
+   338→      if (data.message?.conversationId === selectedConversationId) {
+   339→        // Only refetch if message isn't already in our list (avoid duplicates)
+   340→        const exists = useCRMStore.getState().messages.some(m => m.id === data.message.id)
+   341→        if (!exists) {
+   342→          fetch(`/api/conversations/${selectedConversationId}/messages?limit=1&before=${new Date(Date.now() + 60000).toISOString()}`)
+   343→            .then(r => r.json())
+   344→            .then(json => {
+   345→              if (json.data?.length > 0) {
+   346→                const latest = json.data[0]
+   347→                const exists = useCRMStore.getState().messages.some(m => m.id === latest.id)
+   348→                if (!exists) addMessage(latest)
+   349→              }
+   350→            })
+   351→            .catch(() => {})
+   352→        }
+   353→      }
+   354→    }
+   355→
+   356→    const unsub = socket.on(`message:${selectedConversationId}`, handleNewMessage)
+   357→    return unsub
+   358→  }, [selectedConversationId, addMessage])
+   359→
+   360→  // Auto-resize textarea
+   361→  useEffect(() => {
+   362→    const el = textareaRef.current
+   363→    if (!el) return
+   364→    el.style.height = 'auto'
+   365→    el.style.height = Math.min(el.scrollHeight, 120) + 'px'
+   366→  }, [replyText])
+   367→
+   368→  // ─── Send message (text + images/files) ───
+   369→  const handleSend = async () => {
+   370→    if (!selectedConversationId) return
+   371→    const hasText = replyText.trim().length > 0
+   372→    const hasFiles = attachedFiles.length > 0
+   373→    if (!hasText && !hasFiles) return
+   374→
+   375→    setIsSendingMessage(true)
+   376→    try {
+   377→      // Send text message if there's text
+   378→      if (hasText) {
+   379→        const content = replyText.trim()
+   380→        const res = await fetch(`/api/conversations/${selectedConversationId}/messages`, {
+   381→          method: 'POST',
+   382→          headers: { 'Content-Type': 'application/json' },
+   383→          body: JSON.stringify({ content }),
+   384→        })
+   385→        const data = await res.json()
+   386→        const newMsg = data.message || data
+   387→        addMessage(newMsg)
+   388→
+   389→        if (data.automationResult) {
+   390→          setTimeout(async () => {
+   391→            const msgs = await fetch(`/api/conversations/${selectedConversationId}/messages?limit=5`).then(r => r.json())
+   392→            const current = useCRMStore.getState().messages
+   393→            const newIds = new Set((msgs.data || []).map((m: Message) => m.id))
+   394→            const missing = (msgs.data || []).filter((m: Message) => !current.some(c => c.id === m.id))
+   395→            missing.forEach((m: Message) => addMessage(m))
+   396→          }, 500)
+   397→        }
+   398→      }
+   399→
+   400→      // Send image messages
+   401→      for (const file of attachedFiles) {
+   402→        if (file.type === 'image' && file.dataUrl) {
+   403→          const res = await fetch(`/api/conversations/${selectedConversationId}/messages`, {
+   404→            method: 'POST',
+   405→            headers: { 'Content-Type': 'application/json' },
+   406→            body: JSON.stringify({
+   407→              messageType: 'image',
+   408→              content: null,
+   409→              attachmentUrl: file.dataUrl,
+   410→              attachmentName: file.name,
+   411→              attachmentType: file.file?.type || 'image/*',
+   412→            }),
+   413→          })
+   414→          const data = await res.json()
+   415→          addMessage(data.message || data)
+   416→        } else {
+   417→          // File attachment as text reference
+   418→          const res = await fetch(`/api/conversations/${selectedConversationId}/messages`, {
+   419→            method: 'POST',
+   420→            headers: { 'Content-Type': 'application/json' },
+   421→            body: JSON.stringify({
+   422→              content: `\u{1F4CE} ${file.name}`,
+   423→              messageType: 'file',
+   424→              attachmentName: file.name,
+   425→              attachmentType: file.file?.type || 'application/octet-stream',
+   426→            }),
+   427→          })
+   428→          const data = await res.json()
+   429→          addMessage(data.message || data)
+   430→        }
+   431→      }
+   432→
+   433→      setReplyText('')
+   434→      setAttachedFiles([])
+   435→      textareaRef.current?.focus()
+   436→    } catch (e) {
+   437→      console.error('Failed to send message', e)
+   438→    } finally {
+   439→      setIsSendingMessage(false)
+   440→    }
+   441→  }
+   442→
+   443→  // ─── File / Image handling ───
+   444→  const readFileAsDataUrl = (file: File): Promise<string> => {
+   445→    return new Promise((resolve, reject) => {
+   446→      const reader = new FileReader()
+   447→      reader.onload = () => resolve(reader.result as string)
+   448→      reader.onerror = reject
+   449→      reader.readAsDataURL(file)
+   450→    })
+   451→  }
+   452→
+   453→  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>, forceType?: 'image' | 'file') => {
+   454→    const files = Array.from(e.target.files || [])
+   455→    if (files.length === 0) return
+   456→
+   457→    const newFiles: AttachedFile[] = []
+   458→    for (const f of files) {
+   459→      const isImage = forceType === 'image' || f.type.startsWith('image/')
+   460→      const entry: AttachedFile = {
+   461→        name: f.name,
+   462→        size: f.size,
+   463→        type: isImage ? 'image' : 'file',
+   464→        file: f,
+   465→      }
+   466→      if (isImage) {
+   467→        entry.dataUrl = await readFileAsDataUrl(f)
+   468→      }
+   469→      newFiles.push(entry)
+   470→    }
+   471→
+   472→    setAttachedFiles(prev => [...prev, ...newFiles])
+   473→    e.target.value = ''
+   474→    textareaRef.current?.focus()
+   475→  }
+   476→
+   477→  const removeFile = (index: number) => {
+   478→    setAttachedFiles(prev => prev.filter((_, i) => i !== index))
+   479→  }
+   480→
+   481→  const insertEmoji = (emoji: string) => {
+   482→    setReplyText(prev => prev + emoji)
+   483→    setEmojiOpen(false)
+   484→    textareaRef.current?.focus()
+   485→  }
+   486→
+   487→  // Change status
+   488→  const handleStatusChange = async (status: string) => {
+   489→    if (!selectedConversationId) return
+   490→    try {
+   491→      await fetch(`/api/conversations/${selectedConversationId}/status`, {
+   492→        method: 'POST',
+   493→        headers: { 'Content-Type': 'application/json' },
+   494→        body: JSON.stringify({ status }),
+   495→      })
+   496→      // Re-fetch detail
+   497→      const detailRes = await fetch(`/api/conversations/${selectedConversationId}`)
+   498→      const detail = await detailRes.json()
+   499→      setConversationDetail(detail)
+   500→    } catch (e) {
+   501→      console.error('Failed to change status', e)
+   502→    }
+   503→  }
+   504→
+   505→  // Assign agent
+   506→  const handleAssign = async (agentId: string) => {
+   507→    if (!selectedConversationId) return
+   508→    try {
+   509→      await fetch(`/api/conversations/${selectedConversationId}/assign`, {
+   510→        method: 'POST',
+   511→        headers: { 'Content-Type': 'application/json' },
+   512→        body: JSON.stringify({ ownerId: agentId || null }),
+   513→      })
+   514→      const detailRes = await fetch(`/api/conversations/${selectedConversationId}`)
+   515→      const detail = await detailRes.json()
+   516→      setConversationDetail(detail)
+   517→    } catch (e) {
+   518→      console.error('Failed to assign', e)
+   519→    }
+   520→  }
+   521→
+   522→  const handleKeyDown = (e: React.KeyboardEvent) => {
+   523→    if (e.key === 'Enter' && !e.shiftKey) {
+   524→      e.preventDefault()
+   525→      handleSend()
+   526→    }
+   527→  }
+   528→
+   529→  function formatFileSize(bytes: number) {
+   530→    if (bytes < 1024) return bytes + ' B'
+   531→    if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB'
+   532→    return (bytes / 1048576).toFixed(1) + ' MB'
+   533→  }
+   534→
+   535→  const handleImageClick = useCallback((url: string) => setImagePreviewUrl(url), [])
+   536→
+   537→  // ─── Empty state ───
+   538→  if (!selectedConversationId || !conversationDetail) {
+   539→    return (
+   540→      <div className="flex-1 h-full flex items-center justify-center bg-muted/20">
+   541→        <div className="text-center text-muted-foreground/50 animate-float">
+   542→          <div className="h-20 w-20 mx-auto mb-5 rounded-3xl bg-gradient-to-br from-primary/10 to-primary/5 flex items-center justify-center shadow-lg shadow-primary/5">
+   543→            <Send className="h-9 w-9 text-primary/30" />
+   544→          </div>
+   545→          <p className="text-sm font-semibold text-foreground/40">Chon mot hoi thoai de bat dau</p>
+   546→          <p className="text-xs mt-1.5 text-muted-foreground/35">Chon tu danh sach ben trai de xem chi tiet</p>
+   547→        </div>
+   548→      </div>
+   549→    )
+   550→  }
+   551→
+   552→  const convo = conversationDetail
+   553→  const channelCfg = CHANNEL_CONFIG[convo.channel as keyof typeof CHANNEL_CONFIG]
+   554→  const statusCfg = STATUS_CONFIG[convo.status]
+   555→  const priorityCfg = PRIORITY_CONFIG[convo.priority]
+   556→  const now = new Date()
+   557→  const slaBreached = convo.slaFirstResponse && new Date(convo.slaFirstResponse) < now && convo.status === 'open'
+   558→
+   559→  return (
+   560→    <div className="flex flex-col flex-1 min-h-0">
+   561→      {/* Chat Header */}
+   562→      <div className="px-4 py-3 border-b border-border/40 glass flex items-center justify-between gap-3 flex-shrink-0">
+   563→        <div className="flex items-center gap-3 min-w-0">
+   564→          <Button
+   565→            variant="ghost" size="icon" className="h-8 w-8 flex-shrink-0 md:hidden rounded-xl hover:bg-foreground/5"
+   566→            onClick={() => setMobileView('list')}
+   567→          >
+   568→            <ArrowLeft className="h-4 w-4" />
+   569→          </Button>
+   570→          <div className="relative">
+   571→            <Avatar className={cn(
+   572→              'h-10 w-10 transition-all duration-300',
+   573→              convo.status === 'open' && 'avatar-ring-online'
+   574→            )}>
+   575→              <AvatarFallback className={cn('text-sm text-white font-semibold', GRADIENT_CLASSES[0])}>
+   576→                {convo.customer.name.split(' ').slice(-2).map((n) => n[0]).join('')}
+   577→              </AvatarFallback>
+   578→            </Avatar>
+   579→            <div className={cn(
+   580→              'absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-background transition-all duration-300',
+   581→              convo.status === 'open' ? 'bg-emerald-500 shadow-sm shadow-emerald-500/50' : 'bg-gray-400'
+   582→            )} />
+   583→          </div>
+   584→          <div className="min-w-0">
+   585→            <div className="flex items-center gap-2 flex-wrap">
+   586→              <span className="font-semibold text-sm truncate">{convo.customer.name}</span>
+   587→              <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-[18px] gap-1 rounded-lg font-medium" style={{ borderColor: channelCfg?.color + '50', color: channelCfg?.color, backgroundColor: channelCfg?.color + '10' }}>
+   588→                <div className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: channelCfg?.color }} />
+   589→                {channelCfg?.label}
+   590→              </Badge>
+   591→              {slaBreached && (
+   592→                <Badge className="bg-red-100 text-red-700 text-[10px] px-1.5 py-0 h-[18px] gap-1 animate-glow-pulse rounded-lg dark:bg-red-950/50 dark:text-red-400">
+   593→                  <AlertTriangle className="h-3 w-3" /> SLA!
+   594→                </Badge>
+   595→              )}
+   596→            </div>
+   597→            <div className="flex items-center gap-2 mt-0.5">
+   598→              {convo.subject && <span className="text-xs text-muted-foreground/60 truncate">{convo.subject}</span>}
+   599→            </div>
+   600→          </div>
+   601→        </div>
+   602→        <div className="flex items-center gap-1.5 flex-shrink-0">
+   603→          <Badge className={cn('text-[11px] px-2.5 py-0.5 h-[22px] cursor-pointer rounded-lg font-medium transition-all duration-200 hover:scale-105', statusCfg?.color)}>
+   604→            {statusCfg?.label}
+   605→          </Badge>
+   606→          <Badge variant="outline" className={cn('text-[11px] px-2 py-0.5 h-[22px] rounded-lg font-medium', priorityCfg?.color)}>
+   607→            {priorityCfg?.label}
+   608→          </Badge>
+   609→          {convo.owner && (
+   610→            <div className="hidden sm:flex items-center gap-1.5 text-xs text-muted-foreground/70 bg-foreground/[0.03] px-2 py-1 rounded-lg">
+   611→              <div className={cn('h-2 w-2 rounded-full', convo.owner.status === 'online' ? 'bg-emerald-500' : convo.owner.status === 'busy' ? 'bg-amber-500' : 'bg-gray-400')} />
+   612→              <span className="font-medium">{convo.owner.name.split(' ').slice(-1)[0]}</span>
+   613→            </div>
+   614→          )}
+   615→          <Button
+   616→            variant="ghost" size="icon" className="h-8 w-8 md:hidden rounded-xl hover:bg-foreground/5"
+   617→            onClick={() => setMobileView('panel')}
+   618→          >
+   619→            <Info className="h-4 w-4" />
+   620→          </Button>
+   621→          <Button
+   622→            variant={botEnabled ? 'default' : 'outline'}
+   623→            size="sm"
+   624→            className={cn('h-7 gap-1 text-[11px] px-2.5 rounded-lg transition-all duration-300',
+   625→              botEnabled
+   626→                ? 'bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white shadow-md shadow-violet-500/25'
+   627→                : 'hover:bg-foreground/5'
+   628→            )}
+   629→            onClick={() => setBotEnabled(!botEnabled)}
+   630→            title={botEnabled ? 'AI ON' : 'AI OFF'}
+   631→          >
+   632→            <Sparkles className="h-3 w-3" />
+   633→            <span className="hidden sm:inline">AI</span>
+   634→          </Button>
+   635→          <DropdownMenu>
+   636→            <DropdownMenuTrigger asChild>
+   637→              <Button variant="ghost" size="icon" className="h-8 w-8 rounded-xl hover:bg-foreground/5 transition-colors">
+   638→                <MoreVertical className="h-4 w-4" />
+   639→              </Button>
+   640→            </DropdownMenuTrigger>
+   641→            <DropdownMenuContent align="end" className="w-52 rounded-xl p-1">
+   642→              <DropdownMenuLabel className="text-xs px-2 py-1.5">Thay doi trang thai</DropdownMenuLabel>
+   643→              {Object.entries(STATUS_CONFIG).map(([key, cfg]) => (
+   644→                <DropdownMenuItem key={key} onClick={() => handleStatusChange(key)} className="rounded-lg text-xs py-2">
+   645→                  <CheckCircle className="h-3.5 w-3.5 mr-2" /> {cfg.label}
+   646→                </DropdownMenuItem>
+   647→              ))}
+   648→              <DropdownMenuSeparator />
+   649→              <DropdownMenuLabel className="text-xs px-2 py-1.5">Phan cong</DropdownMenuLabel>
+   650→              <DropdownMenuItem onClick={() => handleAssign('')} className="rounded-lg text-xs py-2">
+   651→                <UserPlus className="h-3.5 w-3.5 mr-2" /> Bo phan cong
+   652→              </DropdownMenuItem>
+   653→              {agents.map((a) => (
+   654→                <DropdownMenuItem key={a.id} onClick={() => handleAssign(a.id)} className="rounded-lg text-xs py-2">
+   655→                  <User className="h-3.5 w-3.5 mr-2" /> {a.name}
+   656→                  <span className={cn('ml-auto h-2 w-2 rounded-full', a.status === 'online' ? 'bg-emerald-500' : a.status === 'busy' ? 'bg-amber-500' : 'bg-gray-400')} />
+   657→                </DropdownMenuItem>
+   658→              ))}
+   659→            </DropdownMenuContent>
+   660→          </DropdownMenu>
+   661→        </div>
+   662→      </div>
+   663→
+   664→      {/* Messages area — native scroll with lazy load */}
+   665→      <div ref={scrollContainerRef} className="flex-1 min-h-0 overflow-y-auto">
+   666→        {/* Top sentinel for infinite scroll */}
+   667→        <div ref={topSentinelRef} className="h-1 w-full" />
+   668→
+   669→        {/* Load more indicator */}
+   670→        {isLoadingMoreMessages && (
+   671→          <div className="flex items-center justify-center py-3">
+   672→            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground/50" />
+   673→            <span className="text-[11px] text-muted-foreground/50 ml-2">Dang tai tin nhan cu...</span>
+   674→          </div>
+   675→        )}
+   676→
+   677→        <div className="max-w-3xl mx-auto px-4 py-4 space-y-1">
+   678→          {hasMoreMessages && !isLoadingMoreMessages && (
+   679→            <button
+   680→              onClick={loadOlderMessages}
+   681→              className="w-full flex items-center justify-center gap-1.5 py-2 text-[11px] text-muted-foreground/50 hover:text-muted-foreground/70 transition-colors"
+   682→            >
+   683→              <ChevronUp className="h-3.5 w-3.5" />
+   684→              Tai them tin nhan
+   685→            </button>
+   686→          )}
+   687→          {messages.map((msg, idx) => {
+   688→            const showDate = shouldShowDate(messages, idx)
+   689→            const prevMsg = idx > 0 ? messages[idx - 1] : null
+   690→            const nextMsg = messages[idx + 1]
+   691→            const isLastInGroup = !nextMsg ||
+   692→              nextMsg.senderType !== msg.senderType ||
+   693→              new Date(nextMsg.createdAt).getTime() - new Date(msg.createdAt).getTime() > 60000
+   694→            const showAvatar = !prevMsg ||
+   695→              prevMsg.senderType !== msg.senderType ||
+   696→              new Date(msg.createdAt).getTime() - new Date(prevMsg.createdAt).getTime() > 60000
+   697→
+   698→            // Count customer messages for gradient index
+   699→            let customerIdx = 0
+   700→            for (let i = 0; i <= idx; i++) {
+   701→              if (messages[i].senderType === 'customer') customerIdx++
+   702→            }
+   703→            const gradientIdx = msg.senderType === 'customer' ? customerIdx : 0
+   704→
+   705→            return (
+   706→              <div key={msg.id}>
+   707→                {showDate && (
+   708→                  <div className="flex justify-center my-4">
+   709→                    <span className="date-separator text-[11px] text-muted-foreground/70 px-4 py-1.5 rounded-full font-medium">
+   710→                      {formatFullDate(msg.createdAt)}
+   711→                    </span>
+   712→                  </div>
+   713→                )}
+   714→                <MessageBubble message={msg} isLastInGroup={isLastInGroup} showAvatar={showAvatar} gradientIdx={gradientIdx} onImageClick={handleImageClick} />
+   715→              </div>
+   716→            )
+   717→          })}
+   718→          {isBotTyping && <TypingIndicator />}
+   719→          <div ref={bottomRef} className="h-1" />
+   720→        </div>
+   721→      </div>
+   722→
+   723→      {/* Image preview modal */}
+   724→      {imagePreviewUrl && (
+   725→        <div
+   726→          className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in"
+   727→          onClick={() => setImagePreviewUrl(null)}
+   728→        >
+   729→          <img
+   730→            src={imagePreviewUrl}
+   731→            alt="Preview"
+   732→            className="max-w-full max-h-full object-contain rounded-lg"
+   733→          />
+   734→          <button
+   735→            className="absolute top-4 right-4 h-8 w-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
+   736→            onClick={() => setImagePreviewUrl(null)}
+   737→          >
+   738→            <X className="h-4 w-4 text-white" />
+   739→          </button>
+   740→        </div>
+   741→      )}
+   742→
+   743→      {/* Attached files preview */}
+   744→      {attachedFiles.length > 0 && (
+   745→        <div className="px-3 pt-2 flex gap-2 flex-wrap flex-shrink-0">
+   746→          {attachedFiles.map((file, i) => (
+   747→            <div key={i} className="relative group animate-fade-in">
+   748→              {file.type === 'image' && file.dataUrl ? (
+   749→                <div className="relative w-16 h-16 rounded-lg overflow-hidden border border-border/30">
+   750→                  <img src={file.dataUrl} alt={file.name} className="w-full h-full object-cover" />
+   751→                  <button
+   752→                    onClick={() => removeFile(i)}
+   753→                    className="absolute top-0.5 right-0.5 h-4 w-4 rounded-full bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+   754→                  >
+   755→                    <X className="h-2.5 w-2.5 text-white" />
+   756→                  </button>
+   757→                </div>
+   758→              ) : (
+   759→                <div className="flex items-center gap-1.5 bg-muted/80 rounded-lg px-2.5 py-1.5 text-xs">
+   760→                  <Upload className="h-3.5 w-3.5 text-muted-foreground/60" />
+   761→                  <span className="max-w-[120px] truncate">{file.name}</span>
+   762→                  <span className="text-muted-foreground/50">{formatFileSize(file.size)}</span>
+   763→                  <button onClick={() => removeFile(i)} className="ml-0.5 text-muted-foreground/40 hover:text-foreground transition-colors">
+   764→                    <X className="h-3 w-3" />
+   765→                  </button>
+   766→                </div>
+   767→              )}
+   768→            </div>
+   769→          ))}
+   770→        </div>
+   771→      )}
+   772→
+   773→      {/* Message input composer */}
+   774→      {convo.status !== 'resolved' && convo.status !== 'closed' && convo.status !== 'spam' ? (
+   775→        <div className={cn(
+   776→          'composer-area p-3 flex-shrink-0 transition-all duration-300',
+   777→          isFocused && 'shadow-[0_-8px_32px_oklch(0.49_0.2_265/0.06)]'
+   778→        )}>
+   779→          <div className="max-w-3xl mx-auto">
+   780→            <div className={cn(
+   781→              'flex gap-2 items-end rounded-2xl p-1.5 transition-all duration-300',
+   782→              'bg-muted/50 border border-border/40',
+   783→              isFocused && 'bg-background border-primary/20 shadow-lg shadow-primary/5'
+   784→            )}>
+   785→              <div className="flex gap-0.5 pl-1 pb-0.5">
+   786→                <TooltipProvider>
+   787→                  <Tooltip>
+   788→                    <TooltipTrigger asChild>
+   789→                      <Button variant="ghost" size="icon" className="h-8 w-8 rounded-xl text-muted-foreground/60 hover:text-muted-foreground hover:bg-foreground/5 transition-all duration-200"
+   790→                        onClick={() => fileInputRef.current?.click()}>
+   791→                        <Paperclip className="h-4 w-4" />
+   792→                      </Button>
+   793→                    </TooltipTrigger>
+   794→                    <TooltipContent>Dinh kem tep</TooltipContent>
+   795→                  </Tooltip>
+   796→                </TooltipProvider>
+   797→                <TooltipProvider>
+   798→                  <Tooltip>
+   799→                    <TooltipTrigger asChild>
+   800→                      <Button variant="ghost" size="icon" className="h-8 w-8 rounded-xl text-muted-foreground/60 hover:text-muted-foreground hover:bg-foreground/5 transition-all duration-200"
+   801→                        onClick={() => imageInputRef.current?.click()}>
+   802→                        <ImagePlus className="h-4 w-4" />
+   803→                      </Button>
+   804→                    </TooltipTrigger>
+   805→                    <TooltipContent>Gui hinh anh</TooltipContent>
+   806→                  </Tooltip>
+   807→                </TooltipProvider>
+   808→                <input ref={fileInputRef} type="file" className="hidden" multiple onChange={(e) => handleFileSelect(e, 'file')} />
+   809→                <input ref={imageInputRef} type="file" className="hidden" accept="image/*" multiple onChange={(e) => handleFileSelect(e, 'image')} />
+   810→              </div>
+   811→              <Textarea
+   812→                ref={textareaRef}
+   813→                value={replyText}
+   814→                onChange={(e) => setReplyText(e.target.value)}
+   815→                onKeyDown={handleKeyDown}
+   816→                onFocus={() => setIsFocused(true)}
+   817→                onBlur={() => setIsFocused(false)}
+   818→                placeholder="Nhap tin nhan..."
+   819→                className="min-h-[40px] max-h-[120px] resize-none text-[13px] border-0 bg-transparent shadow-none focus-visible:ring-0 focus-visible:border-0 p-2"
+   820→                rows={1}
+   821→              />
+   822→              <div className="flex gap-0.5 pr-0.5 pb-0.5">
+   823→                <Popover open={emojiOpen} onOpenChange={setEmojiOpen}>
+   824→                  <PopoverTrigger asChild>
+   825→                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-xl text-muted-foreground/60 hover:text-muted-foreground hover:bg-foreground/5 transition-all duration-200">
+   826→                      <SmilePlus className="h-4 w-4" />
+   827→                    </Button>
+   828→                  </PopoverTrigger>
+   829→                  <PopoverContent side="top" align="end" className="w-[280px] p-2 rounded-xl">
+   830→                    <div className="grid grid-cols-8 gap-0.5">
+   831→                      {EMOJI_LIST.map((emoji) => (
+   832→                        <button
+   833→                          key={emoji}
+   834→                          onClick={() => insertEmoji(emoji)}
+   835→                          className="h-8 w-8 flex items-center justify-center rounded-lg text-base hover:bg-foreground/[0.06] transition-colors"
+   836→                        >
+   837→                          {emoji}
+   838→                        </button>
+   839→                      ))}
+   840→                    </div>
+   841→                  </PopoverContent>
+   842→                </Popover>
+   843→                <Button
+   844→                  onClick={handleSend}
+   845→                  disabled={(!replyText.trim() && attachedFiles.length === 0) || isSendingMessage}
+   846→                  size="icon" className={cn(
+   847→                    'h-9 w-9 flex-shrink-0 rounded-xl send-btn',
+   848→                    (replyText.trim() || attachedFiles.length > 0) && 'bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600'
+   849→                  )}
+   850→                >
+   851→                  {isSendingMessage ? (
+   852→                    <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+   853→                  ) : (
+   854→                    <Send className="h-4 w-4" />
+   855→                  )}
+   856→                </Button>
+   857→              </div>
+   858→            </div>
+   859→            <p className="text-[10px] text-muted-foreground/30 text-center mt-1.5 font-medium">
+   860→              Enter de gui · Shift+Enter xuong dong
+   861→            </p>
+   862→          </div>
+   863→        </div>
+   864→      ) : (
+   865→        <div className="composer-area p-4 flex-shrink-0">
+   866→          <div className="max-w-3xl mx-auto flex items-center justify-between">
+   867→            <span className="text-xs text-muted-foreground/60">
+   868→              Hoi thoai da {convo.status === 'resolved' ? 'duoc giai quyet' : convo.status === 'closed' ? 'dong' : 'danh dau spam'}
+   869→            </span>
+   870→            <Button variant="outline" size="sm" className="text-xs h-8 rounded-xl font-medium hover:bg-primary hover:text-primary-foreground transition-all duration-200" onClick={() => handleStatusChange('open')}>
+   871→              Mo lai
+   872→            </Button>
+   873→          </div>
+   874→        </div>
+   875→      )}
+   876→    </div>
+   877→  )
+   878→}
+   879→

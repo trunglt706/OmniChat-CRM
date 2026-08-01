@@ -205,6 +205,8 @@ export default function ChatArea() {
   const [emojiOpen, setEmojiOpen] = useState(false)
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([])
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null)
+  const [assignOpen, setAssignOpen] = useState(false)
+  const [assignLoading, setAssignLoading] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
   const topSentinelRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -505,6 +507,7 @@ export default function ChatArea() {
   // Assign agent
   const handleAssign = async (agentId: string) => {
     if (!selectedConversationId) return
+    setAssignLoading(true)
     try {
       await fetch(`/api/conversations/${selectedConversationId}/assign`, {
         method: 'POST',
@@ -514,8 +517,11 @@ export default function ChatArea() {
       const detailRes = await fetch(`/api/conversations/${selectedConversationId}`)
       const detail = await detailRes.json()
       setConversationDetail(detail)
+      setAssignOpen(false)
     } catch (e) {
       console.error('Failed to assign', e)
+    } finally {
+      setAssignLoading(false)
     }
   }
 
@@ -618,6 +624,78 @@ export default function ChatArea() {
           >
             <Info className="h-4 w-4" />
           </Button>
+          <Popover open={assignOpen} onOpenChange={setAssignOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline" size="sm"
+                className={cn(
+                  'h-7 gap-1 text-[11px] px-2.5 rounded-lg font-medium transition-all duration-200',
+                  convo.owner ? 'border-primary/20 text-primary hover:bg-primary/5' : 'hover:bg-foreground/5'
+                )}
+              >
+                <UserPlus className="h-3 w-3" />
+                <span className="hidden sm:inline max-w-[80px] truncate">
+                  {convo.owner ? convo.owner.name.split(' ').slice(-1)[0] : 'Phân công'}
+                </span>
+                {convo.owner && (
+                  <span className={cn(
+                    'ml-0.5 h-2 w-2 rounded-full flex-shrink-0',
+                    convo.owner.status === 'online' ? 'bg-emerald-500' : convo.owner.status === 'busy' ? 'bg-amber-500' : 'bg-gray-400'
+                  )} />
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-[220px] p-1.5 rounded-xl">
+              <div className="px-2 py-1.5 mb-1">
+                <p className="text-[11px] font-bold text-muted-foreground/60 uppercase tracking-wider">Phân công cho</p>
+              </div>
+              <div className="space-y-0.5 max-h-[240px] overflow-y-auto">
+                <button
+                  onClick={() => handleAssign('')}
+                  disabled={assignLoading}
+                  className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs hover:bg-foreground/[0.04] transition-colors text-left"
+                >
+                  <div className="h-6 w-6 rounded-full bg-muted flex items-center justify-center flex-shrink-0">
+                    <XCircle className="h-3 w-3 text-muted-foreground/50" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-medium">Bỏ phân công</p>
+                    <p className="text-[10px] text-muted-foreground/50">Trả về hàng đợi</p>
+                  </div>
+                </button>
+                {assignLoading && <div className="flex justify-center py-2"><Loader2 className="h-4 w-4 animate-spin text-primary" /></div>}
+                {agents.map((a) => {
+                  const isCurrentOwner = convo.owner?.id === a.id
+                  return (
+                    <button
+                      key={a.id}
+                      onClick={() => handleAssign(a.id)}
+                      disabled={assignLoading}
+                      className={cn(
+                        'w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs hover:bg-foreground/[0.04] transition-colors text-left',
+                        isCurrentOwner && 'bg-primary/5'
+                      )}
+                    >
+                      <div className="relative">
+                        <div className={cn('h-6 w-6 rounded-full flex items-center justify-center flex-shrink-0 text-white text-[10px] font-semibold', GRADIENT_CLASSES[agents.indexOf(a) % GRADIENT_CLASSES.length])}>
+                          {a.name.split(' ').slice(-2).map(n => n[0]).join('')}
+                        </div>
+                        <span className={cn(
+                          'absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full border-2 border-popover',
+                          a.status === 'online' ? 'bg-emerald-500' : a.status === 'busy' ? 'bg-amber-500' : 'bg-gray-400'
+                        )} />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium truncate">{a.name}</p>
+                        <p className="text-[10px] text-muted-foreground/50 truncate">{a.email}</p>
+                      </div>
+                      {isCurrentOwner && <CheckCircle className="h-3.5 w-3.5 text-primary flex-shrink-0" />}
+                    </button>
+                  )
+                })}
+              </div>
+            </PopoverContent>
+          </Popover>
           <Button
             variant={botEnabled ? 'default' : 'outline'}
             size="sm"
@@ -639,21 +717,11 @@ export default function ChatArea() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-52 rounded-xl p-1">
+              <DropdownMenuSeparator />
               <DropdownMenuLabel className="text-xs px-2 py-1.5">Thay doi trang thai</DropdownMenuLabel>
               {Object.entries(STATUS_CONFIG).map(([key, cfg]) => (
                 <DropdownMenuItem key={key} onClick={() => handleStatusChange(key)} className="rounded-lg text-xs py-2">
                   <CheckCircle className="h-3.5 w-3.5 mr-2" /> {cfg.label}
-                </DropdownMenuItem>
-              ))}
-              <DropdownMenuSeparator />
-              <DropdownMenuLabel className="text-xs px-2 py-1.5">Phan cong</DropdownMenuLabel>
-              <DropdownMenuItem onClick={() => handleAssign('')} className="rounded-lg text-xs py-2">
-                <UserPlus className="h-3.5 w-3.5 mr-2" /> Bo phan cong
-              </DropdownMenuItem>
-              {agents.map((a) => (
-                <DropdownMenuItem key={a.id} onClick={() => handleAssign(a.id)} className="rounded-lg text-xs py-2">
-                  <User className="h-3.5 w-3.5 mr-2" /> {a.name}
-                  <span className={cn('ml-auto h-2 w-2 rounded-full', a.status === 'online' ? 'bg-emerald-500' : a.status === 'busy' ? 'bg-amber-500' : 'bg-gray-400')} />
                 </DropdownMenuItem>
               ))}
             </DropdownMenuContent>

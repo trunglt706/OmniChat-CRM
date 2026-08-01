@@ -1,13 +1,11 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Badge } from '@/components/ui/badge'
-// Native scroll
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
@@ -16,7 +14,12 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter,
 } from '@/components/ui/dialog'
 import {
+  Popover, PopoverContent, PopoverTrigger,
+} from '@/components/ui/popover'
+import {
   Zap, Plus, Trash2, Pencil, Bot, UserPlus, Tag, ArrowRight,
+  Clock, AlertTriangle, Sparkles, Search, Filter, Loader2, ChevronDown,
+  MessageCircle, TagIcon, Wand2, Users, XCircle, CheckCircle2, MoreVertical,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { Agent, Tag } from '@/lib/types'
@@ -29,6 +32,21 @@ interface AutomationRule {
   assignTo: { id: string; name: string } | null
   tag: { id: string; name: string; color: string } | null
   enabled: boolean
+  createdAt: string
+}
+
+type ActionType = 'auto_reply' | 'assign_agent' | 'tag' | 'auto_reply_assign' | 'auto_reply_tag'
+
+const ACTION_TYPES: { key: ActionType; label: string; icon: React.ElementType; desc: string }[] = [
+  { key: 'auto_reply', label: 'Tự động trả lời', icon: Bot, desc: 'Gửi tin nhắn tự động khi khớp từ khóa' },
+  { key: 'assign_agent', label: 'Phân công Agent', icon: UserPlus, desc: 'Tự động phân công cho nhân viên' },
+  { key: 'tag', label: 'Gắn Tag', icon: Tag, desc: 'Tự động gắn tag khi khớp từ khóa' },
+  { key: 'auto_reply_assign', label: 'Trả lời + Phân công', icon: Wand2, desc: 'Tự động trả lời và phân công cùng lúc' },
+  { key: 'auto_reply_tag', label: 'Trả lời + Gắn Tag', icon: Sparkles, desc: 'Tự động trả lời và gắn tag cùng lúc' },
+]
+
+function getActionTypeInfo(type: string) {
+  return ACTION_TYPES.find(t => t.key === type) || ACTION_TYPES[0]
 }
 
 export default function AutomationPanel() {
@@ -38,6 +56,10 @@ export default function AutomationPanel() {
   const [showCreate, setShowCreate] = useState(false)
   const [editing, setEditing] = useState<AutomationRule | null>(null)
   const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
   // Form state
   const [formName, setFormName] = useState('')
@@ -45,6 +67,7 @@ export default function AutomationPanel() {
   const [formReply, setFormReply] = useState('')
   const [formAgent, setFormAgent] = useState('')
   const [formTag, setFormTag] = useState('')
+  const [formActionType, setFormActionType] = useState<ActionType>('auto_reply')
 
   const fetchData = async () => {
     try {
@@ -66,8 +89,14 @@ export default function AutomationPanel() {
   useEffect(() => { fetchData() }, [])
 
   const resetForm = () => {
-    setFormName(''); setFormKeyword(''); setFormReply(''); setFormAgent(''); setFormTag('')
+    setFormName(''); setFormKeyword(''); setFormReply(''); setFormAgent(''); setFormTag(''); setFormActionType('auto_reply')
     setEditing(null); setShowCreate(false)
+  }
+
+  const openCreateForType = (type: ActionType) => {
+    resetForm()
+    setFormActionType(type)
+    setShowCreate(true)
   }
 
   const handleEdit = (rule: AutomationRule) => {
@@ -77,35 +106,59 @@ export default function AutomationPanel() {
     setFormReply(rule.replyMessage || '')
     setFormAgent(rule.assignTo?.id || '')
     setFormTag(rule.tag?.id || '')
+    // Determine action type
+    const hasReply = !!rule.replyMessage
+    const hasAssign = !!rule.assignTo
+    const hasTag = !!rule.tag
+    if (hasReply && hasAssign) setFormActionType('auto_reply_assign')
+    else if (hasReply && hasTag) setFormActionType('auto_reply_tag')
+    else if (hasReply) setFormActionType('auto_reply')
+    else if (hasAssign) setFormActionType('assign_agent')
+    else if (hasTag) setFormActionType('tag')
+    else setFormActionType('auto_reply')
     setShowCreate(true)
   }
 
   const handleSave = async () => {
     if (!formName.trim() || !formKeyword.trim()) return
+    setSaving(true)
     try {
-      if (editing) {
-        await fetch('/api/automation/rules', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: editing.id, name: formName, keyword: formKeyword, replyMessage: formReply || null, assignToId: formAgent || null, tagId: formTag || null, enabled: editing.enabled }),
-        })
-      } else {
-        await fetch('/api/automation/rules', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: formName, keyword: formKeyword, replyMessage: formReply || null, assignToId: formAgent || null, tagId: formTag || null }),
-        })
+      const needsReply = ['auto_reply', 'auto_reply_assign', 'auto_reply_tag'].includes(formActionType)
+      const needsAgent = ['assign_agent', 'auto_reply_assign'].includes(formActionType)
+      const needsTag = ['tag', 'auto_reply_tag'].includes(formActionType)
+
+      const payload: Record<string, unknown> = {
+        name: formName,
+        keyword: formKeyword,
+        replyMessage: needsReply ? (formReply || null) : null,
+        assignToId: needsAgent ? (formAgent || null) : null,
+        tagId: needsTag ? (formTag || null) : null,
       }
+      if (editing) {
+        payload.id = editing.id
+        payload.enabled = editing.enabled
+      }
+
+      await fetch('/api/automation/rules', {
+        method: editing ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
       resetForm()
       fetchData()
     } catch (e) {
       console.error(e)
+    } finally {
+      setSaving(false)
     }
   }
 
   const handleDelete = async (id: string) => {
+    setDeleting(true)
     await fetch(`/api/automation/rules?id=${id}`, { method: 'DELETE' })
+    setDeleteConfirmId(null)
     fetchData()
+    setDeleting(false)
   }
 
   const handleToggle = async (rule: AutomationRule) => {
@@ -117,158 +170,290 @@ export default function AutomationPanel() {
     fetchData()
   }
 
-  // Seed default rules
-  const seedRules = async () => {
-    const defaultRules = [
-      { name: 'Hỏi giá sản phẩm', keyword: 'giá', replyMessage: 'Cảm ơn bạn đã quan tâm! Để nhận báo giá chi tiết, vui lòng cho biết sản phẩm và số lượng bạn cần ạ.', assignToId: null, tagId: null, enabled: true },
-      { name: 'Khiếu nại', keyword: 'phàn nàn', replyMessage: 'Chúng tôi xin lỗi về trải nghiệm không tốt. Chúng tôi sẽ kiểm tra và phản hồi bạn sớm nhất trong 30 phút.', assignToId: null, tagId: null, enabled: true },
-      { name: 'Hỗ trợ kỹ thuật', keyword: 'lỗi', replyMessage: null, assignToId: null, tagId: null, enabled: true },
-    ]
-    for (const r of defaultRules) {
-      await fetch('/api/automation/rules', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(r),
-      })
-    }
-    fetchData()
-  }
+  const filteredRules = rules.filter(r => {
+    if (!searchQuery) return true
+    const q = searchQuery.toLowerCase()
+    return r.name.toLowerCase().includes(q) || r.keyword.toLowerCase().includes(q)
+  })
+
+  const enabledCount = rules.filter(r => r.enabled).length
+  const disabledCount = rules.length - enabledCount
 
   return (
     <div className="h-full min-h-0 overflow-y-auto">
-      <div className="p-4 md:p-6 max-w-[900px] mx-auto space-y-4 md:space-y-6">
-        <div className="flex items-center justify-between gap-3">
+      <div className="p-4 md:p-6 max-w-[900px] mx-auto space-y-5">
+        {/* Header */}
+        <div className="flex items-start justify-between gap-3">
           <div>
-            <h1 className="text-lg md:text-xl font-bold flex items-center gap-2">
-              <Zap className="h-5 w-5" /> Automation Rules
+            <h1 className="text-lg md:text-xl font-bold flex items-center gap-2.5">
+              <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-lg shadow-orange-500/20">
+                <Zap className="h-5 w-5 text-white" />
+              </div>
+              Automation Rules
             </h1>
-            <p className="text-sm text-muted-foreground mt-0.5">Tự động phản hồi, phân công và gắn tag theo từ khóa</p>
+            <p className="text-sm text-muted-foreground mt-1">Tự động phản hồi, phân công và gắn tag theo từ khóa</p>
           </div>
           <div className="flex gap-2 flex-shrink-0">
             {rules.length === 0 && (
-              <Button variant="outline" size="sm" onClick={seedRules} className="text-xs">
+              <Button variant="outline" size="sm" onClick={async () => {
+                const defaults = [
+                  { name: 'Hỏi giá sản phẩm', keyword: 'giá', replyMessage: 'Cảm ơn bạn đã quan tâm! Để nhận báo giá chi tiết, vui lòng cho biết sản phẩm và số lượng bạn cần ạ.', assignToId: null, tagId: null, enabled: true },
+                  { name: 'Khiếu nại', keyword: 'phàn nàn', replyMessage: 'Chúng tôi xin lỗi về trải nghiệm không tốt. Chúng tôi sẽ kiểm tra và phản hồi bạn sớm nhất trong 30 phút.', assignToId: null, tagId: null, enabled: true },
+                  { name: 'Hỗ trợ kỹ thuật', keyword: 'lỗi', replyMessage: null, assignToId: null, tagId: null, enabled: true },
+                ]
+                for (const r of defaults) {
+                  await fetch('/api/automation/rules', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(r) })
+                }
+                fetchData()
+              }} className="text-xs rounded-xl">
                 Tạo mẫu
               </Button>
             )}
-            <Dialog open={showCreate} onOpenChange={(open) => { if (!open) resetForm() }}>
-              <DialogTrigger asChild>
-                <Button size="sm" className="text-xs gap-1">
-                  <Plus className="h-3.5 w-3.5" /> Thêm rule
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button size="sm" className="text-xs gap-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 shadow-md shadow-orange-500/20">
+                  <Plus className="h-3.5 w-3.5" /> Tạo rule
                 </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-md">
-                <DialogHeader>
-                  <DialogTitle className="text-base">{editing ? 'Sửa' : 'Tạo'} Automation Rule</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-4 py-2">
-                  <div className="space-y-2">
-                    <Label className="text-xs">Tên rule</Label>
-                    <Input value={formName} onChange={(e) => setFormName(e.target.value)} placeholder="Ví dụ: Hỏi giá sản phẩm" className="h-8 text-sm" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-xs">Từ khóa kích hoạt</Label>
-                    <Input value={formKeyword} onChange={(e) => setFormKeyword(e.target.value)} placeholder="Ví dụ: giá, khiếu nại, hỗ trợ" className="h-8 text-sm" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-xs flex items-center gap-1"><Bot className="h-3 w-3" /> Tin nhắn tự động (tuỳ chọn)</Label>
-                    <Textarea value={formReply} onChange={(e) => setFormReply(e.target.value)} placeholder="Nội dung tin nhắn tự động..." className="text-sm min-h-[60px] resize-none" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-xs flex items-center gap-1"><UserPlus className="h-3 w-3" /> Phân công cho Agent (tuỳ chọn)</Label>
-                    <Select value={formAgent} onValueChange={setFormAgent}>
-                      <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Chọn agent..." /></SelectTrigger>
-                      <SelectContent>
-                        {agents.map((a) => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-xs flex items-center gap-1"><Tag className="h-3 w-3" /> Gắn Tag (tuỳ chọn)</Label>
-                    <Select value={formTag} onValueChange={setFormTag}>
-                      <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Chọn tag..." /></SelectTrigger>
-                      <SelectContent>
-                        {tags.map((t) => (
-                          <SelectItem key={t.id} value={t.id}>
-                            <div className="flex items-center gap-2">
-                              <div className="h-2 w-2 rounded-full" style={{ backgroundColor: t.color }} />
-                              {t.name}
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-[280px] p-1.5 rounded-xl">
+                <div className="px-2 py-1.5 mb-1">
+                  <p className="text-[11px] font-bold text-muted-foreground/60 uppercase tracking-wider">Loại automation</p>
                 </div>
-                <DialogFooter>
-                  <Button variant="outline" size="sm" onClick={resetForm}>Huỷ</Button>
-                  <Button size="sm" onClick={handleSave} disabled={!formName.trim() || !formKeyword.trim()}>
-                    {editing ? 'Cập nhật' : 'Tạo'}
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+                <div className="space-y-0.5">
+                  {ACTION_TYPES.map((action) => {
+                    const Icon = action.icon
+                    return (
+                      <button
+                        key={action.key}
+                        onClick={() => openCreateForType(action.key)}
+                        className="w-full flex items-center gap-2.5 px-2.5 py-2.5 rounded-lg text-xs hover:bg-foreground/[0.04] transition-colors text-left group"
+                      >
+                        <div className="h-7 w-7 rounded-lg bg-primary/5 group-hover:bg-primary/10 flex items-center justify-center transition-colors">
+                          <Icon className="h-3.5 w-3.5 text-primary" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="font-semibold">{action.label}</p>
+                          <p className="text-[10px] text-muted-foreground/50 mt-0.5">{action.desc}</p>
+                        </div>
+                      </button>
+                    )
+                  })}
+                </div>
+              </PopoverContent>
+            </Popover>
           </div>
         </div>
 
+        {/* Stats */}
+        {rules.length > 0 && (
+          <div className="grid grid-cols-3 gap-3">
+            <div className="glass-card rounded-xl p-3.5 text-center">
+              <p className="text-2xl font-bold tabular-nums">{rules.length}</p>
+              <p className="text-[11px] text-muted-foreground/60 mt-0.5 font-medium">Tổng rules</p>
+            </div>
+            <div className="glass-card rounded-xl p-3.5 text-center">
+              <p className="text-2xl font-bold tabular-nums text-emerald-600 dark:text-emerald-400">{enabledCount}</p>
+              <p className="text-[11px] text-muted-foreground/60 mt-0.5 font-medium">Đang bật</p>
+            </div>
+            <div className="glass-card rounded-xl p-3.5 text-center">
+              <p className="text-2xl font-bold tabular-nums text-muted-foreground/40">{disabledCount}</p>
+              <p className="text-[11px] text-muted-foreground/60 mt-0.5 font-medium">Đã tắt</p>
+            </div>
+          </div>
+        )}
+
+        {/* Search */}
+        {rules.length > 3 && (
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/40" />
+            <Input
+              placeholder="Tìm theo tên hoặc từ khóa..."
+              className="pl-9 h-9 text-[13px] rounded-xl glass-input focus-visible:ring-0"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
+        )}
+
+        {/* Rules list */}
         {loading ? (
-          <div className="flex justify-center py-10"><div className="animate-spin h-5 w-5 border-2 border-primary border-t-transparent rounded-full" /></div>
-        ) : rules.length === 0 ? (
-          <Card>
-            <CardContent className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-              <Zap className="h-10 w-10 mb-3 opacity-30" />
-              <p className="text-sm font-medium">Chưa có automation rule nào</p>
-              <p className="text-xs mt-1">Tạo rule để tự động phản hồi, phân công và gắn tag</p>
-            </CardContent>
-          </Card>
+          <div className="flex justify-center py-10">
+            <Loader2 className="h-5 w-5 animate-spin text-primary" />
+          </div>
+        ) : filteredRules.length === 0 ? (
+          <div className="glass-card rounded-2xl p-12 text-center">
+            <div className="h-16 w-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-amber-100 to-orange-100 dark:from-amber-950/30 dark:to-orange-950/30 flex items-center justify-center">
+              <Zap className="h-7 w-7 text-amber-500" />
+            </div>
+            <p className="text-sm font-semibold">Chưa có automation rule nào</p>
+            <p className="text-xs mt-1.5 text-muted-foreground/50 max-w-[280px] mx-auto">Tạo rule để tự động phản hồi, phân công agent và gắn tag khi khớp từ khóa</p>
+          </div>
         ) : (
-          <div className="space-y-3">
-            {rules.map((rule) => (
-              <Card key={rule.id} className={cn(!rule.enabled && 'opacity-60')}>
-                <CardContent className="p-4">
+          <div className="space-y-2.5">
+            {filteredRules.map((rule, idx) => {
+              const hasReply = !!rule.replyMessage
+              const hasAssign = !!rule.assignTo
+              const hasTag = !!rule.tag
+              return (
+                <div
+                  key={rule.id}
+                  className={cn(
+                    'glass-card rounded-xl p-4 transition-all duration-300 animate-slide-up group hover:shadow-md',
+                    !rule.enabled && 'opacity-50'
+                  )}
+                  style={{ animationDelay: `${idx * 30}ms` }}
+                >
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-2">
+                      <div className="flex items-center gap-2 mb-2.5 flex-wrap">
                         <span className="font-semibold text-sm">{rule.name}</span>
-                        <Badge variant="outline" className="text-[10px] font-mono px-1.5">"{rule.keyword}"</Badge>
-                        <ArrowRight className="h-3 w-3 text-muted-foreground" />
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {rule.replyMessage && (
-                          <div className="flex items-center gap-1 text-xs bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300 px-2 py-1 rounded-md">
+                        <Badge variant="outline" className="text-[10px] font-mono px-1.5 py-0 h-[20px] rounded-md bg-primary/5 border-primary/15">
+                          "{rule.keyword}"
+                        </Badge>
+                        <ArrowRight className="h-3 w-3 text-muted-foreground/40" />
+                        {/* Action type badges */}
+                        {hasReply && (
+                          <div className="flex items-center gap-1 text-[11px] bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-md font-medium">
                             <Bot className="h-3 w-3" /> Auto-reply
                           </div>
                         )}
-                        {rule.assignTo && (
-                          <div className="flex items-center gap-1 text-xs bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 px-2 py-1 rounded-md">
-                            <UserPlus className="h-3 w-3" /> {rule.assignTo.name}
+                        {hasAssign && (
+                          <div className="flex items-center gap-1 text-[11px] bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 px-2 py-0.5 rounded-md font-medium">
+                            <UserPlus className="h-3 w-3" /> {rule.assignTo!.name}
                           </div>
                         )}
-                        {rule.tag && (
-                          <div className="flex items-center gap-1 text-xs px-2 py-1 rounded-md" style={{ backgroundColor: rule.tag.color + '15', color: rule.tag.color }}>
-                            <Tag className="h-3 w-3" /> {rule.tag.name}
+                        {hasTag && (
+                          <div className="flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-md font-medium" style={{ backgroundColor: rule.tag!.color + '15', color: rule.tag!.color }}>
+                            <Tag className="h-3 w-3" /> {rule.tag!.name}
                           </div>
                         )}
                       </div>
                       {rule.replyMessage && (
-                        <p className="text-xs text-muted-foreground mt-2 line-clamp-1">{rule.replyMessage}</p>
+                        <p className="text-xs text-muted-foreground/70 line-clamp-1 leading-relaxed">{rule.replyMessage}</p>
                       )}
                     </div>
-                    <div className="flex items-center gap-1 flex-shrink-0">
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
                       <Switch checked={rule.enabled} onCheckedChange={() => handleToggle(rule)} className="scale-75" />
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleEdit(rule)}>
-                        <Pencil className="h-3 w-3" />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => handleDelete(rule.id)}>
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
+                      {deleteConfirmId === rule.id ? (
+                        <div className="flex items-center gap-0.5 animate-fade-in">
+                          <span className="text-[10px] text-destructive font-medium">Xoá?</span>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg" onClick={() => handleDelete(rule.id)} disabled={deleting}>
+                            {deleting ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5 text-destructive" />}
+                          </Button>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg" onClick={() => setDeleteConfirmId(null)}>
+                            <XCircle className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => handleEdit(rule)}>
+                            <Pencil className="h-3 w-3" />
+                          </Button>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity text-destructive" onClick={() => setDeleteConfirmId(rule.id)}>
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </>
+                      )}
                     </div>
                   </div>
-                </CardContent>
-              </Card>
-            ))}
+                </div>
+              )
+            })}
           </div>
         )}
       </div>
+
+      {/* Create/Edit Dialog */}
+      <Dialog open={showCreate} onOpenChange={(open) => { if (!open) resetForm() }}>
+        <DialogContent className="max-w-md rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-base flex items-center gap-2">
+              {editing ? 'Sửa' : 'Tạo mới'} Automation Rule
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label className="text-xs font-medium">Tên rule</Label>
+              <Input value={formName} onChange={(e) => setFormName(e.target.value)} placeholder="Ví dụ: Hỏi giá sản phẩm" className="h-9 text-sm rounded-xl glass-input focus-visible:ring-0" />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs font-medium">Từ khóa kích hoạt</Label>
+              <Input value={formKeyword} onChange={(e) => setFormKeyword(e.target.value)} placeholder="Ví dụ: giá, khiếu nại, hỗ trợ" className="h-9 text-sm rounded-xl glass-input focus-visible:ring-0" />
+            </div>
+
+            {/* Action type indicator */}
+            <div className="space-y-2">
+              <Label className="text-xs font-medium flex items-center gap-1.5">
+                <Wand2 className="h-3 w-3" /> Loại hành động
+              </Label>
+              <div className="bg-foreground/[0.03] rounded-xl p-3 flex flex-wrap gap-1.5">
+                {ACTION_TYPES.map((t) => {
+                  const Icon = t.icon
+                  const active = formActionType === t.key
+                  return (
+                    <button
+                      key={t.key}
+                      onClick={() => setFormActionType(t.key)}
+                      className={cn(
+                        'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all duration-200',
+                        active
+                          ? 'bg-primary text-primary-foreground shadow-sm'
+                          : 'text-muted-foreground/70 hover:text-foreground hover:bg-foreground/[0.05]'
+                      )}
+                    >
+                      <Icon className="h-3 w-3" /> {t.label}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Conditional fields based on action type */}
+            {['auto_reply', 'auto_reply_assign', 'auto_reply_tag'].includes(formActionType) && (
+              <div className="space-y-2 animate-fade-in">
+                <Label className="text-xs font-medium flex items-center gap-1.5"><Bot className="h-3 w-3" /> Tin nhắn tự động</Label>
+                <Textarea value={formReply} onChange={(e) => setFormReply(e.target.value)} placeholder="Nội dung tin nhắn tự động..." className="text-sm min-h-[70px] resize-none rounded-xl glass-input focus-visible:ring-0" />
+              </div>
+            )}
+            {['assign_agent', 'auto_reply_assign'].includes(formActionType) && (
+              <div className="space-y-2 animate-fade-in">
+                <Label className="text-xs font-medium flex items-center gap-1.5"><UserPlus className="h-3 w-3" /> Phân công cho Agent</Label>
+                <Select value={formAgent} onValueChange={setFormAgent}>
+                  <SelectTrigger className="h-9 text-sm rounded-xl"><SelectValue placeholder="Chọn agent..." /></SelectTrigger>
+                  <SelectContent>
+                    {agents.map((a) => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            {['tag', 'auto_reply_tag'].includes(formActionType) && (
+              <div className="space-y-2 animate-fade-in">
+                <Label className="text-xs font-medium flex items-center gap-1.5"><Tag className="h-3 w-3" /> Gắn Tag</Label>
+                <Select value={formTag} onValueChange={setFormTag}>
+                  <SelectTrigger className="h-9 text-sm rounded-xl"><SelectValue placeholder="Chọn tag..." /></SelectTrigger>
+                  <SelectContent>
+                    {tags.map((t) => (
+                      <SelectItem key={t.id} value={t.id}>
+                        <div className="flex items-center gap-2">
+                          <div className="h-2 w-2 rounded-full" style={{ backgroundColor: t.color }} />
+                          {t.name}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" size="sm" onClick={resetForm} className="rounded-xl">Huỷ</Button>
+            <Button size="sm" onClick={handleSave} disabled={!formName.trim() || !formKeyword.trim() || saving} className="rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600">
+              {saving ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : null}
+              {editing ? 'Cập nhật' : 'Tạo rule'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
