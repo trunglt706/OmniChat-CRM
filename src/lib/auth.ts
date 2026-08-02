@@ -42,16 +42,16 @@ export const authOptions: NextAuthOptions = {
         token.email = 'admin@omnichat.vn'
         return token
       }
-      if (account) {
-        token.id = profile?.sub || token.sub
-        token.picture = profile?.picture
+      if (account && profile) {
+        (token as any).id = (profile as any).sub || token.sub
+        ;(token as any).picture = (profile as any).picture
       }
       return token
     },
     async session({ session, token }) {
       if (session.user) {
-        (session.user as any).id = token.id
-        (session.user as any).role = token.role || 'agent'
+        ;(session.user as any).id = (token as any).id
+        ;(session.user as any).role = (token as any).role || 'agent'
       }
       return session
     },

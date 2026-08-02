@@ -48,8 +48,9 @@ ${recentMessages}`;
 
   try {
     // Use z-ai-web-dev-sdk for AI completion
-    const { createCompletion } = await import('z-ai-web-dev-sdk');
-    const response = await createCompletion({
+    const Z = (await import('z-ai-web-dev-sdk')).default;
+    const client = await Z.create();
+    const response = await client.chat.completions.create({
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: message },
@@ -58,7 +59,9 @@ ${recentMessages}`;
       maxTokens: 200,
     });
 
-    const aiReply = typeof response === 'string' ? response : response?.choices?.[0]?.message?.content || 'Xin lỗi, tôi không thể xử lý yêu cầu này lúc này.';
+    const aiReply = typeof response === 'string'
+      ? response
+      : response?.choices?.[0]?.message?.content || 'Xin lỗi, tôi không thể xử lý yêu cầu này lúc này.';
 
     return NextResponse.json({ reply: aiReply });
   } catch (error) {

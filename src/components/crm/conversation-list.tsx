@@ -205,7 +205,7 @@ export default function ConversationList() {
     return unsub
   }, [fetchConversations])
 
-  const debounceRef = useRef<NodeJS.Timeout>()
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined)
   const handleSearch = (v: string) => {
     setSearchQuery(v)
     clearTimeout(debounceRef.current)

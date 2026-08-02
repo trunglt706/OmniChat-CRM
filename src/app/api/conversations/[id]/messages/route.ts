@@ -83,7 +83,7 @@ export async function POST(
   });
 
   // Trigger automation rules for customer messages
-  let automationResult = null;
+  let automationResult: { ruleName: string; actions: string[] } | null = null;
   if (triggerAutomation && actualSenderType === 'customer' && content) {
     const rules = await db.automationRule.findMany({ where: { enabled: true } });
     const matched = rules.find((r) => content.toLowerCase().includes(r.keyword.toLowerCase()));

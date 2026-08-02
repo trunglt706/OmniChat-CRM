@@ -1,22 +1,26 @@
+# Work Log
+
 ---
-Task ID: 1-6
+Task ID: 1
 Agent: Main Agent
-Task: Add route persistence, login, rate limiting, blacklist, backup/restore features
+Task: Kiểm tra và fix toàn bộ lỗi trong dự án OmniChat CRM
 
 Work Log:
-- Created Edge-compatible middleware.ts with auth guard (JWT validation via getToken) and in-memory rate limiting
-- Created separate Node.js security lib (src/lib/security.ts) for blacklist/config persistence to JSON files
-- Fixed mock OAuth provider: added absolute URLs, profile() function, and NEXTAUTH_URL env var
-- Persisted activeView in URL search params (?view=dashboard) so reload preserves current page
-- Upgraded login page with email/password form, validation, and show/hide password toggle
-- Added Security tab to Settings: rate limit config (enable/disable, max requests per minute), blacklist management (add/remove IP/email entries)
-- Added Backup tab to Settings: create backup, list backups with size/date, restore from backup, delete backup
-- Created API routes: /api/security/config, /api/security/blacklist, /api/backup, /api/backup/restore
-- Added ~40 i18n keys per locale (vi, en, zh) for login, security, and backup features
-- All tests pass: auth guard, login flow, security API, blacklist CRUD, backup CRUD, URL view persistence
+- Phát hiện `middleware.ts` gây crash server sau mỗi request (Next.js 16 deprecate middleware, dùng proxy.ts)
+- Chuyển `src/middleware.ts` sang `src/proxy.ts` (Next.js 16 convention), loại bỏ `setInterval` gây crash
+- Fix TypeScript errors: `auth.ts` (token.id unknown type), `conversation-list.tsx` (NodeJS.Timeout), `simulation/route.ts` & `messages/route.ts` (automationResult type), `bot/route.ts` (z-ai-web-dev-sdk API)
+- Phát hiện NextAuth v4 OAuth callback không tương thích với Next.js 16 (body parsing error)
+- Tạo mock login API trực tiếp (`/api/auth/mock/login`) dùng `next-auth/jwt.encode` để set JWT cookie, bỏ qua NextAuth OAuth flow
+- Update login page dùng `fetch` trực tiếp thay vì `signIn()` từ next-auth/react
+- Tạo logout API (`/api/auth/mock/logout`) xóa session cookie
+- Bỏ import `signOut` từ `next-auth/react` trong page.tsx
+- Phát hiện OOM (3.9GB RAM, next-server dùng quá 2.2GB bị kill)
+- Thêm `--max-old-space-size=2560` vào dev script
 
 Stage Summary:
-- New files: src/middleware.ts, src/lib/security.ts, src/app/api/security/blacklist/route.ts, src/app/api/security/config/route.ts, src/app/api/backup/route.ts, src/app/api/backup/restore/route.ts, scripts/start-dev.sh
-- Modified files: src/app/page.tsx (URL sync), src/app/login/page.tsx (email/password form), src/app/settings/page.tsx (Security + Backup tabs), src/lib/auth.ts (mock OAuth fix), src/i18n/translations.ts (new keys), .env (NEXTAUTH_URL)
-- Auth flow verified end-to-end via curl tests
-- Data directory (data/backups, data/blacklist.json, data/security-config.json) created at runtime
+- Server chạy ổn định, không còn crash
+- Login flow hoạt động: `/login` → POST `/api/auth/mock/login` → redirect tới app với JWT cookie
+- Proxy.ts (Next.js 16) thay thế middleware.ts: auth guard + rate limiting
+- 0 TypeScript errors trong src/
+- Tất cả trang (/, /reports, /settings) trả về 200
+- API endpoints hoạt động bình thường

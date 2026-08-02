@@ -2,25 +2,15 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { getToken } from 'next-auth/jwt'
 
-// ─── In-memory rate limit store (Edge-compatible) ───
+// ─── In-memory rate limit store ───
 interface RateLimitEntry {
   count: number
   resetAt: number
 }
 const rateLimitStore = new Map<string, RateLimitEntry>()
 
-// Default rate limit: can be overridden via NEXT_PUBLIC_RATE_LIMIT env var
+// Default rate limit: can be overridden via RATE_LIMIT_PER_MINUTE env var
 const DEFAULT_RATE_LIMIT = parseInt(process.env.RATE_LIMIT_PER_MINUTE || '60', 10)
-
-// Clean up expired entries every 60s
-if (typeof globalThis !== 'undefined') {
-  ;(globalThis as any).__rateLimitCleanup = setInterval(() => {
-    const now = Date.now()
-    for (const [key, entry] of rateLimitStore.entries()) {
-      if (entry.resetAt <= now) rateLimitStore.delete(key)
-    }
-  }, 60_000)
-}
 
 // ─── Routes that don't require auth ───
 const PUBLIC_PATHS = ['/login', '/api/auth']
@@ -32,7 +22,7 @@ const RATE_LIMITED_API_PREFIXES = [
   '/api/tags', '/api/automation',
 ]
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
   const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
     request.headers.get('x-real-ip') ||
@@ -45,18 +35,25 @@ export async function middleware(request: NextRequest) {
     pathname.includes('.') // static files
 
   if (!isPublic) {
-    const token = await getToken({
-      req: request,
-      secret: process.env.NEXTAUTH_SECRET || 'omnichat-dev-secret-change-in-production',
-    })
-    if (!token) {
+    try {
+      const token = await getToken({
+        req: request,
+        secret: process.env.NEXTAUTH_SECRET || 'omnichat-dev-secret-change-in-production',
+      })
+      if (!token) {
+        const loginUrl = new URL('/login', request.url)
+        loginUrl.searchParams.set('callbackUrl', pathname)
+        return NextResponse.redirect(loginUrl)
+      }
+    } catch {
+      // If token check fails (e.g., no cookie), redirect to login
       const loginUrl = new URL('/login', request.url)
       loginUrl.searchParams.set('callbackUrl', pathname)
       return NextResponse.redirect(loginUrl)
     }
   }
 
-  // ─── 2. Rate limiting for API routes (in-memory, Edge-compatible) ───
+  // ─── 2. Rate limiting for API routes ───
   if (RATE_LIMITED_API_PREFIXES.some(p => pathname.startsWith(p))) {
     const now = Date.now()
     const key = `rl:${ip}`

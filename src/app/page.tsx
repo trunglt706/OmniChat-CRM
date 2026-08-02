@@ -42,7 +42,7 @@ import {
 } from '@/components/ui/select'
 import { useTheme } from 'next-themes'
 import { cn } from '@/lib/utils'
-import { signOut } from 'next-auth/react'
+
 import { useT } from '@/i18n/useT'
 import { LOCALE_LABELS, LOCALES, type Locale } from '@/i18n/translations'
 
@@ -107,10 +107,9 @@ function Header() {
   const handleLogout = async () => {
     setLoggingOut(true)
     try {
-      await signOut({ callbackUrl: '/login' })
-    } catch {
-      window.location.href = '/login'
-    }
+      await fetch('/api/auth/mock/logout', { method: 'POST' })
+    } catch {}
+    window.location.href = '/login'
   }
 
   const roleLabel = currentUser?.role === 'admin' ? t('user.role.admin') : currentUser?.role === 'supervisor' ? t('user.role.supervisor') : currentUser?.role === 'agent' ? t('user.role.agent') : currentUser?.role || 'Agent'

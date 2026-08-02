@@ -175,7 +175,7 @@ export async function POST(request: NextRequest) {
     });
 
     // Check automation rules
-    let automationResult = null;
+    let automationResult: { ruleName: string; actions: string[] } | null = null;
     if (content) {
       const rules = await db.automationRule.findMany({ where: { enabled: true } });
       const matched = rules.find((r) => content.toLowerCase().includes(r.keyword.toLowerCase()));
