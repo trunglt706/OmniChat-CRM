@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useCRMStore } from '@/store/crm-store'
 import { socket } from '@/lib/socket'
 import ConversationList from '@/components/crm/conversation-list'
@@ -49,7 +50,22 @@ function Header() {
   const { theme, setTheme } = useTheme()
   const totalOpen = useCRMStore((s) => s.conversations.filter(c => c.status === 'open').length)
   const activeView = useCRMStore((s) => s.activeView)
-  const setActiveView = useCRMStore((s) => s.setActiveView)
+  const setActiveViewRaw = useCRMStore((s) => s.setActiveView)
+  const router = useRouter()
+  const searchParams = useSearchParams()
+
+  // Sync activeView with URL — prevents losing view on reload
+  const setActiveView = useCallback((v: 'inbox' | 'dashboard' | 'automation' | 'reports') => {
+    setActiveViewRaw(v)
+    const params = new URLSearchParams(searchParams.toString())
+    if (v === 'inbox') {
+      params.delete('view')
+    } else {
+      params.set('view', v)
+    }
+    const qs = params.toString()
+    router.replace(qs ? `?${qs}` : '/', { scroll: false })
+  }, [setActiveViewRaw, router, searchParams])
   const showRightPanel = useCRMStore((s) => s.showRightPanel)
   const setShowRightPanel = useCRMStore((s) => s.setShowRightPanel)
   const currentUser = useCRMStore((s) => s.currentUser)
@@ -322,7 +338,10 @@ function MobileCustomerPanel() {
 export default function CRMPage() {
   const selectedConversationId = useCRMStore((s) => s.selectedConversationId)
   const activeView = useCRMStore((s) => s.activeView)
+  const setActiveViewRaw = useCRMStore((s) => s.setActiveView)
   const mobileView = useCRMStore((s) => s.mobileView)
+  const router = useRouter()
+  const searchParams = useSearchParams()
   const showRightPanel = useCRMStore((s) => s.showRightPanel)
   const incrementUnread = useCRMStore((s) => s.incrementUnread)
   const addNotification = useCRMStore((s) => s.addNotification)
@@ -330,6 +349,17 @@ export default function CRMPage() {
   const setOpenSheet = useCRMStore((s) => s.setOpenSheet)
   const simulationRunning = useCRMStore((s) => s.simulationRunning)
   const { t } = useT()
+
+  // Restore activeView from URL on mount (so reload keeps current view)
+  useEffect(() => {
+    const viewParam = searchParams.get('view')
+    if (viewParam && ['inbox', 'dashboard', 'automation', 'reports'].includes(viewParam)) {
+      const current = useCRMStore.getState().activeView
+      if (current !== viewParam) {
+        setActiveViewRaw(viewParam as 'inbox' | 'dashboard' | 'automation' | 'reports')
+      }
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load settings from localStorage on mount
   useEffect(() => {

@@ -16,9 +16,15 @@ export const authOptions: NextAuthOptions = {
           type: 'oauth',
           clientId: 'mock',
           clientSecret: 'mock',
-          authorization: { url: '/api/auth/mock/authorize', params: {} },
-          token: { url: '/api/auth/mock/token' },
-          userinfo: { url: '/api/auth/mock/userinfo' },
+          authorization: { url: `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/auth/mock/authorize`, params: {} },
+          token: { url: `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/auth/mock/token` },
+          userinfo: { url: `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/auth/mock/userinfo` },
+          profile: (profile: any) => ({
+            id: profile.sub,
+            name: profile.name,
+            email: profile.email,
+            image: profile.picture,
+          }),
           checks: ['none'],
         } as any,
       ]
@@ -33,6 +39,7 @@ export const authOptions: NextAuthOptions = {
       if (useMockAuth) {
         token.id = 'user_01'
         token.role = 'admin'
+        token.email = 'admin@omnichat.vn'
         return token
       }
       if (account) {
@@ -54,7 +61,7 @@ export const authOptions: NextAuthOptions = {
   },
   session: {
     strategy: 'jwt',
-    maxAge: 30 * 24 * 60 * 60, // 30 days
+    maxAge: 30 * 24 * 60 * 60,
   },
   secret: process.env.NEXTAUTH_SECRET || 'omnichat-dev-secret-change-in-production',
 }

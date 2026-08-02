@@ -1,0 +1,718 @@
+    34→const SETTINGS_TABS = [
+    35→  { key: 'profile', labelKey: 'settingsTab.profile', icon: User },
+    36→  { key: 'system', labelKey: 'settingsTab.system', icon: Settings },
+    37→  { key: 'channels', labelKey: 'settingsTab.channels', icon: MessageSquare },
+    38→  { key: 'staff', labelKey: 'settingsTab.staff', icon: Users },
+    39→] as const
+    40→
+    41→type SettingsTab = typeof SETTINGS_TABS[number]['key']
+    42→
+    43→const GRADIENT_CLASSES = ['avatar-gradient-1', 'avatar-gradient-2', 'avatar-gradient-3', 'avatar-gradient-4', 'avatar-gradient-5', 'avatar-gradient-6']
+    44→
+    45→const STATUS_OPTIONS: { value: UserProfile['status']; labelKey: string; color: string }[] = [
+    46→  { value: 'online', labelKey: 'profile.status.online', color: 'bg-emerald-500' },
+    47→  { value: 'busy', labelKey: 'profile.status.busy', color: 'bg-amber-500' },
+    48→  { value: 'away', labelKey: 'profile.status.away', color: 'bg-orange-400' },
+    49→  { value: 'offline', labelKey: 'profile.status.offline', color: 'bg-gray-400' },
+    50→]
+    51→
+    52→interface ChannelDefinition {
+    53→  key: string
+    54→  nameKey: string
+    55→  descKey: string
+    56→  color: string
+    57→  icon: React.ElementType
+    58→  enabled: boolean
+    59→  configured: boolean
+    60→  config?: Record<string, string>
+    61→}
+    62→
+    63→const CHANNEL_DEFINITIONS: Omit<ChannelDefinition, 'enabled' | 'configured' | 'config'>[] = [
+    64→  { key: 'facebook_messenger', nameKey: 'channels.fb.name', descKey: 'channels.fb.desc', color: '#1877f2', icon: MessageSquare },
+    65→  { key: 'zalo', nameKey: 'channels.zalo.name', descKey: 'channels.zalo.desc', color: '#0068ff', icon: Phone },
+    66→  { key: 'telegram', nameKey: 'channels.tg.name', descKey: 'channels.tg.desc', color: '#26a5e4', icon: Send },
+    67→  { key: 'website', nameKey: 'channels.web.name', descKey: 'channels.web.desc', color: '#10b981', icon: Globe2 },
+    68→  { key: 'email', nameKey: 'channels.email.name', descKey: 'channels.email.desc', color: '#ea4335', icon: Mail },
+    69→]
+    70→
+    71→function SettingRow({ icon: Icon, label, description, children }: { icon: React.ElementType; label: string; description?: string; children: React.ReactNode }) {
+    72→  return (
+    73→    <div className="flex items-center justify-between gap-4 py-3.5">
+    74→      <div className="flex items-start gap-3.5 min-w-0">
+    75→        <div className="h-9 w-9 rounded-xl bg-foreground/[0.03] flex items-center justify-center flex-shrink-0 mt-0.5">
+    76→          <Icon className="h-4 w-4 text-muted-foreground/50" />
+    77→        </div>
+    78→        <div className="min-w-0">
+    79→          <p className="text-[13px] font-medium">{label}</p>
+    80→          {description && <p className="text-[11px] text-muted-foreground/50 mt-0.5 leading-relaxed">{description}</p>}
+    81→        </div>
+    82→      </div>
+    83→      <div className="flex-shrink-0">{children}</div>
+    84→    </div>
+    85→  )
+    86→}
+    87→
+    88→function SectionHeader({ title }: { title: string }) {
+    89→  return <h4 className="text-[10px] font-bold text-muted-foreground/40 uppercase tracking-[0.15em] px-1 mb-2">{title}</h4>
+    90→}
+    91→
+    92→// ═══ PROFILE TAB ═══
+    93→function ProfileTab() {
+    94→  const { currentUser, setCurrentUser } = useCRMStore()
+    95→  const { t } = useT()
+    96→  const [editing, setEditing] = useState(false)
+    97→  const [form, setForm] = useState({ name: '', email: '', phone: '', bio: '' })
+    98→  const fileRef = useRef<HTMLInputElement>(null)
+    99→
+   100→  useEffect(() => {
+   101→    if (currentUser) setForm({ name: currentUser.name, email: currentUser.email, phone: currentUser.phone, bio: currentUser.bio })
+   102→  }, [currentUser])
+   103→
+   104→  const handleSave = () => { if (currentUser) { setCurrentUser({ ...currentUser, ...form }); setEditing(false) } }
+   105→  const handleCancel = () => { if (currentUser) setForm({ name: currentUser.name, email: currentUser.email, phone: currentUser.phone, bio: currentUser.bio }); setEditing(false) }
+   106→  const handleStatusChange = (status: UserProfile['status']) => { if (currentUser) setCurrentUser({ ...currentUser, status }) }
+   107→
+   108→  if (!currentUser) return null
+   109→
+   110→  return (
+   111→    <div className="space-y-6 animate-fade-in">
+   112→      <div className="glass-card rounded-2xl p-6">
+   113→        <div className="flex flex-col items-center gap-4">
+   114→          <div className="relative group">
+   115→            <Avatar className={cn('h-24 w-24 ring-4 ring-background shadow-xl', GRADIENT_CLASSES[0])}>
+   116→              <AvatarFallback className="text-3xl text-white font-bold">{currentUser.name.split(' ').slice(-2).map(n => n[0]).join('')}</AvatarFallback>
+   117→            </Avatar>
+   118→            <button onClick={() => fileRef.current?.click()} className="absolute inset-0 rounded-full bg-black/0 group-hover:bg-black/30 transition-all duration-200 flex items-center justify-center opacity-0 group-hover:opacity-100">
+   119→              <Camera className="h-6 w-6 text-white" />
+   120→            </button>
+   121→            <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={() => {}} />
+   122→          </div>
+   123→          {!editing && (
+   124→            <div className="text-center">
+   125→              <h3 className="text-xl font-bold tracking-tight">{currentUser.name}</h3>
+   126→              <p className="text-sm text-muted-foreground/60 mt-1 font-medium">{currentUser.email}</p>
+   127→              <span className="inline-flex items-center gap-1.5 mt-2.5 text-xs font-medium px-3 py-1.5 rounded-full bg-foreground/[0.04] text-muted-foreground/70">
+   128→                <Shield className="h-3.5 w-3.5" />
+   129→                {currentUser.role === 'admin' ? t('user.role.admin') : currentUser.role === 'agent' ? t('user.role.agent') : currentUser.role === 'supervisor' ? t('user.role.supervisor') : currentUser.role}
+   130→              </span>
+   131→            </div>
+   132→          )}
+   133→          <div className="flex gap-2">
+   134→            {STATUS_OPTIONS.map((opt) => (
+   135→              <button key={opt.value} onClick={() => handleStatusChange(opt.value)} className={cn('flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-medium transition-all duration-200 border', currentUser.status === opt.value ? 'border-primary/30 bg-primary/5 text-primary' : 'border-transparent text-muted-foreground/50 hover:text-foreground hover:bg-foreground/[0.03]')}>
+   136→                <span className={cn('h-2 w-2 rounded-full', opt.color, currentUser.status === opt.value && 'shadow-sm')} />
+   137→                {t(opt.labelKey)}
+   138→              </button>
+   139→            ))}
+   140→          </div>
+   141→        </div>
+   142→      </div>
+   143→      <div className="space-y-4">
+   144→        <SectionHeader title={t('profile.personalInfo')} />
+   145→        <div className="glass-card rounded-2xl p-5 space-y-4">
+   146→          <div className="space-y-3">
+   147→            <div className="space-y-1.5">
+   148→              <Label className="text-xs font-medium text-muted-foreground/70">{t('profile.displayName')}</Label>
+   149→              <Input value={form.name} onChange={(e) => setForm(f => ({ ...f, name: e.target.value }))} disabled={!editing} className="rounded-xl glass-input h-10 text-sm" />
+   150→            </div>
+   151→            <div className="space-y-1.5">
+   152→              <Label className="text-xs font-medium text-muted-foreground/70">{t('profile.email')}</Label>
+   153→              <Input type="email" value={form.email} onChange={(e) => setForm(f => ({ ...f, email: e.target.value }))} disabled={!editing} className="rounded-xl glass-input h-10 text-sm" />
+   154→            </div>
+   155→            <div className="space-y-1.5">
+   156→              <Label className="text-xs font-medium text-muted-foreground/70">{t('profile.phoneNumber')}</Label>
+   157→              <Input value={form.phone} onChange={(e) => setForm(f => ({ ...f, phone: e.target.value }))} disabled={!editing} className="rounded-xl glass-input h-10 text-sm" />
+   158→            </div>
+   159→            <div className="space-y-1.5">
+   160→              <Label className="text-xs font-medium text-muted-foreground/70">{t('profile.bio')}</Label>
+   161→              <Textarea value={form.bio} onChange={(e) => setForm(f => ({ ...f, bio: e.target.value }))} disabled={!editing} className="rounded-xl glass-input min-h-[80px] resize-none text-sm" />
+   162→            </div>
+   163→          </div>
+   164→          {!editing ? (
+   165→            <Button onClick={() => setEditing(true)} className="w-full h-10 rounded-xl text-sm font-medium"><Pencil className="h-4 w-4 mr-1.5" /> {t('profile.editInfo')}</Button>
+   166→          ) : (
+   167→            <div className="flex gap-2">
+   168→              <Button variant="outline" onClick={handleCancel} className="flex-1 h-10 rounded-xl text-sm font-medium"><X className="h-4 w-4 mr-1.5" /> {t('profile.cancel')}</Button>
+   169→              <Button onClick={handleSave} className="flex-1 h-10 rounded-xl text-sm font-medium bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600"><Check className="h-4 w-4 mr-1.5" /> {t('profile.save')}</Button>
+   170→            </div>
+   171→          )}
+   172→        </div>
+   173→      </div>
+   174→      <div className="space-y-2">
+   175→        <SectionHeader title={t('profile.stats.title')} />
+   176→        <div className="grid grid-cols-2 gap-3">
+   177→          {[
+   178→            { label: t('profile.stat.conversationsToday'), value: '12', icon: MessageSquare },
+   179→            { label: t('profile.stat.avgResponse'), value: '2m 30s', icon: Clock },
+   180→            { label: t('profile.stat.avgRating'), value: '4.8/5', icon: Shield },
+   181→            { label: t('profile.stat.totalConversations'), value: '1,247', icon: User },
+   182→          ].map((stat) => (
+   183→            <div key={stat.label} className="glass-card rounded-xl p-4">
+   184→              <stat.icon className="h-4 w-4 text-muted-foreground/40 mb-2" />
+   185→              <p className="text-lg font-bold tabular-nums">{stat.value}</p>
+   186→              <p className="text-[11px] text-muted-foreground/50 mt-0.5 font-medium">{stat.label}</p>
+   187→            </div>
+   188→          ))}
+   189→        </div>
+   190→      </div>
+   191→    </div>
+   192→  )
+   193→}
+   194→
+   195→// ═══ SYSTEM TAB ═══
+   196→function SystemTab() {
+   197→  const { settings, updateSettings, notifications, clearAllNotifications } = useCRMStore()
+   198→  const { theme, setTheme } = useTheme()
+   199→  const { t } = useT()
+   200→  return (
+   201→    <div className="space-y-6 animate-fade-in">
+   202→      <div className="space-y-1">
+   203→        <SectionHeader title={t('settings.appearance')} />
+   204→        <div className="glass-card rounded-2xl p-5">
+   205→          <SettingRow icon={theme === 'dark' ? Moon : Sun} label={t('settings.theme')} description={t('settings.themeDesc')}>
+   206→            <Button variant="outline" size="sm" className="h-8 rounded-lg text-xs gap-1.5 border-border/40" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>
+   207→              {theme === 'dark' ? <Moon className="h-3.5 w-3.5" /> : <Sun className="h-3.5 w-3.5" />}
+   208→              {theme === 'dark' ? t('settings.dark') : t('settings.light')}
+   209→            </Button>
+   210→          </SettingRow>
+   211→          <Separator className="opacity-30 my-1" />
+   212→          <SettingRow icon={Maximize2} label={t('settings.compactMode')} description={t('settings.compactModeDesc')}>
+   213→            <Switch checked={settings.compactMode} onCheckedChange={(v) => updateSettings({ compactMode: v })} />
+   214→          </SettingRow>
+   215→          <Separator className="opacity-30 my-1" />
+   216→          <SettingRow icon={Eye} label={t('settings.showPreview')} description={t('settings.showPreviewDesc')}>
+   217→            <Switch checked={settings.showPreview} onCheckedChange={(v) => updateSettings({ showPreview: v })} />
+   218→          </SettingRow>
+   219→          <Separator className="opacity-30 my-1" />
+   220→          <SettingRow icon={Globe} label={t('settings.language')}>
+   221→            <Select value={settings.language} onValueChange={(v) => updateSettings({ language: v as Locale })}>
+   222→              <SelectTrigger className="w-32 h-8 rounded-lg text-xs"><SelectValue /></SelectTrigger>
+   223→              <SelectContent>{LOCALES.map((loc) => <SelectItem key={loc} value={loc}>{LOCALE_LABELS[loc]}</SelectItem>)}</SelectContent>
+   224→            </Select>
+   225→          </SettingRow>
+   226→        </div>
+   227→      </div>
+   228→      <div className="space-y-1">
+   229→        <SectionHeader title={t('settings.notifications')} />
+   230→        <div className="glass-card rounded-2xl p-5">
+   231→          <SettingRow icon={Volume2} label={t('settings.sound')} description={t('settings.soundDesc')}>
+   232→            <Switch checked={settings.soundEnabled} onCheckedChange={(v) => updateSettings({ soundEnabled: v })} />
+   233→          </SettingRow>
+   234→          <Separator className="opacity-30 my-1" />
+   235→          <SettingRow icon={Monitor} label={t('settings.desktopNotif')} description={t('settings.desktopNotifDesc')}>
+   236→            <Switch checked={settings.desktopNotifEnabled} onCheckedChange={(v) => updateSettings({ desktopNotifEnabled: v })} />
+   237→          </SettingRow>
+   238→          <Separator className="opacity-30 my-1" />
+   239→          <SettingRow icon={Mail} label={t('settings.emailNotif')} description={t('settings.emailNotifDesc')}>
+   240→            <Switch checked={settings.emailNotifEnabled} onCheckedChange={(v) => updateSettings({ emailNotifEnabled: v })} />
+   241→          </SettingRow>
+   242→          {notifications.length > 0 && (
+   243→            <><Separator className="opacity-30 my-1" />
+   244→            <Button variant="ghost" size="sm" className="w-full mt-1 h-9 rounded-xl text-xs text-muted-foreground/60 hover:text-foreground hover:bg-foreground/[0.03]" onClick={() => clearAllNotifications()}>
+   245→              <Trash2 className="h-3.5 w-3.5 mr-1.5" /> {t('settings.clearAllNotifs', { count: notifications.length })}
+   246→            </Button></>
+   247→          )}
+   248→        </div>
+   249→      </div>
+   250→      <div className="space-y-1">
+   251→        <SectionHeader title={t('settings.conversations')} />
+   252→        <div className="glass-card rounded-2xl p-5">
+   253→          <SettingRow icon={UserCheck} label={t('settings.autoAssign')} description={t('settings.autoAssignDesc')}>
+   254→            <Switch checked={settings.autoAssign} onCheckedChange={(v) => updateSettings({ autoAssign: v })} />
+   255→          </SettingRow>
+   256→        </div>
+   257→      </div>
+   258→      <div className="space-y-1">
+   259→        <SectionHeader title={t('settings.data')} />
+   260→        <div className="glass-card rounded-2xl p-5">
+   261→          <SettingRow icon={Trash2} label={t('settings.clearCache')} description={t('settings.clearCacheDesc')}>
+   262→            <Button variant="outline" size="sm" className="h-8 rounded-lg text-xs border-border/40 hover:border-red-300 hover:text-red-600">{t('settings.clearCache')}</Button>
+   263→          </SettingRow>
+   264→          <Separator className="opacity-30 my-1" />
+   265→          <Button variant="outline" size="sm" className="w-full h-9 rounded-xl text-xs border-border/40 hover:border-red-300 hover:text-red-600" onClick={() => { localStorage.removeItem('omnichat_settings'); updateSettings({ soundEnabled: true, desktopNotifEnabled: true, emailNotifEnabled: false, compactMode: false, showPreview: true, autoAssign: true, language: settings.language }) }}>
+   266→            <RotateCcw className="h-3.5 w-3.5 mr-1.5" /> {t('settings.resetDefaults')}
+   267→          </Button>
+   268→        </div>
+   269→      </div>
+   270→    </div>
+   271→  )
+   272→}
+   273→
+   274→// ═══ CHANNELS TAB ═══
+   275→interface ChannelSetting {
+   276→  key: string
+   277→  name: string
+   278→  description: string
+   279→  color: string
+   280→  icon: React.ElementType
+   281→  enabled: boolean
+   282→  configured: boolean
+   283→  config?: Record<string, string>
+   284→}
+   285→
+   286→function ChannelsTab() {
+   287→  const { t } = useT()
+   288→  const [channels, setChannels] = useState<ChannelSetting[]>([
+   289→    { key: 'facebook_messenger', name: t('channels.fb.name'), description: t('channels.fb.desc'), color: '#1877f2', icon: MessageSquare, enabled: true, configured: true, config: { pageId: 'OmniChat Official', token: 'hidden' } },
+   290→    { key: 'zalo', name: t('channels.zalo.name'), description: t('channels.zalo.desc'), color: '#0068ff', icon: Phone, enabled: true, configured: true, config: { phone: '0901 234 567' } },
+   291→    { key: 'telegram', name: t('channels.tg.name'), description: t('channels.tg.desc'), color: '#26a5e4', icon: Send, enabled: false, configured: false, config: {} },
+   292→    { key: 'website', name: t('channels.web.name'), description: t('channels.web.desc'), color: '#10b981', icon: Globe2, enabled: true, configured: true, config: { webhook: 'https://omnichat.vn/widget/abc123' } },
+   293→    { key: 'email', name: t('channels.email.name'), description: t('channels.email.desc'), color: '#ea4335', icon: Mail, enabled: false, configured: false, config: {} },
+   294→  ])
+   295→
+   296→  const [editingChannel, setEditingChannel] = useState<string | null>(null)
+   297→  const [editForm, setEditForm] = useState<Record<string, string>>({})
+   298→
+   299→  const toggleChannel = (key: string) => setChannels(prev => prev.map(ch => ch.key === key ? { ...ch, enabled: !ch.enabled } : ch))
+   300→  const startEdit = (ch: ChannelSetting) => { setEditingChannel(ch.key); setEditForm(ch.config || {}) }
+   301→  const saveChannel = (key: string) => {
+   302→    setChannels(prev => prev.map(ch => ch.key === key ? { ...ch, configured: Object.values(editForm).some(v => v.length > 0), config: { ...editForm } } : ch))
+   303→    setEditingChannel(null)
+   304→  }
+   305→
+   306→  return (
+   307→    <div className="space-y-6 animate-fade-in">
+   308→      <div>
+   309→        <h3 className="text-sm font-bold">{t('channels.configTitle')}</h3>
+   310→        <p className="text-xs text-muted-foreground/60 mt-1">{t('channels.configDesc')}</p>
+   311→      </div>
+   312→      {channels.map((ch) => {
+   313→        const Icon = ch.icon
+   314→        const isEditing = editingChannel === ch.key
+   315→        return (
+   316→          <div key={ch.key} className="glass-card rounded-2xl overflow-hidden transition-all duration-200">
+   317→            <div className="p-5">
+   318→              <div className="flex items-start justify-between gap-4">
+   319→                <div className="flex items-start gap-3.5 min-w-0">
+   320→                  <div className="h-11 w-11 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm" style={{ backgroundColor: ch.color + '12' }}>
+   321→                    <Icon className="h-5 w-5" style={{ color: ch.color }} />
+   322→                  </div>
+   323→                  <div className="min-w-0">
+   324→                    <div className="flex items-center gap-2">
+   325→                      <h4 className="text-[13px] font-semibold">{ch.name}</h4>
+   326→                      {ch.configured && ch.enabled && <Badge className="text-[9px] px-1.5 py-0 h-[16px] bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 rounded-md font-medium"><Check className="h-2.5 w-2.5 mr-0.5" /> {t('channels.connected')}</Badge>}
+   327→                      {!ch.configured && ch.enabled && <Badge className="text-[9px] px-1.5 py-0 h-[16px] bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 rounded-md font-medium">{t('channels.notConfigured')}</Badge>}
+   328→                    </div>
+   329→                    <p className="text-[11px] text-muted-foreground/50 mt-1 leading-relaxed">{ch.description}</p>
+   330→                  </div>
+   331→                </div>
+   332→                <Switch checked={ch.enabled} onCheckedChange={() => toggleChannel(ch.key)} />
+   333→              </div>
+   334→            </div>
+   335→            {isEditing && (
+   336→              <div className="px-5 pb-5 border-t border-border/30 pt-4 space-y-3 animate-slide-down">
+   337→                {ch.key === 'facebook_messenger' && (
+   338→                  <>
+   339→                    <div className="space-y-1.5">
+   340→                      <Label className="text-xs font-medium text-muted-foreground/70">{t('channels.fb.pageName')}</Label>
+   341→                      <Input value={editForm.pageId || ''} onChange={(e) => setEditForm(f => ({ ...f, pageId: e.target.value }))} placeholder={t('channels.fb.pageNamePlaceholder')} className="rounded-xl glass-input h-9 text-sm" />
+   342→                    </div>
+   343→                    <div className="space-y-1.5">
+   344→                      <Label className="text-xs font-medium text-muted-foreground/70">{t('channels.fb.token')}</Label>
+   345→                      <Input value={editForm.token || ''} onChange={(e) => setEditForm(f => ({ ...f, token: e.target.value }))} type="password" placeholder={t('channels.fb.tokenPlaceholder')} className="rounded-xl glass-input h-9 text-sm" />
+   346→                    </div>
+   347→                  </>
+   348→                )}
+   349→                {ch.key === 'zalo' && (
+   350→                  <div className="space-y-1.5">
+   351→                    <Label className="text-xs font-medium text-muted-foreground/70">{t('channels.zalo.phone')}</Label>
+   352→                    <Input value={editForm.phone || ''} onChange={(e) => setEditForm(f => ({ ...f, phone: e.target.value }))} placeholder={t('channels.zalo.phonePlaceholder')} className="rounded-xl glass-input h-9 text-sm" />
+   353→                  </div>
+   354→                )}
+   355→                {ch.key === 'telegram' && (
+   356→                  <div className="space-y-1.5">
+   357→                    <Label className="text-xs font-medium text-muted-foreground/70">{t('channels.tg.token')}</Label>
+   358→                    <Input value={editForm.token || ''} onChange={(e) => setEditForm(f => ({ ...f, token: e.target.value }))} type="password" placeholder={t('channels.tg.tokenPlaceholder')} className="rounded-xl glass-input h-9 text-sm" />
+   359→                  </div>
+   360→                )}
+   361→                {ch.key === 'website' && (
+   362→                  <>
+   363→                    <div className="space-y-1.5">
+   364→                      <Label className="text-xs font-medium text-muted-foreground/70">{t('channels.web.webhook')}</Label>
+   365→                      <Input value={editForm.webhook || ''} onChange={(e) => setEditForm(f => ({ ...f, webhook: e.target.value }))} placeholder={t('channels.web.webhookPlaceholder')} className="rounded-xl glass-input h-9 text-sm" />
+   366→                    </div>
+   367→                    <p className="text-[10px] text-muted-foreground/40 mt-1">{t('channels.web.snippetHint')}</p>
+   368→                    <div className="bg-foreground/[0.03] rounded-xl p-3 font-mono text-[11px] text-muted-foreground/70 break-all select-all">
+   369→                      {`<script src="https://omnichat.vn/widget.js" data-id="abc123"><` + `/script>`}
+   370→                    </div>
+   371→                  </>
+   372→                )}
+   373→                {ch.key === 'email' && (
+   374→                  <>
+   375→                    <div className="space-y-1.5">
+   376→                      <Label className="text-xs font-medium text-muted-foreground/70">{t('channels.email.address')}</Label>
+   377→                      <Input value={editForm.email || ''} onChange={(e) => setEditForm(f => ({ ...f, email: e.target.value }))} placeholder={t('channels.email.placeholder')} className="rounded-xl glass-input h-9 text-sm" />
+   378→                    </div>
+   379→                    <div className="space-y-1.5">
+   380→                      <Label className="text-xs font-medium text-muted-foreground/70">{t('channels.email.imap')}</Label>
+   381→                      <Input placeholder={t('channels.email.imapPlaceholder')} className="rounded-xl glass-input h-9 text-sm" />
+   382→                    </div>
+   383→                  </>
+   384→                )}
+   385→                <div className="flex gap-2 pt-1">
+   386→                  <Button variant="outline" size="sm" onClick={() => setEditingChannel(null)} className="h-8 rounded-lg text-xs"><X className="h-3.5 w-3.5 mr-1" /> {t('profile.cancel')}</Button>
+   387→                  <Button size="sm" onClick={() => saveChannel(ch.key)} className="h-8 rounded-lg text-xs bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600"><Check className="h-3.5 w-3.5 mr-1" /> {t('channels.saveConfig')}</Button>
+   388→                </div>
+   389→              </div>
+   390→            )}
+   391→            {!isEditing && (
+   392→              <div className="px-5 pb-4">
+   393→                <Button variant="ghost" size="sm" className="h-8 rounded-lg text-xs text-muted-foreground/60 hover:text-foreground hover:bg-foreground/[0.03]" onClick={() => startEdit(ch)}>
+   394→                  <Pencil className="h-3.5 w-3.5 mr-1.5" />{ch.configured ? t('channels.editConfig') : t('channels.configure')}
+   395→                </Button>
+   396→              </div>
+   397→            )}
+   398→          </div>
+   399→        )
+   400→      })}
+   401→    </div>
+   402→  )
+   403→}
+   404→
+   405→// ═══ STAFF TAB ═══
+   406→function StaffTab() {
+   407→  const { agents, setAgents } = useCRMStore()
+   408→  const { t } = useT()
+   409→  const [staffList, setStaffList] = useState<Agent[]>([])
+   410→  const [loading, setLoading] = useState(true)
+   411→  const [showInvite, setShowInvite] = useState(false)
+   412→  const [inviteEmail, setInviteEmail] = useState('')
+   413→  const [inviteRole, setInviteRole] = useState('agent')
+   414→  const [editingAgent, setEditingAgent] = useState<Agent | null>(null)
+   415→  const [expandedId, setExpandedId] = useState<string | null>(null)
+   416→  const [deleteConfirm, setDeleteConfirm] = useState(false)
+   417→  const [editForm, setEditForm] = useState({ name: '', email: '', role: 'agent', status: 'online' })
+   418→
+   419→  // Generate stable mock stats per agent
+   420→  const staffStats = useMemo(() => {
+   421→    const stats: Record<string, { conversations: number; avgResponse: number; satisfaction: number; lastActive: string }> = {}
+   422→    staffList.forEach((agent) => {
+   423→      // Simple deterministic hash from agent id
+   424→      const hash = agent.id.split('').reduce((a, c) => a + c.charCodeAt(0), 0)
+   425→      const conversations = 100 + (hash * 7) % 500
+   426→      const avgResponse = 60 + (hash * 13) % 120 // 1-3 min in seconds
+   427→      const satisfaction = 4.0 + ((hash * 3) % 10) / 10 // 4.0-5.0
+   428→      const daysAgo = (hash * 11) % 30
+   429→      const hoursAgo = (hash * 7) % 24
+   430→      const lastActive = daysAgo === 0
+   431→        ? `${hoursAgo}h ago`
+   432→        : `${daysAgo}d ago`
+   433→      stats[agent.id] = { conversations, avgResponse, satisfaction, lastActive }
+   434→    })
+   435→    return stats
+   436→  }, [staffList])
+   437→
+   438→  useEffect(() => {
+   439→    async function load() {
+   440→      try {
+   441→        const res = await fetch('/api/agents')
+   442→        const data = await res.json()
+   443→        if (Array.isArray(data)) { setStaffList(data); setAgents(data) }
+   444→      } catch (e) { console.error('Failed', e) }
+   445→      finally { setLoading(false) }
+   446→    }
+   447→    load()
+   448→  }, [setAgents])
+   449→
+   450→  const handleInvite = () => {
+   451→    if (!inviteEmail.trim()) return
+   452→    const newAgent: Agent = { id: `agent_${Date.now()}`, name: inviteEmail.split('@')[0], email: inviteEmail, avatar: null, role: inviteRole, status: 'offline' }
+   453→    setStaffList(prev => [...prev, newAgent])
+   454→    setAgents([...staffList, newAgent])
+   455→    setInviteEmail('')
+   456→    setShowInvite(false)
+   457→  }
+   458→
+   459→  const openEditDialog = (agent: Agent, e?: React.MouseEvent) => {
+   460→    if (e) e.stopPropagation()
+   461→    setEditForm({ name: agent.name, email: agent.email, role: agent.role, status: agent.status })
+   462→    setDeleteConfirm(false)
+   463→    setEditingAgent(agent)
+   464→  }
+   465→
+   466→  const handleSaveEdit = () => {
+   467→    if (!editingAgent) return
+   468→    const updated = { ...editingAgent, ...editForm }
+   469→    const newList = staffList.map(a => a.id === editingAgent.id ? updated : a)
+   470→    setStaffList(newList)
+   471→    setAgents(newList)
+   472→    setEditingAgent(null)
+   473→  }
+   474→
+   475→  const handleDelete = () => {
+   476→    if (!editingAgent) return
+   477→    const newList = staffList.filter(a => a.id !== editingAgent.id)
+   478→    setStaffList(newList)
+   479→    setAgents(newList)
+   480→    setEditingAgent(null)
+   481→    setDeleteConfirm(false)
+   482→  }
+   483→
+   484→  const toggleExpand = (id: string) => {
+   485→    setExpandedId(prev => prev === id ? null : id)
+   486→  }
+   487→
+   488→  const roleLabel = (role: string) => role === 'admin' ? t('user.role.admin') : role === 'supervisor' ? t('user.role.supervisor') : role === 'agent' ? t('user.role.agent') : role
+   489→  const roleBadge = (role: string) => role === 'admin' ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-400' : role === 'supervisor' ? 'bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-400' : 'bg-slate-100 text-slate-600 dark:bg-slate-800/40 dark:text-slate-400'
+   490→
+   491→  const formatResponseTime = (seconds: number) => {
+   492→    const min = Math.floor(seconds / 60)
+   493→    const sec = seconds % 60
+   494→    return min > 0 ? `~${min}m ${sec > 0 ? `${sec}s` : ''}` : `~${sec}s`
+   495→  }
+   496→
+   497→  return (
+   498→    <div className="space-y-6 animate-fade-in">
+   499→      <div className="flex items-center justify-between">
+   500→        <div>
+   501→          <h3 className="text-sm font-bold">{t('staff.title')}</h3>
+   502→          <p className="text-xs text-muted-foreground/60 mt-1">{t('staff.count', { count: staffList.length })}</p>
+   503→        </div>
+   504→        <Button size="sm" className="h-8 rounded-xl text-xs gap-1.5 bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600" onClick={() => setShowInvite(!showInvite)}>
+   505→          <Plus className="h-3.5 w-3.5" /> {t('staff.invite')}
+   506→        </Button>
+   507→      </div>
+   508→      {showInvite && (
+   509→        <div className="glass-card rounded-2xl p-5 animate-slide-down">
+   510→          <h4 className="text-[13px] font-semibold mb-3">{t('staff.inviteTitle')}</h4>
+   511→          <div className="flex gap-2">
+   512→            <Input value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} placeholder={t('staff.emailPlaceholder')} className="flex-1 rounded-xl glass-input h-9 text-sm" onKeyDown={(e) => e.key === 'Enter' && handleInvite()} />
+   513→            <Select value={inviteRole} onValueChange={setInviteRole}>
+   514→              <SelectTrigger className="w-28 h-9 rounded-xl text-xs"><SelectValue /></SelectTrigger>
+   515→              <SelectContent><SelectItem value="agent">{t('user.role.agent')}</SelectItem><SelectItem value="supervisor">{t('user.role.supervisor')}</SelectItem><SelectItem value="admin">{t('user.role.admin')}</SelectItem></SelectContent>
+   516→            </Select>
+   517→            <Button size="sm" onClick={handleInvite} className="h-9 rounded-xl text-xs"><Send className="h-3.5 w-3.5 mr-1" /> {t('staff.send')}</Button>
+   518→          </div>
+   519→        </div>
+   520→      )}
+   521→      <div className="space-y-2">
+   522→        {loading ? (
+   523→          <div className="space-y-3">{[1, 2, 3, 4].map((i) => (<div key={i} className="glass-card rounded-xl p-4 flex items-center gap-3"><div className="skeleton-line h-10 w-10 rounded-full flex-shrink-0" /><div className="flex-1 space-y-2"><div className="skeleton-line h-3.5 w-1/3" /><div className="skeleton-line h-3 w-1/4" /></div></div>))}</div>
+   524→        ) : (
+   525→          staffList.map((agent, idx) => {
+   526→            const stats = staffStats[agent.id]
+   527→            const isExpanded = expandedId === agent.id
+   528→            return (
+   529→              <div key={agent.id} className="glass-card rounded-xl overflow-hidden transition-all duration-200 hover:shadow-sm">
+   530→                {/* Main row - clickable to expand */}
+   531→                <div
+   532→                  className="p-4 flex items-center gap-3.5 cursor-pointer"
+   533→                  onClick={() => toggleExpand(agent.id)}
+   534→                >
+   535→                  <Avatar className={cn('h-10 w-10 flex-shrink-0', GRADIENT_CLASSES[idx % GRADIENT_CLASSES.length])}>
+   536→                    <AvatarFallback className="text-xs text-white font-semibold">{agent.name.split(' ').slice(-2).map(n => n[0]).join('')}</AvatarFallback>
+   537→                  </Avatar>
+   538→                  <div className="flex-1 min-w-0">
+   539→                    <div className="flex items-center gap-2">
+   540→                      <span className="text-[13px] font-semibold truncate">{agent.name}</span>
+   541→                      <div className={cn('h-2 w-2 rounded-full flex-shrink-0', agent.status === 'online' ? 'bg-emerald-500' : agent.status === 'busy' ? 'bg-amber-500' : 'bg-gray-400')} />
+   542→                    </div>
+   543→                    <p className="text-[11px] text-muted-foreground/50 truncate mt-0.5">{agent.email}</p>
+   544→                  </div>
+   545→                  <Badge className={cn('text-[10px] px-2 py-0.5 h-[20px] rounded-md font-medium', roleBadge(agent.role))}>{roleLabel(agent.role)}</Badge>
+   546→                  <ChevronDown className={cn('h-4 w-4 text-muted-foreground/30 flex-shrink-0 transition-transform duration-200', isExpanded && 'rotate-180')} />
+   547→                  <Button
+   548→                    variant="ghost"
+   549→                    size="icon"
+   550→                    className="h-8 w-8 rounded-lg text-muted-foreground/40 hover:text-foreground hover:bg-foreground/5"
+   551→                    onClick={(e) => openEditDialog(agent, e)}
+   552→                  >
+   553→                    <MoreVertical className="h-4 w-4" />
+   554→                  </Button>
+   555→                </div>
+   556→                {/* Expanded stats section */}
+   557→                {isExpanded && stats && (
+   558→                  <div className="px-4 pb-4 pt-0 animate-slide-down">
+   559→                    <div className="border-t border-border/20 pt-3 mt-1">
+   560→                      <div className="grid grid-cols-4 gap-3">
+   561→                        <div className="bg-foreground/[0.02] rounded-lg p-2.5 text-center">
+   562→                          <MessageSquare className="h-3.5 w-3.5 text-muted-foreground/40 mx-auto mb-1" />
+   563→                          <p className="text-sm font-bold tabular-nums">{stats.conversations}</p>
+   564→                          <p className="text-[10px] text-muted-foreground/50 font-medium">{t('staff.totalConversations')}</p>
+   565→                        </div>
+   566→                        <div className="bg-foreground/[0.02] rounded-lg p-2.5 text-center">
+   567→                          <Clock className="h-3.5 w-3.5 text-muted-foreground/40 mx-auto mb-1" />
+   568→                          <p className="text-sm font-bold tabular-nums">{formatResponseTime(stats.avgResponse)}</p>
+   569→                          <p className="text-[10px] text-muted-foreground/50 font-medium">{t('staff.avgResponse')}</p>
+   570→                        </div>
+   571→                        <div className="bg-foreground/[0.02] rounded-lg p-2.5 text-center">
+   572→                          <Star className="h-3.5 w-3.5 text-amber-400 mx-auto mb-1" />
+   573→                          <p className="text-sm font-bold tabular-nums">{stats.satisfaction.toFixed(1)}</p>
+   574→                          <p className="text-[10px] text-muted-foreground/50 font-medium">{t('staff.satisfaction')}</p>
+   575→                        </div>
+   576→                        <div className="bg-foreground/[0.02] rounded-lg p-2.5 text-center">
+   577→                          <Clock className="h-3.5 w-3.5 text-muted-foreground/40 mx-auto mb-1" />
+   578→                          <p className="text-sm font-bold">{stats.lastActive}</p>
+   579→                          <p className="text-[10px] text-muted-foreground/50 font-medium">{t('staff.lastActive')}</p>
+   580→                        </div>
+   581→                      </div>
+   582→                    </div>
+   583→                  </div>
+   584→                )}
+   585→              </div>
+   586→            )
+   587→          })
+   588→        )}
+   589→      </div>
+   590→
+   591→      {/* Edit Staff Dialog */}
+   592→      <Dialog open={!!editingAgent} onOpenChange={(open) => { if (!open) { setEditingAgent(null); setDeleteConfirm(false) } }}>
+   593→        <DialogContent className="sm:max-w-md rounded-2xl">
+   594→          <DialogHeader>
+   595→            <DialogTitle className="text-base">{t('staff.edit')}</DialogTitle>
+   596→            <DialogDescription className="text-xs text-muted-foreground/60">
+   597→              {editingAgent?.name}
+   598→            </DialogDescription>
+   599→          </DialogHeader>
+   600→          <div className="space-y-3.5 py-1">
+   601→            <div className="space-y-1.5">
+   602→              <Label className="text-xs font-medium text-muted-foreground/70">{t('staff.name')}</Label>
+   603→              <Input value={editForm.name} onChange={(e) => setEditForm(f => ({ ...f, name: e.target.value }))} className="rounded-xl glass-input h-10 text-sm" />
+   604→            </div>
+   605→            <div className="space-y-1.5">
+   606→              <Label className="text-xs font-medium text-muted-foreground/70">{t('staff.emailLabel')}</Label>
+   607→              <Input value={editForm.email} onChange={(e) => setEditForm(f => ({ ...f, email: e.target.value }))} type="email" className="rounded-xl glass-input h-10 text-sm" />
+   608→            </div>
+   609→            <div className="grid grid-cols-2 gap-3">
+   610→              <div className="space-y-1.5">
+   611→                <Label className="text-xs font-medium text-muted-foreground/70">{t('staff.role')}</Label>
+   612→                <Select value={editForm.role} onValueChange={(v) => setEditForm(f => ({ ...f, role: v }))}>
+   613→                  <SelectTrigger className="h-10 rounded-xl text-sm"><SelectValue /></SelectTrigger>
+   614→                  <SelectContent>
+   615→                    <SelectItem value="admin">{t('user.role.admin')}</SelectItem>
+   616→                    <SelectItem value="supervisor">{t('user.role.supervisor')}</SelectItem>
+   617→                    <SelectItem value="agent">{t('user.role.agent')}</SelectItem>
+   618→                  </SelectContent>
+   619→                </Select>
+   620→              </div>
+   621→              <div className="space-y-1.5">
+   622→                <Label className="text-xs font-medium text-muted-foreground/70">{t('staff.status')}</Label>
+   623→                <Select value={editForm.status} onValueChange={(v) => setEditForm(f => ({ ...f, status: v }))}>
+   624→                  <SelectTrigger className="h-10 rounded-xl text-sm"><SelectValue /></SelectTrigger>
+   625→                  <SelectContent>
+   626→                    <SelectItem value="online">{t('profile.status.online')}</SelectItem>
+   627→                    <SelectItem value="busy">{t('profile.status.busy')}</SelectItem>
+   628→                    <SelectItem value="away">{t('profile.status.away')}</SelectItem>
+   629→                    <SelectItem value="offline">{t('profile.status.offline')}</SelectItem>
+   630→                  </SelectContent>
+   631→                </Select>
+   632→              </div>
+   633→            </div>
+   634→          </div>
+   635→          <DialogFooter className="flex-col gap-2 sm:flex-row sm:justify-between">
+   636→            {!deleteConfirm ? (
+   637→              <Button
+   638→                variant="ghost"
+   639→                size="sm"
+   640→                className="text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 h-8 rounded-lg text-xs"
+   641→                onClick={() => setDeleteConfirm(true)}
+   642→              >
+   643→                <Trash2 className="h-3.5 w-3.5 mr-1.5" /> {t('staff.delete')}
+   644→              </Button>
+   645→            ) : (
+   646→              <div className="flex items-center gap-2">
+   647→                <span className="text-[11px] text-red-500 font-medium">{t('staff.deleteConfirm')}</span>
+   648→                <Button variant="ghost" size="sm" className="h-8 rounded-lg text-xs" onClick={() => setDeleteConfirm(false)}>
+   649→                  <X className="h-3 w-3 mr-1" /> {t('staff.cancelEdit')}
+   650→                </Button>
+   651→                <Button variant="destructive" size="sm" className="h-8 rounded-lg text-xs" onClick={handleDelete}>
+   652→                  <Trash2 className="h-3 w-3 mr-1" /> {t('staff.delete')}
+   653→                </Button>
+   654→              </div>
+   655→            )}
+   656→            <div className="flex gap-2">
+   657→              <Button variant="outline" size="sm" className="h-8 rounded-lg text-xs" onClick={() => { setEditingAgent(null); setDeleteConfirm(false) }}>
+   658→                {t('staff.cancelEdit')}
+   659→              </Button>
+   660→              <Button size="sm" className="h-8 rounded-lg text-xs bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600" onClick={handleSaveEdit}>
+   661→                <Check className="h-3.5 w-3.5 mr-1" /> {t('staff.save')}
+   662→              </Button>
+   663→            </div>
+   664→          </DialogFooter>
+   665→        </DialogContent>
+   666→      </Dialog>
+   667→    </div>
+   668→  )
+   669→}
+   670→
+   671→// ═══ MAIN PAGE ═══
+   672→export default function SettingsPage() {
+   673→  const router = useRouter()
+   674→  const { t } = useT()
+   675→  const [activeTab, setActiveTab] = useState<SettingsTab>('profile')
+   676→
+   677→  useEffect(() => {
+   678→    try {
+   679→      const saved = localStorage.getItem('omnichat_settings')
+   680→      if (saved) useCRMStore.getState().updateSettings(JSON.parse(saved))
+   681→    } catch {}
+   682→  }, [])
+   683→
+   684→  const renderContent = () => {
+   685→    switch (activeTab) {
+   686→      case 'profile': return <ProfileTab />
+   687→      case 'system': return <SystemTab />
+   688→      case 'channels': return <ChannelsTab />
+   689→      case 'staff': return <StaffTab />
+   690→      default: return null
+   691→    }
+   692→  }
+   693→
+   694→  return (
+   695→    <div className="h-dvh h-screen flex flex-col bg-background overflow-hidden">
+   696→      <header className="h-12 md:h-14 border-b border-border/30 glass flex items-center justify-between px-3 md:px-6 flex-shrink-0 z-50">
+   697→        <div className="flex items-center gap-3">
+   698→          <Button variant="ghost" size="icon" className="h-8 w-8 rounded-xl hover:bg-foreground/5" onClick={() => router.push('/')}>
+   699→            <ArrowLeft className="h-4 w-4" />
+   700→          </Button>
+   701→          <div className="flex items-center gap-2.5">
+   702→            <div className="h-8 w-8 rounded-xl bg-gradient-to-br from-indigo-500 via-violet-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+   703→              <Settings className="h-4 w-4 text-white" />
+   704→            </div>
+   705→            <div>
+   706→              <h1 className="text-sm font-bold tracking-tight">{t('settingsPage.title')}</h1>
+   707→              <p className="text-[10px] text-muted-foreground/50 font-medium hidden sm:block">{t('settingsPage.subtitle')}</p>
+   708→            </div>
+   709→          </div>
+   710→        </div>
+   711→      </header>
+   712→      <div className="flex-1 min-h-0 overflow-hidden">
+   713→        <div className="hidden md:flex h-full">
+   714→          <nav className="w-56 md:w-64 border-r border-border/20 flex-shrink-0 flex-col p-3 space-y-1 overflow-y-auto">
+   715→            {SETTINGS_TABS.map((tab) => {
+   716→              const Icon = tab.icon
+   717→              const active = activeTab === tab.key
+   718→              return (
+   719→                <button key={tab.key} onClick={() => setActiveTab(tab.key)} className={cn('w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-[13px] font-medium transition-all duration-250', active ? 'bg-gradient-to-r from-indigo-500/10 to-violet-500/10 text-primary border border-primary/10' : 'text-muted-foreground/70 hover:text-foreground hover:bg-foreground/[0.03] border border-transparent')}>
+   720→                  <Icon className={cn('h-4 w-4', active && 'text-primary')} />
+   721→                  {t(tab.labelKey)}
+   722→                </button>
+   723→              )
+   724→            })}
+   725→          </nav>
+   726→          <main className="flex-1 min-h-0 overflow-y-auto p-4 md:p-6 lg:p-8">
+   727→            <div className="max-w-2xl mx-auto">{renderContent()}</div>
+   728→          </main>
+   729→        </div>
+   730→        <div className="md:hidden flex flex-col h-full">
+   731→          <div className="flex-shrink-0 border-b border-border/20 flex overflow-x-auto scrollbar-none">
+   732→            {SETTINGS_TABS.map((tab) => {
+   733→              const Icon = tab.icon
+   734→              const active = activeTab === tab.key
+   735→              return (
+   736→                <button key={tab.key} onClick={() => setActiveTab(tab.key)} className={cn('flex items-center gap-1.5 px-4 py-3 text-xs font-medium whitespace-nowrap transition-all duration-250 border-b-2 flex-shrink-0', active ? 'text-primary border-primary' : 'text-muted-foreground/60 border-transparent hover:text-foreground')}>
+   737→                  <Icon className="h-3.5 w-3.5" />
+   738→                  {t(tab.labelKey)}
+   739→                </button>
+   740→              )
+   741→            })}
+   742→          </div>
+   743→          <main className="flex-1 min-h-0 overflow-y-auto p-4">
+   744→            <div className="max-w-2xl mx-auto">{renderContent()}</div>
+   745→          </main>
+   746→        </div>
+   747→      </div>
+   748→    </div>
+   749→  )
+   750→}
+   751→

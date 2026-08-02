@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useMemo } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useCRMStore, type UserProfile } from '@/store/crm-store'
 import { useTheme } from 'next-themes'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
@@ -28,7 +28,8 @@ import {
   Volume2, Monitor, Mail, Maximize2, Eye, Globe, UserCheck,
   Camera, Check, X, Shield, Clock, MessageSquareOff, Phone,
   Send, Trash2, RotateCcw, Pencil, MoreVertical, Plus, Bell,
-  Globe2, ChevronDown, Star,
+  Globe2, ChevronDown, Star, ShieldAlert, Database, Download,
+  Upload, RefreshCw, Ban, AlertTriangle, Loader2, Zap, HardDrive,
 } from 'lucide-react'
 
 const SETTINGS_TABS = [
@@ -36,9 +37,11 @@ const SETTINGS_TABS = [
   { key: 'system', labelKey: 'settingsTab.system', icon: Settings },
   { key: 'channels', labelKey: 'settingsTab.channels', icon: MessageSquare },
   { key: 'staff', labelKey: 'settingsTab.staff', icon: Users },
+  { key: 'security', labelKey: 'settingsTab.security', icon: ShieldAlert },
+  { key: 'backup', labelKey: 'settingsTab.backup', icon: Database },
 ] as const
 
-type SettingsTab = typeof SETTINGS_TABS[number]['key']
+type SettingsTab = (typeof SETTINGS_TABS)[number]['key']
 
 const GRADIENT_CLASSES = ['avatar-gradient-1', 'avatar-gradient-2', 'avatar-gradient-3', 'avatar-gradient-4', 'avatar-gradient-5', 'avatar-gradient-6']
 
@@ -668,11 +671,449 @@ function StaffTab() {
   )
 }
 
+// ═══ SECURITY TAB ═══
+interface BlacklistItem {
+  type: 'ip' | 'email'
+  value: string
+  reason: string
+  addedAt: string
+  addedBy: string
+}
+
+function SecurityTab() {
+  const { t } = useT()
+  const [config, setConfig] = useState({ rateLimitPerMinute: 60, rateLimitEnabled: true, blacklistEnabled: true })
+  const [blacklist, setBlacklist] = useState<BlacklistItem[]>([])
+  const [loading, setLoading] = useState(true)
+  const [newType, setNewType] = useState<'ip' | 'email'>('ip')
+  const [newValue, setNewValue] = useState('')
+  const [newReason, setNewReason] = useState('')
+  const [adding, setAdding] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [rateLimitInput, setRateLimitInput] = useState('60')
+
+  const loadData = async () => {
+    setLoading(true)
+    try {
+      const [configRes, blacklistRes] = await Promise.all([
+        fetch('/api/security/config'),
+        fetch('/api/security/blacklist'),
+      ])
+      const configData = await configRes.json()
+      const blacklistData = await blacklistRes.json()
+      setConfig(configData)
+      setRateLimitInput(String(configData.rateLimitPerMinute))
+      setBlacklist(blacklistData.data || [])
+    } catch (e) { console.error('Failed to load security config', e) }
+    finally { setLoading(false) }
+  }
+
+  useEffect(() => { loadData() }, [])
+
+  const saveConfig = async () => {
+    setSaving(true)
+    try {
+      const res = await fetch('/api/security/config', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...config,
+          rateLimitPerMinute: parseInt(rateLimitInput) || 60,
+        }),
+      })
+      const data = await res.json()
+      if (data.data) setConfig(data.data)
+    } catch (e) { console.error(e) }
+    finally { setSaving(false) }
+  }
+
+  const addToBlacklist = async () => {
+    if (!newValue.trim()) return
+    setAdding(true)
+    try {
+      const res = await fetch('/api/security/blacklist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: newType, value: newValue.trim(), reason: newReason.trim() }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setBlacklist(prev => [data.data, ...prev])
+        setNewValue('')
+        setNewReason('')
+      }
+    } catch (e) { console.error(e) }
+    finally { setAdding(false) }
+  }
+
+  const removeFromBlacklist = async (type: string, value: string) => {
+    try {
+      await fetch(`/api/security/blacklist?type=${type}&value=${encodeURIComponent(value)}`, { method: 'DELETE' })
+      setBlacklist(prev => prev.filter(e => !(e.type === type && e.value === value)))
+    } catch (e) { console.error(e) }
+  }
+
+  const formatSize = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} B`
+    if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`
+    return `${(bytes / 1048576).toFixed(1)} MB`
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground/40" />
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-6 animate-fade-in">
+      {/* Rate Limiting */}
+      <div className="space-y-1">
+        <SectionHeader title={t('security.rateLimit.title')} />
+        <div className="glass-card rounded-2xl p-5 space-y-4">
+          <SettingRow icon={Zap} label={t('security.rateLimit.enabled')} description={t('security.rateLimit.enabledDesc')}>
+            <Switch
+              checked={config.rateLimitEnabled}
+              onCheckedChange={(v) => setConfig(c => ({ ...c, rateLimitEnabled: v }))}
+            />
+          </SettingRow>
+          <Separator className="opacity-30 my-1" />
+          <SettingRow icon={Clock} label={t('security.rateLimit.maxRequests')} description={t('security.rateLimit.maxRequestsDesc')}>
+            <div className="flex items-center gap-2">
+              <Input
+                type="number"
+                min={1}
+                max={10000}
+                value={rateLimitInput}
+                onChange={(e) => setRateLimitInput(e.target.value)}
+                className="w-24 h-8 rounded-lg text-sm text-center"
+                disabled={!config.rateLimitEnabled}
+              />
+              <span className="text-xs text-muted-foreground/50">/ {t('security.rateLimit.perMinute')}</span>
+            </div>
+          </SettingRow>
+          <Button
+            onClick={saveConfig}
+            disabled={saving}
+            className="w-full h-9 rounded-xl text-xs font-medium bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600"
+          >
+            {saving ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Check className="h-3.5 w-3.5 mr-1.5" />}
+            {t('security.saveConfig')}
+          </Button>
+        </div>
+      </div>
+
+      {/* Blacklist */}
+      <div className="space-y-1">
+        <SectionHeader title={t('security.blacklist.title')} />
+        <div className="glass-card rounded-2xl p-5 space-y-4">
+          <SettingRow icon={Ban} label={t('security.blacklist.enabled')} description={t('security.blacklist.enabledDesc')}>
+            <Switch
+              checked={config.blacklistEnabled}
+              onCheckedChange={(v) => setConfig(c => ({ ...c, blacklistEnabled: v }))}
+            />
+          </SettingRow>
+          <Separator className="opacity-30 my-1" />
+
+          {/* Add form */}
+          <div className="space-y-3 p-3 rounded-xl bg-foreground/[0.02]">
+            <p className="text-xs font-medium text-muted-foreground/70">{t('security.blacklist.addNew')}</p>
+            <div className="flex gap-2">
+              <Select value={newType} onValueChange={(v) => setNewType(v as 'ip' | 'email')}>
+                <SelectTrigger className="w-24 h-9 rounded-lg text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ip">IP</SelectItem>
+                  <SelectItem value="email">Email</SelectItem>
+                </SelectContent>
+              </Select>
+              <Input
+                value={newValue}
+                onChange={(e) => setNewValue(e.target.value)}
+                placeholder={newType === 'ip' ? '192.168.1.1' : 'spam@example.com'}
+                className="flex-1 h-9 rounded-lg text-sm"
+              />
+            </div>
+            <Input
+              value={newReason}
+              onChange={(e) => setNewReason(e.target.value)}
+              placeholder={t('security.blacklist.reasonPlaceholder')}
+              className="h-9 rounded-lg text-sm"
+            />
+            <Button
+              onClick={addToBlacklist}
+              disabled={adding || !newValue.trim()}
+              size="sm"
+              className="h-9 rounded-lg text-xs bg-gradient-to-r from-red-500 to-rose-500 hover:from-red-600 hover:to-rose-600"
+            >
+              {adding ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Ban className="h-3.5 w-3.5 mr-1.5" />}
+              {t('security.blacklist.addBtn')}
+            </Button>
+          </div>
+
+          {/* Blacklist table */}
+          {blacklist.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-muted-foreground/50">
+                {t('security.blacklist.count', { count: blacklist.length })}
+              </p>
+              <div className="space-y-1.5 max-h-[300px] overflow-y-auto">
+                {blacklist.map((entry, idx) => (
+                  <div
+                    key={idx}
+                    className="flex items-center justify-between gap-3 p-3 rounded-xl bg-foreground/[0.02] hover:bg-foreground/[0.04] transition-colors group"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-4 rounded-md font-mono">
+                          {entry.type === 'ip' ? 'IP' : 'EMAIL'}
+                        </Badge>
+                        <span className="text-xs font-mono font-medium truncate">{entry.value}</span>
+                      </div>
+                      {entry.reason && (
+                        <p className="text-[10px] text-muted-foreground/40 mt-0.5 truncate">{entry.reason}</p>
+                      )}
+                      <p className="text-[9px] text-muted-foreground/30 mt-0.5">
+                        {new Date(entry.addedAt).toLocaleString()}
+                      </p>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 rounded-lg opacity-0 group-hover:opacity-100 text-muted-foreground/40 hover:text-red-500 transition-all"
+                      onClick={() => removeFromBlacklist(entry.type, entry.value)}
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {blacklist.length === 0 && (
+            <div className="text-center py-6">
+              <ShieldAlert className="h-8 w-8 text-muted-foreground/20 mx-auto mb-2" />
+              <p className="text-xs text-muted-foreground/40">{t('security.blacklist.empty')}</p>
+            </div>
+          )}
+
+          <Button
+            onClick={saveConfig}
+            disabled={saving}
+            className="w-full h-9 rounded-xl text-xs font-medium bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600"
+          >
+            {saving ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Check className="h-3.5 w-3.5 mr-1.5" />}
+            {t('security.saveConfig')}
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ═══ BACKUP TAB ═══
+interface BackupItem {
+  id: string
+  filename: string
+  size: number
+  createdAt: string
+}
+
+function BackupTab() {
+  const { t } = useT()
+  const [backups, setBackups] = useState<BackupItem[]>([])
+  const [loading, setLoading] = useState(true)
+  const [creating, setCreating] = useState(false)
+  const [restoring, setRestoring] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState<string | null>(null)
+  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+
+  const loadBackups = async () => {
+    setLoading(true)
+    try {
+      const res = await fetch('/api/backup')
+      const data = await res.json()
+      setBackups(data.data || [])
+    } catch (e) { console.error(e) }
+    finally { setLoading(false) }
+  }
+
+  useEffect(() => { loadBackups() }, [])
+
+  const createBackup = async () => {
+    setCreating(true)
+    setMessage(null)
+    try {
+      const res = await fetch('/api/backup', { method: 'POST' })
+      const data = await res.json()
+      if (res.ok) {
+        setMessage({ type: 'success', text: t('backup.created') })
+        loadBackups()
+      } else {
+        setMessage({ type: 'error', text: data.error || t('backup.createFailed') })
+      }
+    } catch (e) {
+      setMessage({ type: 'error', text: t('backup.createFailed') })
+    }
+    finally { setCreating(false) }
+  }
+
+  const restoreBackup = async (id: string) => {
+    setRestoring(id)
+    setMessage(null)
+    try {
+      const res = await fetch('/api/backup/restore', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ backupId: id }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        setMessage({ type: 'success', text: t('backup.restored') })
+      } else {
+        setMessage({ type: 'error', text: data.error || t('backup.restoreFailed') })
+      }
+    } catch (e) {
+      setMessage({ type: 'error', text: t('backup.restoreFailed') })
+    }
+    finally { setRestoring(null) }
+  }
+
+  const deleteBackup = async (id: string) => {
+    setDeleting(id)
+    try {
+      await fetch(`/api/backup?id=${id}`, { method: 'DELETE' })
+      setBackups(prev => prev.filter(b => b.id !== id))
+    } catch (e) { console.error(e) }
+    finally { setDeleting(null) }
+  }
+
+  const formatSize = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} B`
+    if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`
+    return `${(bytes / 1048576).toFixed(1)} MB`
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground/40" />
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-6 animate-fade-in">
+      <div className="space-y-1">
+        <SectionHeader title={t('backup.manage')} />
+        <div className="glass-card rounded-2xl p-5 space-y-4">
+          {/* Info */}
+          <div className="flex items-start gap-3 p-3 rounded-xl bg-foreground/[0.02]">
+            <HardDrive className="h-5 w-5 text-muted-foreground/40 mt-0.5 flex-shrink-0" />
+            <div>
+              <p className="text-xs font-medium">{t('backup.info')}</p>
+              <p className="text-[10px] text-muted-foreground/40 mt-1 leading-relaxed">{t('backup.infoDesc')}</p>
+            </div>
+          </div>
+
+          {/* Create backup button */}
+          <Button
+            onClick={createBackup}
+            disabled={creating}
+            className="w-full h-10 rounded-xl text-sm font-medium bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600 shadow-lg shadow-indigo-500/15"
+          >
+            {creating ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Download className="h-4 w-4 mr-2" />}
+            {t('backup.createBtn')}
+          </Button>
+
+          {/* Message */}
+          {message && (
+            <div className={cn(
+              'p-3 rounded-xl text-xs font-medium flex items-center gap-2',
+              message.type === 'success' ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400' : 'bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-400'
+            )}>
+              {message.type === 'success' ? <Check className="h-3.5 w-3.5" /> : <AlertTriangle className="h-3.5 w-3.5" />}
+              {message.text}
+            </div>
+          )}
+
+          {/* Backup list */}
+          <div className="space-y-2">
+            <p className="text-xs font-medium text-muted-foreground/50">
+              {t('backup.list', { count: backups.length })}
+            </p>
+            {backups.length === 0 ? (
+              <div className="text-center py-8">
+                <Database className="h-8 w-8 text-muted-foreground/20 mx-auto mb-2" />
+                <p className="text-xs text-muted-foreground/40">{t('backup.empty')}</p>
+              </div>
+            ) : (
+              <div className="space-y-1.5 max-h-[400px] overflow-y-auto">
+                {backups.map((backup) => (
+                  <div
+                    key={backup.id}
+                    className="flex items-center justify-between gap-3 p-3 rounded-xl bg-foreground/[0.02] hover:bg-foreground/[0.04] transition-colors group"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <Database className="h-4 w-4 text-muted-foreground/30" />
+                        <span className="text-xs font-medium truncate">{backup.id}</span>
+                      </div>
+                      <div className="flex items-center gap-3 mt-0.5">
+                        <span className="text-[10px] text-muted-foreground/40">{formatSize(backup.size)}</span>
+                        <span className="text-[10px] text-muted-foreground/30">
+                          {new Date(backup.createdAt).toLocaleString()}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 rounded-lg text-[10px] text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/30"
+                        onClick={() => restoreBackup(backup.id)}
+                        disabled={restoring === backup.id}
+                      >
+                        {restoring === backup.id ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <RefreshCw className="h-3 w-3 mr-1" />}
+                        {t('backup.restore')}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 rounded-lg text-muted-foreground/40 hover:text-red-500"
+                        onClick={() => deleteBackup(backup.id)}
+                        disabled={deleting === backup.id}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ═══ MAIN PAGE ═══
 export default function SettingsPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { t } = useT()
   const [activeTab, setActiveTab] = useState<SettingsTab>('profile')
+
+  // Restore tab from URL ?tab=xxx
+  useEffect(() => {
+    const tabParam = searchParams.get('tab')
+    if (tabParam && ['profile', 'system', 'channels', 'staff', 'security', 'backup'].includes(tabParam)) {
+      setActiveTab(tabParam as SettingsTab)
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     try {
@@ -687,6 +1128,8 @@ export default function SettingsPage() {
       case 'system': return <SystemTab />
       case 'channels': return <ChannelsTab />
       case 'staff': return <StaffTab />
+      case 'security': return <SecurityTab />
+      case 'backup': return <BackupTab />
       default: return null
     }
   }
