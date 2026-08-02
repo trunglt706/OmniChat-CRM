@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback, useMemo } from 'react'
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { useCRMStore } from '@/store/crm-store'
 import { useT } from '@/i18n/useT'
 import { cn } from '@/lib/utils'
@@ -25,8 +25,10 @@ import {
   ArrowLeft, RefreshCw, Download, MessageSquare, CheckCircle,
   Clock, Star, Shield, Loader2, TrendingUp, CalendarIcon,
   ChevronLeft, Bot, ArrowUpRight, ArrowDownRight, Minus, Tag,
-  Timer, BarChart3, Zap,
+  Timer, BarChart3, Zap, ImageIcon,
 } from 'lucide-react'
+import * as XLSX from 'xlsx'
+import { toPng } from 'html-to-image'
 
 // ─── Types ───
 type ReportTab = 'conversations' | 'agents' | 'sla' | 'channels' | 'customers' | 'messages' | 'responseTime' | 'botPerformance' | 'tags' | 'resolutionTrends'
@@ -109,6 +111,13 @@ export default function ReportsPage() {
   const [botPerformanceData, setBotPerformanceData] = useState<any>(null)
   const [tagsData, setTagsData] = useState<any[]>([])
   const [resolutionTrendsData, setResolutionTrendsData] = useState<any[]>([])
+
+  // ─── Chart container refs for image export ───
+  const chartRefMessages = useRef<HTMLDivElement>(null)
+  const chartRefResponseTime = useRef<HTMLDivElement>(null)
+  const chartRefResolutionTrends = useRef<HTMLDivElement>(null)
+
+  const chartTabs: ReportTab[] = ['messages', 'responseTime', 'resolutionTrends']
 
   // ─── Presets ───
   const presets: { key: PresetKey; label: string }[] = [
@@ -255,6 +264,227 @@ export default function ReportsPage() {
     facebook_messenger: 'Facebook Messenger', zalo: 'Zalo',
     telegram: 'Telegram', website: 'Website', email: 'Email',
   }
+
+  // ═══════════════════════════════════════════
+  // ─── Export helpers ───
+  // ═══════════════════════════════════════════
+
+  const getDateRangeLabel = useCallback(() => {
+    if (!startDate || !endDate) return '7d'
+    return `${format(startDate, 'yyyy-MM-dd')}_${format(endDate, 'yyyy-MM-dd')}`
+  }, [startDate, endDate])
+
+  const handleExportExcel = useCallback(() => {
+    const wb = XLSX.utils.book_new()
+    const dateRange = getDateRangeLabel()
+    let sheetName: string | undefined
+
+    switch (activeTab) {
+      case 'conversations': {
+        const headers = [
+          t('reports.conversations.col.date'),
+          t('reports.conversations.col.total'),
+          t('reports.conversations.col.open'),
+          t('reports.conversations.col.resolved'),
+          t('reports.conversations.col.closed'),
+          t('reports.conversations.col.avgResponse'),
+          t('reports.conversations.col.avgResolution'),
+        ]
+        const rows = conversationsData.map((r) => [
+          r.date, r.total, r.open, r.resolved, r.closed, r.avgResponseTime, r.avgResolutionTime,
+        ])
+        const ws = XLSX.utils.aoa_to_sheet([headers, ...rows])
+        XLSX.utils.book_append_sheet(wb, ws, 'Conversations')
+        sheetName = `omnichat-report-conversations-${dateRange}.xlsx`
+        break
+      }
+      case 'agents': {
+        const headers = [
+          t('reports.agents.col.name'),
+          t('reports.agents.col.conversations'),
+          t('reports.agents.col.messages'),
+          t('reports.agents.col.avgResponse'),
+          t('reports.agents.col.resolved'),
+          t('reports.agents.col.satisfaction'),
+          t('reports.agents.col.activeHours'),
+        ]
+        const rows = agentsData.map((r) => [
+          r.name, r.conversations, r.messages, r.avgResponseTime, r.resolved, r.satisfaction, r.activeHours,
+        ])
+        const ws = XLSX.utils.aoa_to_sheet([headers, ...rows])
+        XLSX.utils.book_append_sheet(wb, ws, 'Agents')
+        sheetName = `omnichat-report-agents-${dateRange}.xlsx`
+        break
+      }
+      case 'responseTime': {
+        // Main sheet: buckets
+        const headers = [
+          t('reports.responseTime.col.bucket'),
+          t('reports.responseTime.col.count'),
+          t('reports.responseTime.col.percentage'),
+          t('reports.responseTime.col.avgSatisfaction'),
+        ]
+        const buckets = responseTimeData?.buckets || []
+        const rows = buckets.map((r: any) => [
+          r.bucket, r.count, r.percentage, r.avgSatisfaction,
+        ])
+        const ws = XLSX.utils.aoa_to_sheet([headers, ...rows])
+        XLSX.utils.book_append_sheet(wb, ws, 'Response Time')
+        // Second sheet: percentile stats
+        if (responseTimeData?.stats) {
+          const { stats } = responseTimeData
+          const pHeaders = [t('reports.responseTime.avgLabel'), t('reports.responseTime.p50'), t('reports.responseTime.p90'), t('reports.responseTime.p99')]
+          const pValues = [stats.avg, stats.p50, stats.p90, stats.p99]
+          const ws2 = XLSX.utils.aoa_to_sheet([pHeaders, pValues])
+          XLSX.utils.book_append_sheet(wb, ws2, 'Percentiles')
+        }
+        sheetName = `omnichat-report-responseTime-${dateRange}.xlsx`
+        break
+      }
+      case 'channels': {
+        const headers = [
+          t('reports.channels.col.channel'),
+          t('reports.channels.col.conversations'),
+          t('reports.channels.col.messages'),
+          t('reports.channels.col.avgResponse'),
+          t('reports.channels.col.resolution'),
+          t('reports.channels.col.satisfaction'),
+        ]
+        const rows = channelsData.map((r) => [
+          r.channel, r.conversations, r.messages, r.avgResponseTime, r.resolutionRate, r.satisfaction,
+        ])
+        const ws = XLSX.utils.aoa_to_sheet([headers, ...rows])
+        XLSX.utils.book_append_sheet(wb, ws, 'Channels')
+        sheetName = `omnichat-report-channels-${dateRange}.xlsx`
+        break
+      }
+      case 'customers': {
+        const headers = [
+          t('reports.customers.col.name'),
+          t('reports.customers.col.conversations'),
+          t('reports.customers.col.messages'),
+          t('reports.customers.col.lastActive'),
+          t('reports.customers.col.channel'),
+          t('reports.customers.col.value'),
+        ]
+        const rows = customersData.map((r) => [
+          r.name, r.conversations, r.messages, r.lastActive, r.primaryChannel, r.value,
+        ])
+        const ws = XLSX.utils.aoa_to_sheet([headers, ...rows])
+        XLSX.utils.book_append_sheet(wb, ws, 'Customers')
+        sheetName = `omnichat-report-customers-${dateRange}.xlsx`
+        break
+      }
+      case 'messages': {
+        const headers = [
+          t('reports.messages.col.period'),
+          t('reports.messages.col.incoming'),
+          t('reports.messages.col.outgoing'),
+          t('reports.messages.col.total'),
+        ]
+        const hourly = messagesData?.hourly || []
+        const rows = hourly.map((r) => [
+          r.period, r.incoming, r.outgoing, r.total,
+        ])
+        const ws = XLSX.utils.aoa_to_sheet([headers, ...rows])
+        XLSX.utils.book_append_sheet(wb, ws, 'Messages')
+        sheetName = `omnichat-report-messages-${dateRange}.xlsx`
+        break
+      }
+      case 'sla': {
+        const headers = [
+          t('reports.sla.col.metric'),
+          t('reports.sla.col.target'),
+          t('reports.sla.col.actual'),
+          t('reports.sla.col.compliance'),
+        ]
+        const rows = slaData.map((r) => [
+          r.metric, r.target, r.actual, r.compliance,
+        ])
+        const ws = XLSX.utils.aoa_to_sheet([headers, ...rows])
+        XLSX.utils.book_append_sheet(wb, ws, 'SLA')
+        sheetName = `omnichat-report-sla-${dateRange}.xlsx`
+        break
+      }
+      case 'botPerformance': {
+        const headers = [
+          t('reports.botPerformance.col.metric'),
+          t('reports.botPerformance.col.value'),
+          t('reports.botPerformance.col.trend'),
+        ]
+        const metrics = botPerformanceData?.metrics || []
+        const rows = metrics.map((r: any) => {
+          const metricMap: Record<string, string> = {
+            totalHandled: t('reports.botPerformance.totalHandled'),
+            handoffRate: t('reports.botPerformance.handoffRate'),
+            avgResolutionTime: t('reports.botPerformance.avgResolutionTime'),
+            customerSatisfaction: t('reports.botPerformance.customerSatisfaction'),
+            conversationsSaved: t('reports.botPerformance.conversationsSaved'),
+            accuracy: t('reports.botPerformance.accuracy'),
+          }
+          return [metricMap[r.metric] || r.metric, r.value, r.trend]
+        })
+        const ws = XLSX.utils.aoa_to_sheet([headers, ...rows])
+        XLSX.utils.book_append_sheet(wb, ws, 'Bot Performance')
+        sheetName = `omnichat-report-botPerformance-${dateRange}.xlsx`
+        break
+      }
+      case 'tags': {
+        const headers = [
+          t('reports.tags.col.tag'),
+          t('reports.tags.col.count'),
+          t('reports.tags.col.conversations'),
+          t('reports.tags.col.avgResolution'),
+          t('reports.tags.col.satisfaction'),
+        ]
+        const rows = tagsData.map((r) => [
+          r.tag, r.count, r.conversations, r.avgResolution, r.satisfaction,
+        ])
+        const ws = XLSX.utils.aoa_to_sheet([headers, ...rows])
+        XLSX.utils.book_append_sheet(wb, ws, 'Tags')
+        sheetName = `omnichat-report-tags-${dateRange}.xlsx`
+        break
+      }
+      case 'resolutionTrends': {
+        const headers = [
+          t('reports.resolutionTrends.col.period'),
+          t('reports.resolutionTrends.col.total'),
+          t('reports.resolutionTrends.col.resolved'),
+          t('reports.resolutionTrends.col.rate'),
+          t('reports.resolutionTrends.col.avgTime'),
+        ]
+        const rows = resolutionTrendsData.map((r) => [
+          r.period, r.total, r.resolved, r.rate, r.avgTime,
+        ])
+        const ws = XLSX.utils.aoa_to_sheet([headers, ...rows])
+        XLSX.utils.book_append_sheet(wb, ws, 'Resolution Trends')
+        sheetName = `omnichat-report-resolutionTrends-${dateRange}.xlsx`
+        break
+      }
+    }
+
+    if (sheetName) {
+      XLSX.writeFile(wb, sheetName)
+    }
+  }, [activeTab, t, getDateRangeLabel, conversationsData, agentsData, responseTimeData, channelsData, customersData, messagesData, slaData, botPerformanceData, tagsData, resolutionTrendsData])
+
+  const handleExportChartImage = useCallback(() => {
+    const refMap: Record<string, React.RefObject<HTMLDivElement | null>> = {
+      messages: chartRefMessages,
+      responseTime: chartRefResponseTime,
+      resolutionTrends: chartRefResolutionTrends,
+    }
+    const el = refMap[activeTab]?.current
+    if (!el) return
+    toPng(el, { backgroundColor: '#ffffff', pixelRatio: 2 }).then((dataUrl) => {
+      const link = document.createElement('a')
+      link.download = `omnichat-chart-${activeTab}-${getDateRangeLabel()}.png`
+      link.href = dataUrl
+      link.click()
+    }).catch((err) => {
+      console.error('Chart image export error', err)
+    })
+  }, [activeTab, getDateRangeLabel])
 
   // ═══════════════════════════════════════════
   // ─── Tab renderers ───
@@ -494,7 +724,7 @@ export default function ReportsPage() {
           </div>
         </div>
       )}
-      <div className="glass-card rounded-2xl p-4 md:p-5">
+      <div id="chart-messages" ref={chartRefMessages} className="glass-card rounded-2xl p-4 md:p-5">
         <p className="text-xs font-semibold mb-4">{t('reports.messages.byHour')}</p>
         {messagesData && messagesData.hourly && (
           <div className="h-64 md:h-80">
@@ -560,7 +790,7 @@ export default function ReportsPage() {
           ))}
         </div>
         {/* Chart */}
-        <div className="glass-card rounded-2xl p-4 md:p-5">
+        <div id="chart-responseTime" ref={chartRefResponseTime} className="glass-card rounded-2xl p-4 md:p-5">
           <div className="h-56 md:h-64">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={buckets} margin={{ top: 4, right: 4, left: -20, bottom: 4 }}>
@@ -708,7 +938,7 @@ export default function ReportsPage() {
   // ─── Resolution Trends ───
   const renderResolutionTrendsTab = () => (
     <div className="space-y-4">
-      <div className="glass-card rounded-2xl p-4 md:p-5">
+      <div id="chart-resolutionTrends" ref={chartRefResolutionTrends} className="glass-card rounded-2xl p-4 md:p-5">
         <div className="h-64 md:h-72">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={resolutionTrendsData} margin={{ top: 4, right: 4, left: -20, bottom: 4 }}>
@@ -1018,7 +1248,21 @@ export default function ReportsPage() {
 
   const renderDetailContent = () => {
     if (detailLoading) {
-      return <div className="flex items-center justify-center py-20"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+      return (
+        <div className="glass-card rounded-2xl p-4 md:p-5">
+          <div className="skeleton-line h-4 w-40 mb-4" />
+          <div className="space-y-3">
+            {[1,2,3,4,5].map(i => (
+              <div key={i} className="flex gap-4 items-center">
+                <div className="skeleton-line h-3 w-16 flex-shrink-0" />
+                <div className="skeleton-line h-3 w-10 flex-shrink-0" />
+                <div className="flex-1" />
+                <div className="skeleton-line h-3 w-12 flex-shrink-0" />
+              </div>
+            ))}
+          </div>
+        </div>
+      )
     }
     switch (detailView?.type) {
       case 'conversations': return renderConversationDetail()
@@ -1036,7 +1280,24 @@ export default function ReportsPage() {
 
   const renderTabContent = () => {
     if (loading) {
-      return <div className="flex items-center justify-center py-20"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+      return (
+        <div className="space-y-4">
+          <div className="glass-card rounded-2xl p-4 md:p-5">
+            <div className="space-y-3">
+              {[1,2,3,4,5,6].map(i => (
+                <div key={i} className="flex gap-4 items-center">
+                  <div className="skeleton-line h-3 w-20 flex-shrink-0" />
+                  <div className="skeleton-line h-3 w-12 flex-shrink-0" />
+                  <div className="skeleton-line h-3 w-14 flex-shrink-0" />
+                  <div className="skeleton-line h-3 w-16 flex-shrink-0" />
+                  <div className="flex-1" />
+                  <div className="skeleton-line h-3 w-14 flex-shrink-0" />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )
     }
     switch (activeTab) {
       case 'conversations': return renderConversationsTable()
@@ -1076,10 +1337,18 @@ export default function ReportsPage() {
               {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
               <span className="hidden sm:inline">{t('reports.refresh')}</span>
             </Button>
-            <Button variant="outline" size="sm" className="h-8 rounded-xl text-xs gap-1.5 border-border/40">
+            <Button variant="outline" size="sm" className="h-8 rounded-xl text-xs gap-1.5 border-border/40"
+              onClick={handleExportExcel} disabled={loading || !!detailView}>
               <Download className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">{t('reports.export')}</span>
             </Button>
+            {!detailView && chartTabs.includes(activeTab) && (
+              <Button variant="outline" size="sm" className="h-8 rounded-xl text-xs gap-1.5 border-border/40"
+                onClick={handleExportChartImage}>
+                <ImageIcon className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">{t('reports.exportChart') || 'PNG'}</span>
+              </Button>
+            )}
           </div>
         </div>
 

@@ -94,8 +94,42 @@ export default function Dashboard() {
 
   if (loading || !data) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <div className="animate-spin h-6 w-6 border-2 border-primary border-t-transparent rounded-full" />
+      <div className="h-full overflow-y-auto p-4 md:p-6 space-y-5">
+        {/* Summary cards skeleton */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
+          {[1,2,3,4].map(i => (
+            <div key={i} className="glass-card rounded-2xl p-4 md:p-5">
+              <div className="skeleton-line h-3 w-24 mb-3" />
+              <div className="skeleton-line h-7 w-16" />
+              <div className="skeleton-line h-2.5 w-20 mt-2" />
+            </div>
+          ))}
+        </div>
+        {/* Charts skeleton */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="glass-card rounded-2xl p-4 md:p-5">
+            <div className="skeleton-line h-4 w-32 mb-4" />
+            <div className="skeleton-line h-52 w-full rounded-lg" />
+          </div>
+          <div className="glass-card rounded-2xl p-4 md:p-5">
+            <div className="skeleton-line h-4 w-32 mb-4" />
+            <div className="skeleton-line h-52 w-full rounded-lg" />
+          </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="glass-card rounded-2xl p-4 md:p-5">
+            <div className="skeleton-line h-4 w-28 mb-4" />
+            <div className="skeleton-line h-44 w-full rounded-lg" />
+          </div>
+          <div className="glass-card rounded-2xl p-4 md:p-5 md:col-span-2">
+            <div className="skeleton-line h-4 w-28 mb-4" />
+            <div className="skeleton-line h-44 w-full rounded-lg" />
+          </div>
+        </div>
+        <div className="glass-card rounded-2xl p-4 md:p-5">
+          <div className="skeleton-line h-4 w-28 mb-4" />
+          <div className="skeleton-line h-48 w-full rounded-lg" />
+        </div>
       </div>
     )
   }
