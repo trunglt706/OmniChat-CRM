@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import { ThemeProvider } from "next-themes";
+import { HtmlLangSync } from "@/components/i18n/html-lang";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -16,7 +17,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "OmniChat CRM - Multi Channel Chat System",
-  description: "Hệ thống quản lý hội thoại đa kênh cho doanh nghiệp",
+  description: "Multi-channel customer support CRM system | Hệ thống quản lý hội thoại đa kênh",
   icons: {
     icon: "https://z-cdn.chatglm.cn/z-ai/static/logo.svg",
   },
@@ -38,6 +39,7 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
+          <HtmlLangSync />
           {children}
           <Toaster />
         </ThemeProvider>

@@ -22,7 +22,8 @@ import {
   MessageCircle, TagIcon, Wand2, Users, XCircle, CheckCircle2, MoreVertical,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import type { Agent, Tag } from '@/lib/types'
+import type { Agent, Tag as TagType } from '@/lib/types'
+import { useT } from '@/i18n/useT'
 
 interface AutomationRule {
   id: string
@@ -37,22 +38,23 @@ interface AutomationRule {
 
 type ActionType = 'auto_reply' | 'assign_agent' | 'tag' | 'auto_reply_assign' | 'auto_reply_tag'
 
-const ACTION_TYPES: { key: ActionType; label: string; icon: React.ElementType; desc: string }[] = [
-  { key: 'auto_reply', label: 'Tự động trả lời', icon: Bot, desc: 'Gửi tin nhắn tự động khi khớp từ khóa' },
-  { key: 'assign_agent', label: 'Phân công Agent', icon: UserPlus, desc: 'Tự động phân công cho nhân viên' },
-  { key: 'tag', label: 'Gắn Tag', icon: Tag, desc: 'Tự động gắn tag khi khớp từ khóa' },
-  { key: 'auto_reply_assign', label: 'Trả lời + Phân công', icon: Wand2, desc: 'Tự động trả lời và phân công cùng lúc' },
-  { key: 'auto_reply_tag', label: 'Trả lời + Gắn Tag', icon: Sparkles, desc: 'Tự động trả lời và gắn tag cùng lúc' },
+const ACTION_TYPES: { key: ActionType; labelKey: string; icon: React.ElementType; descKey: string }[] = [
+  { key: 'auto_reply', labelKey: 'auto.type.autoReply', icon: Bot, descKey: 'auto.type.autoReplyDesc' },
+  { key: 'assign_agent', labelKey: 'auto.type.assignAgent', icon: UserPlus, descKey: 'auto.type.assignAgentDesc' },
+  { key: 'tag', labelKey: 'auto.type.tag', icon: Tag, descKey: 'auto.type.tagDesc' },
+  { key: 'auto_reply_assign', labelKey: 'auto.type.replyAssign', icon: Wand2, descKey: 'auto.type.replyAssignDesc' },
+  { key: 'auto_reply_tag', labelKey: 'auto.type.replyTag', icon: Sparkles, descKey: 'auto.type.replyTagDesc' },
 ]
 
 function getActionTypeInfo(type: string) {
-  return ACTION_TYPES.find(t => t.key === type) || ACTION_TYPES[0]
+  return ACTION_TYPES.find(a => a.key === type) || ACTION_TYPES[0]
 }
 
 export default function AutomationPanel() {
+  const { t } = useT()
   const [rules, setRules] = useState<AutomationRule[]>([])
   const [agents, setAgents] = useState<Agent[]>([])
-  const [tags, setTags] = useState<Tag[]>([])
+  const [tags, setTags] = useState<TagType[]>([])
   const [showCreate, setShowCreate] = useState(false)
   const [editing, setEditing] = useState<AutomationRule | null>(null)
   const [loading, setLoading] = useState(true)
@@ -189,9 +191,9 @@ export default function AutomationPanel() {
               <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-lg shadow-orange-500/20">
                 <Zap className="h-5 w-5 text-white" />
               </div>
-              Automation Rules
+              {t('auto.title')}
             </h1>
-            <p className="text-sm text-muted-foreground mt-1">Tự động phản hồi, phân công và gắn tag theo từ khóa</p>
+            <p className="text-sm text-muted-foreground mt-1">{t('auto.subtitle')}</p>
           </div>
           <div className="flex gap-2 flex-shrink-0">
             {rules.length === 0 && (
@@ -206,18 +208,18 @@ export default function AutomationPanel() {
                 }
                 fetchData()
               }} className="text-xs rounded-xl">
-                Tạo mẫu
+                {t('auto.createSample')}
               </Button>
             )}
             <Popover>
               <PopoverTrigger asChild>
                 <Button size="sm" className="text-xs gap-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 shadow-md shadow-orange-500/20">
-                  <Plus className="h-3.5 w-3.5" /> Tạo rule
+                  <Plus className="h-3.5 w-3.5" /> {t('auto.create')}
                 </Button>
               </PopoverTrigger>
               <PopoverContent align="end" className="w-[280px] p-1.5 rounded-xl">
                 <div className="px-2 py-1.5 mb-1">
-                  <p className="text-[11px] font-bold text-muted-foreground/60 uppercase tracking-wider">Loại automation</p>
+                  <p className="text-[11px] font-bold text-muted-foreground/60 uppercase tracking-wider">{t('auto.typeLabel')}</p>
                 </div>
                 <div className="space-y-0.5">
                   {ACTION_TYPES.map((action) => {
@@ -232,8 +234,8 @@ export default function AutomationPanel() {
                           <Icon className="h-3.5 w-3.5 text-primary" />
                         </div>
                         <div className="min-w-0">
-                          <p className="font-semibold">{action.label}</p>
-                          <p className="text-[10px] text-muted-foreground/50 mt-0.5">{action.desc}</p>
+                          <p className="font-semibold">{t(action.labelKey)}</p>
+                          <p className="text-[10px] text-muted-foreground/50 mt-0.5">{t(action.descKey)}</p>
                         </div>
                       </button>
                     )
@@ -249,15 +251,15 @@ export default function AutomationPanel() {
           <div className="grid grid-cols-3 gap-3">
             <div className="glass-card rounded-xl p-3.5 text-center">
               <p className="text-2xl font-bold tabular-nums">{rules.length}</p>
-              <p className="text-[11px] text-muted-foreground/60 mt-0.5 font-medium">Tổng rules</p>
+              <p className="text-[11px] text-muted-foreground/60 mt-0.5 font-medium">{t('auto.total')}</p>
             </div>
             <div className="glass-card rounded-xl p-3.5 text-center">
               <p className="text-2xl font-bold tabular-nums text-emerald-600 dark:text-emerald-400">{enabledCount}</p>
-              <p className="text-[11px] text-muted-foreground/60 mt-0.5 font-medium">Đang bật</p>
+              <p className="text-[11px] text-muted-foreground/60 mt-0.5 font-medium">{t('auto.enabled')}</p>
             </div>
             <div className="glass-card rounded-xl p-3.5 text-center">
               <p className="text-2xl font-bold tabular-nums text-muted-foreground/40">{disabledCount}</p>
-              <p className="text-[11px] text-muted-foreground/60 mt-0.5 font-medium">Đã tắt</p>
+              <p className="text-[11px] text-muted-foreground/60 mt-0.5 font-medium">{t('auto.disabled')}</p>
             </div>
           </div>
         )}
@@ -267,7 +269,7 @@ export default function AutomationPanel() {
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/40" />
             <Input
-              placeholder="Tìm theo tên hoặc từ khóa..."
+              placeholder={t('auto.search')}
               className="pl-9 h-9 text-[13px] rounded-xl glass-input focus-visible:ring-0"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -285,8 +287,8 @@ export default function AutomationPanel() {
             <div className="h-16 w-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-amber-100 to-orange-100 dark:from-amber-950/30 dark:to-orange-950/30 flex items-center justify-center">
               <Zap className="h-7 w-7 text-amber-500" />
             </div>
-            <p className="text-sm font-semibold">Chưa có automation rule nào</p>
-            <p className="text-xs mt-1.5 text-muted-foreground/50 max-w-[280px] mx-auto">Tạo rule để tự động phản hồi, phân công agent và gắn tag khi khớp từ khóa</p>
+            <p className="text-sm font-semibold">{t('auto.empty')}</p>
+            <p className="text-xs mt-1.5 text-muted-foreground/50 max-w-[280px] mx-auto">{t('auto.emptyDesc')}</p>
           </div>
         ) : (
           <div className="space-y-2.5">
@@ -336,7 +338,7 @@ export default function AutomationPanel() {
                       <Switch checked={rule.enabled} onCheckedChange={() => handleToggle(rule)} className="scale-75" />
                       {deleteConfirmId === rule.id ? (
                         <div className="flex items-center gap-0.5 animate-fade-in">
-                          <span className="text-[10px] text-destructive font-medium">Xoá?</span>
+                          <span className="text-[10px] text-destructive font-medium">{t('notes.deleteConfirm')}</span>
                           <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg" onClick={() => handleDelete(rule.id)} disabled={deleting}>
                             {deleting ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5 text-destructive" />}
                           </Button>
@@ -368,32 +370,32 @@ export default function AutomationPanel() {
         <DialogContent className="max-w-md rounded-2xl">
           <DialogHeader>
             <DialogTitle className="text-base flex items-center gap-2">
-              {editing ? 'Sửa' : 'Tạo mới'} Automation Rule
+              {editing ? t('auto.edit') : t('auto.createTitle')} Automation Rule
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-2">
-              <Label className="text-xs font-medium">Tên rule</Label>
-              <Input value={formName} onChange={(e) => setFormName(e.target.value)} placeholder="Ví dụ: Hỏi giá sản phẩm" className="h-9 text-sm rounded-xl glass-input focus-visible:ring-0" />
+              <Label className="text-xs font-medium">{t('auto.ruleName')}</Label>
+              <Input value={formName} onChange={(e) => setFormName(e.target.value)} placeholder={t('auto.ruleNamePlaceholder')} className="h-9 text-sm rounded-xl glass-input focus-visible:ring-0" />
             </div>
             <div className="space-y-2">
-              <Label className="text-xs font-medium">Từ khóa kích hoạt</Label>
-              <Input value={formKeyword} onChange={(e) => setFormKeyword(e.target.value)} placeholder="Ví dụ: giá, khiếu nại, hỗ trợ" className="h-9 text-sm rounded-xl glass-input focus-visible:ring-0" />
+              <Label className="text-xs font-medium">{t('auto.keyword')}</Label>
+              <Input value={formKeyword} onChange={(e) => setFormKeyword(e.target.value)} placeholder={t('auto.keywordPlaceholder')} className="h-9 text-sm rounded-xl glass-input focus-visible:ring-0" />
             </div>
 
             {/* Action type indicator */}
             <div className="space-y-2">
               <Label className="text-xs font-medium flex items-center gap-1.5">
-                <Wand2 className="h-3 w-3" /> Loại hành động
+                <Wand2 className="h-3 w-3" /> {t('auto.actionType')}
               </Label>
               <div className="bg-foreground/[0.03] rounded-xl p-3 flex flex-wrap gap-1.5">
-                {ACTION_TYPES.map((t) => {
-                  const Icon = t.icon
-                  const active = formActionType === t.key
+                {ACTION_TYPES.map((at) => {
+                  const Icon = at.icon
+                  const active = formActionType === at.key
                   return (
                     <button
-                      key={t.key}
-                      onClick={() => setFormActionType(t.key)}
+                      key={at.key}
+                      onClick={() => setFormActionType(at.key)}
                       className={cn(
                         'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all duration-200',
                         active
@@ -401,7 +403,7 @@ export default function AutomationPanel() {
                           : 'text-muted-foreground/70 hover:text-foreground hover:bg-foreground/[0.05]'
                       )}
                     >
-                      <Icon className="h-3 w-3" /> {t.label}
+                      <Icon className="h-3 w-3" /> {t(at.labelKey)}
                     </button>
                   )
                 })}
@@ -411,15 +413,15 @@ export default function AutomationPanel() {
             {/* Conditional fields based on action type */}
             {['auto_reply', 'auto_reply_assign', 'auto_reply_tag'].includes(formActionType) && (
               <div className="space-y-2 animate-fade-in">
-                <Label className="text-xs font-medium flex items-center gap-1.5"><Bot className="h-3 w-3" /> Tin nhắn tự động</Label>
-                <Textarea value={formReply} onChange={(e) => setFormReply(e.target.value)} placeholder="Nội dung tin nhắn tự động..." className="text-sm min-h-[70px] resize-none rounded-xl glass-input focus-visible:ring-0" />
+                <Label className="text-xs font-medium flex items-center gap-1.5"><Bot className="h-3 w-3" /> {t('auto.autoMessage')}</Label>
+                <Textarea value={formReply} onChange={(e) => setFormReply(e.target.value)} placeholder={t('auto.autoMessagePlaceholder')} className="text-sm min-h-[70px] resize-none rounded-xl glass-input focus-visible:ring-0" />
               </div>
             )}
             {['assign_agent', 'auto_reply_assign'].includes(formActionType) && (
               <div className="space-y-2 animate-fade-in">
-                <Label className="text-xs font-medium flex items-center gap-1.5"><UserPlus className="h-3 w-3" /> Phân công cho Agent</Label>
+                <Label className="text-xs font-medium flex items-center gap-1.5"><UserPlus className="h-3 w-3" /> {t('auto.assignToAgent')}</Label>
                 <Select value={formAgent} onValueChange={setFormAgent}>
-                  <SelectTrigger className="h-9 text-sm rounded-xl"><SelectValue placeholder="Chọn agent..." /></SelectTrigger>
+                  <SelectTrigger className="h-9 text-sm rounded-xl"><SelectValue placeholder={t('auto.selectAgent')} /></SelectTrigger>
                   <SelectContent>
                     {agents.map((a) => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
                   </SelectContent>
@@ -428,15 +430,15 @@ export default function AutomationPanel() {
             )}
             {['tag', 'auto_reply_tag'].includes(formActionType) && (
               <div className="space-y-2 animate-fade-in">
-                <Label className="text-xs font-medium flex items-center gap-1.5"><Tag className="h-3 w-3" /> Gắn Tag</Label>
+                <Label className="text-xs font-medium flex items-center gap-1.5"><Tag className="h-3 w-3" /> {t('auto.assignTag')}</Label>
                 <Select value={formTag} onValueChange={setFormTag}>
-                  <SelectTrigger className="h-9 text-sm rounded-xl"><SelectValue placeholder="Chọn tag..." /></SelectTrigger>
+                  <SelectTrigger className="h-9 text-sm rounded-xl"><SelectValue placeholder={t('auto.selectTag')} /></SelectTrigger>
                   <SelectContent>
-                    {tags.map((t) => (
-                      <SelectItem key={t.id} value={t.id}>
+                    {tags.map((tg) => (
+                      <SelectItem key={tg.id} value={tg.id}>
                         <div className="flex items-center gap-2">
-                          <div className="h-2 w-2 rounded-full" style={{ backgroundColor: t.color }} />
-                          {t.name}
+                          <div className="h-2 w-2 rounded-full" style={{ backgroundColor: tg.color }} />
+                          {tg.name}
                         </div>
                       </SelectItem>
                     ))}
@@ -446,10 +448,10 @@ export default function AutomationPanel() {
             )}
           </div>
           <DialogFooter className="gap-2">
-            <Button variant="outline" size="sm" onClick={resetForm} className="rounded-xl">Huỷ</Button>
+            <Button variant="outline" size="sm" onClick={resetForm} className="rounded-xl">{t('auto.cancel')}</Button>
             <Button size="sm" onClick={handleSave} disabled={!formName.trim() || !formKeyword.trim() || saving} className="rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600">
               {saving ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : null}
-              {editing ? 'Cập nhật' : 'Tạo rule'}
+              {editing ? t('auto.update') : t('auto.create')}
             </Button>
           </DialogFooter>
         </DialogContent>

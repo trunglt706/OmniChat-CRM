@@ -12,18 +12,20 @@ import { cn } from '@/lib/utils'
 import {
   User, Mail, Phone, Briefcase, MessageSquare, Camera, Check, X, Shield, Clock,
 } from 'lucide-react'
+import { useT } from '@/i18n/useT'
 
 const GRADIENT_CLASSES = ['avatar-gradient-1', 'avatar-gradient-2', 'avatar-gradient-3', 'avatar-gradient-4', 'avatar-gradient-5', 'avatar-gradient-6']
 
-const STATUS_OPTIONS: { value: UserProfile['status']; label: string; color: string }[] = [
-  { value: 'online', label: 'Truc tuyen', color: 'bg-emerald-500' },
-  { value: 'busy', label: 'Ban', color: 'bg-amber-500' },
-  { value: 'away', label: 'Vang mat', color: 'bg-orange-400' },
-  { value: 'offline', label: 'Ngoai tuyen', color: 'bg-gray-400' },
+const STATUS_OPTIONS: { value: UserProfile['status']; labelKey: string; color: string }[] = [
+  { value: 'online', labelKey: 'profile.status.online', color: 'bg-emerald-500' },
+  { value: 'busy', labelKey: 'profile.status.busy', color: 'bg-amber-500' },
+  { value: 'away', labelKey: 'profile.status.away', color: 'bg-orange-400' },
+  { value: 'offline', labelKey: 'profile.status.offline', color: 'bg-gray-400' },
 ]
 
 export default function ProfilePanel() {
   const { currentUser, setCurrentUser, settings, setOpenSheet } = useCRMStore()
+  const { t } = useT()
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState({ name: '', email: '', phone: '', bio: '' })
   const fileRef = useRef<HTMLInputElement>(null)
@@ -57,7 +59,7 @@ export default function ProfilePanel() {
   return (
     <div className="flex flex-col h-full min-h-0 animate-slide-up">
       <div className="px-5 pt-5 pb-3">
-        <h2 className="text-base font-bold tracking-tight">Ho so cua toi</h2>
+        <h2 className="text-base font-bold tracking-tight">{t('profile.title')}</h2>
       </div>
       <Separator className="opacity-40" />
 
@@ -86,7 +88,7 @@ export default function ProfilePanel() {
                 <p className="text-xs text-muted-foreground/60 mt-1 font-medium">{currentUser.email}</p>
                 <span className="inline-flex items-center gap-1.5 mt-2 text-[11px] font-medium px-2.5 py-1 rounded-full bg-foreground/[0.04] text-muted-foreground/70">
                   <Shield className="h-3 w-3" />
-                  {currentUser.role === 'admin' ? 'Quan tri vien' : currentUser.role === 'agent' ? 'Nhan vien' : currentUser.role}
+                  {currentUser.role === 'admin' ? t('user.role.admin') : currentUser.role === 'agent' ? t('user.role.agent') : currentUser.role}
                 </span>
               </div>
             ) : null}
@@ -105,7 +107,7 @@ export default function ProfilePanel() {
                   )}
                 >
                   <span className={cn('h-2 w-2 rounded-full', opt.color, currentUser.status === opt.value && 'shadow-sm')} />
-                  {opt.label}
+                  {t(opt.labelKey)}
                 </button>
               ))}
             </div>
@@ -115,12 +117,12 @@ export default function ProfilePanel() {
         {/* Profile form */}
         <div className="space-y-4">
           <h4 className="text-[10px] font-bold text-muted-foreground/40 uppercase tracking-[0.15em] px-1">
-            Thong tin ca nhan
+            {t('profile.personalInfo')}
           </h4>
 
           <div className="space-y-3">
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-muted-foreground/70">Ten hien thi</Label>
+              <Label className="text-xs font-medium text-muted-foreground/70">{t('profile.displayName')}</Label>
               <Input
                 value={form.name}
                 onChange={(e) => setForm(f => ({ ...f, name: e.target.value }))}
@@ -139,7 +141,7 @@ export default function ProfilePanel() {
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-muted-foreground/70">So dien thoai</Label>
+              <Label className="text-xs font-medium text-muted-foreground/70">{t('profile.phoneNumber')}</Label>
               <Input
                 value={form.phone}
                 onChange={(e) => setForm(f => ({ ...f, phone: e.target.value }))}
@@ -148,7 +150,7 @@ export default function ProfilePanel() {
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-muted-foreground/70">Tieu su</Label>
+              <Label className="text-xs font-medium text-muted-foreground/70">{t('profile.bio')}</Label>
               <Textarea
                 value={form.bio}
                 onChange={(e) => setForm(f => ({ ...f, bio: e.target.value }))}
@@ -164,7 +166,7 @@ export default function ProfilePanel() {
               onClick={() => setEditing(true)}
               className="w-full h-10 rounded-xl text-sm font-medium"
             >
-              Chinh sua thong tin
+              {t('profile.editInfo')}
             </Button>
           ) : (
             <div className="flex gap-2">
@@ -173,13 +175,13 @@ export default function ProfilePanel() {
                 onClick={handleCancel}
                 className="flex-1 h-10 rounded-xl text-sm font-medium"
               >
-                <X className="h-4 w-4 mr-1.5" /> Huy
+                <X className="h-4 w-4 mr-1.5" /> {t('profile.cancel')}
               </Button>
               <Button
                 onClick={handleSave}
                 className="flex-1 h-10 rounded-xl text-sm font-medium bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600"
               >
-                <Check className="h-4 w-4 mr-1.5" /> Luu
+                <Check className="h-4 w-4 mr-1.5" /> {t('profile.save')}
               </Button>
             </div>
           )}
@@ -188,14 +190,14 @@ export default function ProfilePanel() {
         {/* Stats card */}
         <div className="space-y-2">
           <h4 className="text-[10px] font-bold text-muted-foreground/40 uppercase tracking-[0.15em] px-1">
-            Thong ke hoat dong
+            {t('profile.stats.title')}
           </h4>
           <div className="grid grid-cols-2 gap-2">
             {[
-              { label: 'Hoi thoai hom nay', value: '12', icon: MessageSquare },
-              { label: 'TB trung binh phan hoi', value: '2m 30s', icon: Clock },
-              { label: 'Danh gia tb', value: '4.8/5', icon: Shield },
-              { label: 'Tong hoi thoai', value: '1,247', icon: User },
+              { label: t('profile.stat.conversationsToday'), value: '12', icon: MessageSquare },
+              { label: t('profile.stat.avgResponse'), value: '2m 30s', icon: Clock },
+              { label: t('profile.stat.avgRating'), value: '4.8/5', icon: Shield },
+              { label: t('profile.stat.totalConversations'), value: '1,247', icon: User },
             ].map((stat) => (
               <div key={stat.label} className="bg-foreground/[0.02] rounded-xl p-3">
                 <stat.icon className="h-4 w-4 text-muted-foreground/40 mb-1.5" />

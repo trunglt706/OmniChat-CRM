@@ -26,6 +26,7 @@ import { cn } from '@/lib/utils'
 import {
   Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
 } from '@/components/ui/tooltip'
+import { useT } from '@/i18n/useT'
 
 const EMOJI_LIST = [
   '😀','😂','🥰','😍','🤩','😎','🤔','😮','😢','😤',
@@ -199,6 +200,8 @@ export default function ChatArea() {
   const isBotTyping = useCRMStore((s) => s.isBotTyping)
   const setMobileView = useCRMStore((s) => s.setMobileView)
   const showRightPanel = useCRMStore((s) => s.showRightPanel)
+
+  const { t } = useT()
 
   const [replyText, setReplyText] = useState('')
   const [isFocused, setIsFocused] = useState(false)
@@ -548,8 +551,8 @@ export default function ChatArea() {
           <div className="h-20 w-20 mx-auto mb-5 rounded-3xl bg-gradient-to-br from-primary/10 to-primary/5 flex items-center justify-center shadow-lg shadow-primary/5">
             <Send className="h-9 w-9 text-primary/30" />
           </div>
-          <p className="text-sm font-semibold text-foreground/40">Chon mot hoi thoai de bat dau</p>
-          <p className="text-xs mt-1.5 text-muted-foreground/35">Chon tu danh sach ben trai de xem chi tiet</p>
+          <p className="text-sm font-semibold text-foreground/40">{t('chat.empty')}</p>
+          <p className="text-xs mt-1.5 text-muted-foreground/35">{t('chat.emptyDesc')}</p>
         </div>
       </div>
     )
@@ -635,7 +638,7 @@ export default function ChatArea() {
               >
                 <UserPlus className="h-3 w-3" />
                 <span className="hidden sm:inline max-w-[80px] truncate">
-                  {convo.owner ? convo.owner.name.split(' ').slice(-1)[0] : 'Phân công'}
+                  {convo.owner ? convo.owner.name.split(' ').slice(-1)[0] : t('chat.assignTo')}
                 </span>
                 {convo.owner && (
                   <span className={cn(
@@ -647,7 +650,7 @@ export default function ChatArea() {
             </PopoverTrigger>
             <PopoverContent align="end" className="w-[220px] p-1.5 rounded-xl">
               <div className="px-2 py-1.5 mb-1">
-                <p className="text-[11px] font-bold text-muted-foreground/60 uppercase tracking-wider">Phân công cho</p>
+                <p className="text-[11px] font-bold text-muted-foreground/60 uppercase tracking-wider">{t('chat.assignTo')}</p>
               </div>
               <div className="space-y-0.5 max-h-[240px] overflow-y-auto">
                 <button
@@ -659,8 +662,8 @@ export default function ChatArea() {
                     <XCircle className="h-3 w-3 text-muted-foreground/50" />
                   </div>
                   <div className="min-w-0">
-                    <p className="font-medium">Bỏ phân công</p>
-                    <p className="text-[10px] text-muted-foreground/50">Trả về hàng đợi</p>
+                    <p className="font-medium">{t('chat.unassign')}</p>
+                    <p className="text-[10px] text-muted-foreground/50">{t('chat.returnToQueue')}</p>
                   </div>
                 </button>
                 {assignLoading && <div className="flex justify-center py-2"><Loader2 className="h-4 w-4 animate-spin text-primary" /></div>}
@@ -718,7 +721,7 @@ export default function ChatArea() {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-52 rounded-xl p-1">
               <DropdownMenuSeparator />
-              <DropdownMenuLabel className="text-xs px-2 py-1.5">Thay doi trang thai</DropdownMenuLabel>
+              <DropdownMenuLabel className="text-xs px-2 py-1.5">{t('chat.changeStatus')}</DropdownMenuLabel>
               {Object.entries(STATUS_CONFIG).map(([key, cfg]) => (
                 <DropdownMenuItem key={key} onClick={() => handleStatusChange(key)} className="rounded-lg text-xs py-2">
                   <CheckCircle className="h-3.5 w-3.5 mr-2" /> {cfg.label}
@@ -738,7 +741,7 @@ export default function ChatArea() {
         {isLoadingMoreMessages && (
           <div className="flex items-center justify-center py-3">
             <Loader2 className="h-4 w-4 animate-spin text-muted-foreground/50" />
-            <span className="text-[11px] text-muted-foreground/50 ml-2">Dang tai tin nhan cu...</span>
+            <span className="text-[11px] text-muted-foreground/50 ml-2">{t('chat.loadingMore')}</span>
           </div>
         )}
 
@@ -749,7 +752,7 @@ export default function ChatArea() {
               className="w-full flex items-center justify-center gap-1.5 py-2 text-[11px] text-muted-foreground/50 hover:text-muted-foreground/70 transition-colors"
             >
               <ChevronUp className="h-3.5 w-3.5" />
-              Tai them tin nhan
+              {t('chat.loadMore')}
             </button>
           )}
           {messages.map((msg, idx) => {
@@ -859,7 +862,7 @@ export default function ChatArea() {
                         <Paperclip className="h-4 w-4" />
                       </Button>
                     </TooltipTrigger>
-                    <TooltipContent>Dinh kem tep</TooltipContent>
+                    <TooltipContent>{t('chat.attachFile')}</TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
                 <TooltipProvider>
@@ -870,7 +873,7 @@ export default function ChatArea() {
                         <ImagePlus className="h-4 w-4" />
                       </Button>
                     </TooltipTrigger>
-                    <TooltipContent>Gui hinh anh</TooltipContent>
+                    <TooltipContent>{t('chat.sendImage')}</TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
                 <input ref={fileInputRef} type="file" className="hidden" multiple onChange={(e) => handleFileSelect(e, 'file')} />
@@ -883,7 +886,7 @@ export default function ChatArea() {
                 onKeyDown={handleKeyDown}
                 onFocus={() => setIsFocused(true)}
                 onBlur={() => setIsFocused(false)}
-                placeholder="Nhap tin nhan..."
+                placeholder={t('chat.placeholder')}
                 className="min-h-[40px] max-h-[120px] resize-none text-[13px] border-0 bg-transparent shadow-none focus-visible:ring-0 focus-visible:border-0 p-2"
                 rows={1}
               />
@@ -925,7 +928,7 @@ export default function ChatArea() {
               </div>
             </div>
             <p className="text-[10px] text-muted-foreground/30 text-center mt-1.5 font-medium">
-              Enter de gui · Shift+Enter xuong dong
+              {t('chat.sendHint')}
             </p>
           </div>
         </div>
@@ -933,10 +936,10 @@ export default function ChatArea() {
         <div className="composer-area p-4 flex-shrink-0">
           <div className="max-w-3xl mx-auto flex items-center justify-between">
             <span className="text-xs text-muted-foreground/60">
-              Hoi thoai da {convo.status === 'resolved' ? 'duoc giai quyet' : convo.status === 'closed' ? 'dong' : 'danh dau spam'}
+              {convo.status === 'resolved' ? t('chat.resolved') : convo.status === 'closed' ? t('chat.closed') : t('chat.spam')}
             </span>
             <Button variant="outline" size="sm" className="text-xs h-8 rounded-xl font-medium hover:bg-primary hover:text-primary-foreground transition-all duration-200" onClick={() => handleStatusChange('open')}>
-              Mo lai
+              {t('chat.reopen')}
             </Button>
           </div>
         </div>

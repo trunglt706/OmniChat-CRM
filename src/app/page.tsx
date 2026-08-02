@@ -30,14 +30,19 @@ import {
   Settings, PanelRightClose, PanelRightOpen,
   Headphones, LogOut, User, ChevronDown, Moon, Sun,
   Inbox, LayoutDashboard, Zap,
-  Loader2, Activity, Bell,
+  Loader2, Activity, Bell, Globe,
 } from 'lucide-react'
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select'
 import { useTheme } from 'next-themes'
 import { cn } from '@/lib/utils'
 import { signOut } from 'next-auth/react'
+import { useT } from '@/i18n/useT'
+import { LOCALE_LABELS, LOCALES, type Locale } from '@/i18n/translations'
 
 function Header() {
   const { theme, setTheme } = useTheme()
@@ -52,16 +57,19 @@ function Header() {
   const notifications = useCRMStore((s) => s.notifications)
   const openSheet = useCRMStore((s) => s.openSheet)
   const setOpenSheet = useCRMStore((s) => s.setOpenSheet)
+  const settings = useCRMStore((s) => s.settings)
+  const updateSettings = useCRMStore((s) => s.updateSettings)
   const [simLoading, setSimLoading] = useState(false)
   const [showLogoutDialog, setShowLogoutDialog] = useState(false)
   const [loggingOut, setLoggingOut] = useState(false)
+  const { t } = useT()
 
   const unreadNotifCount = notifications.filter(n => !n.read).length
 
   const navItems: { key: 'inbox' | 'dashboard' | 'automation'; label: string; icon: React.ElementType }[] = [
-    { key: 'inbox', label: 'Inbox', icon: Inbox },
-    { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { key: 'automation', label: 'Automation', icon: Zap },
+    { key: 'inbox', label: t('nav.inbox'), icon: Inbox },
+    { key: 'dashboard', label: t('nav.dashboard'), icon: LayoutDashboard },
+    { key: 'automation', label: t('nav.automation'), icon: Zap },
   ]
 
   const toggleSimulation = async () => {
@@ -86,6 +94,8 @@ function Header() {
       window.location.href = '/login'
     }
   }
+
+  const roleLabel = currentUser?.role === 'admin' ? t('user.role.admin') : currentUser?.role === 'supervisor' ? t('user.role.supervisor') : currentUser?.role === 'agent' ? t('user.role.agent') : currentUser?.role || 'Agent'
 
   return (
     <header className="h-12 md:h-14 border-b border-border/30 glass flex items-center justify-between px-2 md:px-4 flex-shrink-0 z-50">
@@ -115,8 +125,7 @@ function Header() {
                   active
                     ? 'text-primary-foreground'
                     : 'text-muted-foreground/70 hover:text-foreground hover:bg-foreground/[0.03]'
-                )}
-              >
+                )}>
                 {active && (
                   <span className="absolute inset-0 rounded-lg bg-gradient-to-r from-indigo-500 to-violet-500 shadow-md shadow-indigo-500/25 animate-scale-in" />
                 )}
@@ -137,6 +146,21 @@ function Header() {
       </div>
 
       <div className="flex items-center gap-0.5 md:gap-1 flex-shrink-0">
+        {/* Language switcher */}
+        <Select value={settings.language} onValueChange={(v) => updateSettings({ language: v as Locale })}>
+          <SelectTrigger className="h-7 w-16 md:w-20 rounded-lg text-[11px] gap-1 border-0 bg-transparent hover:bg-foreground/[0.04] focus:ring-0 px-1.5">
+            <Globe className="h-3 w-3 text-muted-foreground/50" />
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {LOCALES.map((loc) => (
+              <SelectItem key={loc} value={loc} className="text-xs">
+                {LOCALE_LABELS[loc]}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
         {/* Simulation toggle */}
         <TooltipProvider>
           <Tooltip>
@@ -151,12 +175,11 @@ function Header() {
                     : 'text-muted-foreground/60 hover:text-foreground hover:bg-foreground/5'
                 )}
                 onClick={toggleSimulation}
-                disabled={simLoading}
-              >
+                disabled={simLoading}>
                 {simLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Activity className="h-4 w-4" />}
               </Button>
             </TooltipTrigger>
-            <TooltipContent>{simulationRunning ? 'Dung mo phong' : 'Bat dau mo phong realtime'}</TooltipContent>
+            <TooltipContent>{simulationRunning ? t('tooltip.stopSimulation') : t('tooltip.startSimulation')}</TooltipContent>
           </Tooltip>
         </TooltipProvider>
 
@@ -168,8 +191,7 @@ function Header() {
                 variant="ghost"
                 size="icon"
                 className="relative h-8 w-8 rounded-xl text-muted-foreground/60 hover:text-foreground hover:bg-foreground/5 transition-all duration-200"
-                onClick={() => setOpenSheet('notifications')}
-              >
+                onClick={() => setOpenSheet('notifications')}>
                 <Bell className="h-4 w-4" />
                 {unreadNotifCount > 0 && (
                   <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-gradient-to-r from-rose-500 to-pink-500 text-white text-[9px] font-bold flex items-center justify-center shadow-sm shadow-rose-500/30 animate-scale-bounce">
@@ -178,7 +200,7 @@ function Header() {
                 )}
               </Button>
             </TooltipTrigger>
-            <TooltipContent>Thong bao</TooltipContent>
+            <TooltipContent>{t('tooltip.notifications')}</TooltipContent>
           </Tooltip>
         </TooltipProvider>
 
@@ -190,7 +212,7 @@ function Header() {
                 {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
               </Button>
             </TooltipTrigger>
-            <TooltipContent>{theme === 'dark' ? 'Light mode' : 'Dark mode'}</TooltipContent>
+            <TooltipContent>{theme === 'dark' ? t('tooltip.lightMode') : t('tooltip.darkMode')}</TooltipContent>
           </Tooltip>
         </TooltipProvider>
 
@@ -202,7 +224,7 @@ function Header() {
                   {showRightPanel ? <PanelRightClose className="h-4 w-4" /> : <PanelRightOpen className="h-4 w-4" />}
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>Thong tin khach hang</TooltipContent>
+              <TooltipContent>{t('tooltip.customerPanel')}</TooltipContent>
             </Tooltip>
           </TooltipProvider>
         )}
@@ -227,7 +249,7 @@ function Header() {
               </div>
               <div className="hidden sm:flex flex-col items-start">
                 <span className="text-xs font-semibold leading-tight">{currentUser?.name || 'User'}</span>
-                <span className="text-[10px] text-muted-foreground/50 leading-tight font-medium">{currentUser?.role === 'admin' ? 'Quan tri vien' : currentUser?.role || 'Agent'}</span>
+                <span className="text-[10px] text-muted-foreground/50 leading-tight font-medium">{roleLabel}</span>
               </div>
               <ChevronDown className="h-3 w-3 text-muted-foreground/40" />
             </Button>
@@ -239,17 +261,16 @@ function Header() {
             </div>
             <DropdownMenuSeparator />
             <DropdownMenuItem className="rounded-lg text-xs py-2.5" onClick={() => window.location.href = '/settings?tab=profile'}>
-              <User className="h-3.5 w-3.5 mr-2.5" /> Ho so cua toi
+              <User className="h-3.5 w-3.5 mr-2.5" /> {t('user.profile')}
             </DropdownMenuItem>
             <DropdownMenuItem className="rounded-lg text-xs py-2.5" onClick={() => window.location.href = '/settings?tab=system'}>
-              <Settings className="h-3.5 w-3.5 mr-2.5" /> Cai dat
+              <Settings className="h-3.5 w-3.5 mr-2.5" /> {t('user.settings')}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem
               className="rounded-lg text-xs py-2.5 text-destructive focus:text-destructive"
-              onClick={() => setShowLogoutDialog(true)}
-            >
-              <LogOut className="h-3.5 w-3.5 mr-2.5" /> Dang xuat
+              onClick={() => setShowLogoutDialog(true)}>
+              <LogOut className="h-3.5 w-3.5 mr-2.5" /> {t('user.logout')}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -258,20 +279,19 @@ function Header() {
         <AlertDialog open={showLogoutDialog} onOpenChange={setShowLogoutDialog}>
           <AlertDialogContent className="rounded-2xl max-w-sm">
             <AlertDialogHeader>
-              <AlertDialogTitle className="text-base">Xac nhan dang xuat</AlertDialogTitle>
+              <AlertDialogTitle className="text-base">{t('logout.title')}</AlertDialogTitle>
               <AlertDialogDescription className="text-sm text-muted-foreground/70">
-                Ban co chac chan muon dang xuat khong? Cac hoi thoai chua xu ly se van duoc giu nguyen.
+                {t('logout.description')}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter className="gap-2">
-              <AlertDialogCancel className="rounded-xl h-9 text-xs font-medium" disabled={loggingOut}>Huy</AlertDialogCancel>
+              <AlertDialogCancel className="rounded-xl h-9 text-xs font-medium" disabled={loggingOut}>{t('logout.cancel')}</AlertDialogCancel>
               <AlertDialogAction
                 onClick={handleLogout}
                 disabled={loggingOut}
-                className="rounded-xl h-9 text-xs font-medium bg-destructive hover:bg-destructive/90"
-              >
+                className="rounded-xl h-9 text-xs font-medium bg-destructive hover:bg-destructive/90">
                 {loggingOut ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <LogOut className="h-3.5 w-3.5 mr-1.5" />}
-                Dang xuat
+                {t('logout.confirm')}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
@@ -283,13 +303,14 @@ function Header() {
 
 function MobileCustomerPanel() {
   const { setMobileView } = useCRMStore()
+  const { t } = useT()
   return (
     <div className="md:hidden flex flex-col h-full min-h-0">
       <div className="px-3 py-2.5 border-b border-border/30 glass flex items-center gap-2 flex-shrink-0">
         <Button variant="ghost" size="icon" className="h-8 w-8 rounded-xl" onClick={() => setMobileView('chat')}>
           <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
         </Button>
-        <span className="font-semibold text-sm">Thong tin khach hang</span>
+        <span className="font-semibold text-sm">{t('tooltip.customerPanel')}</span>
       </div>
       <div className="flex-1 min-h-0 overflow-hidden"><CustomerPanel /></div>
     </div>
@@ -306,6 +327,7 @@ export default function CRMPage() {
   const openSheet = useCRMStore((s) => s.openSheet)
   const setOpenSheet = useCRMStore((s) => s.setOpenSheet)
   const simulationRunning = useCRMStore((s) => s.simulationRunning)
+  const { t } = useT()
 
   // Load settings from localStorage on mount
   useEffect(() => {
@@ -326,8 +348,8 @@ export default function CRMPage() {
     setTimeout(() => {
       addNotification({
         type: 'system',
-        title: 'Chao mung ban quay lai!',
-        body: 'OmniChat CRM san sang phuc vu ban.',
+        title: t('welcome.title'),
+        body: t('welcome.body'),
       })
     }, 1500)
   }, [])
@@ -350,8 +372,8 @@ export default function CRMPage() {
           incrementUnread(msg.conversationId)
           addNotification({
             type: 'new_message',
-            title: 'Tin nhan moi',
-            body: 'Ban co tin nhan moi tu khach hang',
+            title: t('notif.newMessage'),
+            body: t('notif.newMessageBody'),
             conversationId: msg.conversationId,
           })
         }

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useCRMStore } from '@/store/crm-store'
+import { useT } from '@/i18n/useT'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -59,6 +60,7 @@ function InfoRow({ icon: Icon, label, value }: { icon: React.ElementType; label:
 
 function InfoTab() {
   const { conversationDetail } = useCRMStore()
+  const { t } = useT()
   if (!conversationDetail) return null
 
   const customer = conversationDetail.customer
@@ -79,7 +81,7 @@ function InfoTab() {
           <div className="min-w-0 flex-1">
             <h3 className="font-bold text-[15px] truncate tracking-tight">{customer.name}</h3>
             <p className="text-[11px] text-muted-foreground/50 mt-0.5 font-medium">
-              Khách hàng từ {new Date(customer.createdAt).toLocaleDateString('vi-VN')}
+              {t('panel.customerSince', { date: new Date(customer.createdAt).toLocaleDateString('vi-VN') })}
             </p>
           </div>
         </div>
@@ -87,20 +89,20 @@ function InfoTab() {
 
       {/* Contact info - grid of info rows */}
       <div className="space-y-1">
-        <h4 className="text-[10px] font-bold text-muted-foreground/40 uppercase tracking-[0.15em] px-1 mb-2">Liên hệ</h4>
+        <h4 className="text-[10px] font-bold text-muted-foreground/40 uppercase tracking-[0.15em] px-1 mb-2">{t('panel.contact')}</h4>
         <div className="space-y-0.5">
-          {customer.phone && <InfoRow icon={Phone} label="Điện thoại" value={customer.phone} />}
-          {customer.email && <InfoRow icon={Mail} label="Email" value={customer.email} />}
-          {customer.company && <InfoRow icon={Building} label="Công ty" value={customer.company} />}
-          {customer.address && <InfoRow icon={MapPin} label="Địa chỉ" value={customer.address} />}
-          {customer.birthday && <InfoRow icon={Calendar} label="Ngày sinh" value={customer.birthday} />}
+          {customer.phone && <InfoRow icon={Phone} label={t('panel.phone')} value={customer.phone} />}
+          {customer.email && <InfoRow icon={Mail} label={t('panel.email')} value={customer.email} />}
+          {customer.company && <InfoRow icon={Building} label={t('panel.company')} value={customer.company} />}
+          {customer.address && <InfoRow icon={MapPin} label={t('panel.address')} value={customer.address} />}
+          {customer.birthday && <InfoRow icon={Calendar} label={t('panel.birthday')} value={customer.birthday} />}
         </div>
       </div>
 
       {/* Platform identities */}
       {identities.length > 0 && (
         <div className="space-y-2">
-          <h4 className="text-[10px] font-bold text-muted-foreground/40 uppercase tracking-[0.15em] px-1">Tài khoản liên kết</h4>
+          <h4 className="text-[10px] font-bold text-muted-foreground/40 uppercase tracking-[0.15em] px-1">{t('panel.linkedAccounts')}</h4>
           <div className="space-y-1.5">
             {identities.map((identity, idx) => (
               <PlatformBadge
@@ -117,7 +119,7 @@ function InfoTab() {
       {/* Tags */}
       {conversationDetail.tags.length > 0 && (
         <div className="space-y-2">
-          <h4 className="text-[10px] font-bold text-muted-foreground/40 uppercase tracking-[0.15em] px-1">Tags</h4>
+          <h4 className="text-[10px] font-bold text-muted-foreground/40 uppercase tracking-[0.15em] px-1">{t('panel.tags')}</h4>
           <div className="flex flex-wrap gap-1.5">
             {conversationDetail.tags.map((ct) => (
               <Badge
@@ -136,7 +138,7 @@ function InfoTab() {
       {/* Note from customer profile */}
       {customer.note && (
         <div className="space-y-2">
-          <h4 className="text-[10px] font-bold text-muted-foreground/40 uppercase tracking-[0.15em] px-1">Ghi chú</h4>
+          <h4 className="text-[10px] font-bold text-muted-foreground/40 uppercase tracking-[0.15em] px-1">{t('panel.note')}</h4>
           <div className="bg-foreground/[0.02] rounded-xl p-3 text-xs text-muted-foreground/70 leading-relaxed border border-foreground/[0.04]">
             {customer.note}
           </div>
@@ -148,6 +150,7 @@ function InfoTab() {
 
 function NotesTab() {
   const { selectedConversationId, conversationDetail, notes, setNotes, addNote, updateNote, deleteNote } = useCRMStore()
+  const { t } = useT()
   const [newNote, setNewNote] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -275,11 +278,11 @@ function NotesTab() {
             />
             <div className="flex gap-1.5 justify-end">
               <Button variant="ghost" size="sm" className="h-7 text-[11px] rounded-lg" onClick={handleCancelEdit}>
-                <Ban className="h-3 w-3 mr-1" /> Huỷ
+                <Ban className="h-3 w-3 mr-1" /> {t('notes.cancel')}
               </Button>
               <Button size="sm" className="h-7 text-[11px] rounded-lg bg-gradient-to-r from-indigo-500 to-violet-500" onClick={handleSaveEdit} disabled={!editContent.trim() || isLoading}>
                 {isLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3 mr-1" />}
-                Lưu
+                {t('notes.save')}
               </Button>
             </div>
           </div>
@@ -287,7 +290,7 @@ function NotesTab() {
           <>
             {note.isPinned && (
               <div className="flex items-center gap-1 text-[10px] text-amber-600 dark:text-amber-400 font-bold uppercase tracking-wider mb-1.5">
-                <Pin className="h-2.5 w-2.5" /> Đã ghim
+                <Pin className="h-2.5 w-2.5" /> {t('notes.pinned')}
               </div>
             )}
             <p className="text-[13px] leading-relaxed text-foreground/80 whitespace-pre-wrap">{note.content}</p>
@@ -296,7 +299,7 @@ function NotesTab() {
               <div className={cn('flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200', deleteConfirmId === note.id && 'opacity-100')}>
                 {deleteConfirmId === note.id ? (
                   <>
-                    <span className="text-[10px] text-destructive font-medium mr-1">Xoá?</span>
+                    <span className="text-[10px] text-destructive font-medium mr-1">{t('notes.deleteConfirm')}</span>
                     <Button variant="ghost" size="icon" className="h-6 w-6 rounded-lg" onClick={() => handleDelete(note.id)} disabled={isLoading}>
                       {isLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3 text-destructive" />}
                     </Button>
@@ -306,13 +309,13 @@ function NotesTab() {
                   </>
                 ) : (
                   <>
-                    <Button variant="ghost" size="icon" className="h-6 w-6 rounded-lg hover:bg-amber-100 dark:hover:bg-amber-950/40" onClick={() => handleTogglePin(note)} disabled={isLoading} title={note.isPinned ? 'Bỏ ghim' : 'Ghim'}>
+                    <Button variant="ghost" size="icon" className="h-6 w-6 rounded-lg hover:bg-amber-100 dark:hover:bg-amber-950/40" onClick={() => handleTogglePin(note)} disabled={isLoading} title={note.isPinned ? t('notes.unpin') : t('notes.pin')}>
                       {note.isPinned ? <PinOff className="h-3 w-3 text-amber-500" /> : <Pin className="h-3 w-3 text-muted-foreground/50" />}
                     </Button>
-                    <Button variant="ghost" size="icon" className="h-6 w-6 rounded-lg" onClick={() => handleEdit(note)} disabled={isLoading} title="Sửa">
+                    <Button variant="ghost" size="icon" className="h-6 w-6 rounded-lg" onClick={() => handleEdit(note)} disabled={isLoading} title={t('notes.edit')}>
                       <Pencil className="h-3 w-3" />
                     </Button>
-                    <Button variant="ghost" size="icon" className="h-6 w-6 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/40" onClick={() => setDeleteConfirmId(note.id)} disabled={isLoading} title="Xoá">
+                    <Button variant="ghost" size="icon" className="h-6 w-6 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/40" onClick={() => setDeleteConfirmId(note.id)} disabled={isLoading} title={t('notes.delete')}>
                       <Trash2 className="h-3 w-3 text-muted-foreground/50 hover:text-destructive" />
                     </Button>
                   </>
@@ -337,7 +340,7 @@ function NotesTab() {
       )}
       <div className="space-y-2">
         {regularNotes.length > 0 && pinnedNotes.length > 0 && (
-          <h4 className="text-[10px] font-bold text-muted-foreground/40 uppercase tracking-[0.15em] px-1">Tất cả</h4>
+          <h4 className="text-[10px] font-bold text-muted-foreground/40 uppercase tracking-[0.15em] px-1">{t('notes.all')}</h4>
         )}
         {regularNotes.map((note, idx) => renderNoteCard(note, idx))}
       </div>
@@ -346,15 +349,15 @@ function NotesTab() {
           <div className="h-12 w-12 rounded-xl bg-foreground/[0.02] flex items-center justify-center mb-3">
             <MessageCircle className="h-5 w-5" />
           </div>
-          <p className="text-xs font-medium">Chưa có ghi chú nào</p>
-          <p className="text-[10px] mt-0.5 text-muted-foreground/30">Thêm ghi chú nội bộ về hội thoại</p>
+          <p className="text-xs font-medium">{t('notes.empty')}</p>
+          <p className="text-[10px] mt-0.5 text-muted-foreground/30">{t('notes.emptyDesc')}</p>
         </div>
       )}
       <div className="space-y-2.5 pt-3 border-t border-border/30">
-        <Textarea value={newNote} onChange={(e) => setNewNote(e.target.value)} placeholder="Thêm ghi chú nội bộ..." className="text-[13px] min-h-[70px] resize-none rounded-xl glass-input focus-visible:ring-0" />
+        <Textarea value={newNote} onChange={(e) => setNewNote(e.target.value)} placeholder={t('notes.placeholder')} className="text-[13px] min-h-[70px] resize-none rounded-xl glass-input focus-visible:ring-0" />
         <Button onClick={handleAddNote} disabled={!newNote.trim() || isSubmitting} size="sm" className={cn('w-full text-xs h-9 rounded-xl font-medium transition-all duration-200', newNote.trim() && 'bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600 shadow-md shadow-indigo-500/20')}>
           {isSubmitting ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Plus className="h-3.5 w-3.5 mr-1.5" />}
-          Thêm ghi chú
+          {t('notes.add')}
         </Button>
       </div>
     </div>
@@ -363,6 +366,7 @@ function NotesTab() {
 
 function LeadTab() {
   const { conversationDetail } = useCRMStore()
+  const { t } = useT()
   if (!conversationDetail) return null
 
   const leads = conversationDetail.leads || []
@@ -373,8 +377,8 @@ function LeadTab() {
         <div className="h-16 w-16 rounded-2xl bg-foreground/[0.02] flex items-center justify-center mb-4">
           <Target className="h-7 w-7" />
         </div>
-        <p className="text-sm font-medium">Chưa có Lead nào</p>
-        <p className="text-[11px] mt-1 text-muted-foreground/30">Lead sẽ xuất hiện khi được tạo</p>
+        <p className="text-sm font-medium">{t('lead.empty')}</p>
+        <p className="text-[11px] mt-1 text-muted-foreground/30">{t('lead.emptyDesc')}</p>
       </div>
     )
   }
@@ -397,11 +401,11 @@ function LeadTab() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="bg-foreground/[0.02] rounded-lg p-2.5">
-                <span className="text-[10px] text-muted-foreground/50 font-medium uppercase tracking-wider">Nguồn</span>
+                <span className="text-[10px] text-muted-foreground/50 font-medium uppercase tracking-wider">{t('lead.source')}</span>
                 <p className="font-semibold text-xs mt-0.5">{lead.source || '-'}</p>
               </div>
               <div className="bg-foreground/[0.02] rounded-lg p-2.5">
-                <span className="text-[10px] text-muted-foreground/50 font-medium uppercase tracking-wider">Xác suất</span>
+                <span className="text-[10px] text-muted-foreground/50 font-medium uppercase tracking-wider">{t('lead.probability')}</span>
                 <div className="flex items-center gap-2 mt-0.5">
                   <div className="flex-1 h-1.5 bg-foreground/[0.04] rounded-full overflow-hidden">
                     <div className="h-full bg-gradient-to-r from-indigo-500 to-violet-500 rounded-full transition-all duration-500" style={{ width: `${lead.probability}%` }} />
@@ -410,7 +414,7 @@ function LeadTab() {
                 </div>
               </div>
               <div className="bg-foreground/[0.02] rounded-lg p-2.5">
-                <span className="text-[10px] text-muted-foreground/50 font-medium uppercase tracking-wider">Follow-up</span>
+                <span className="text-[10px] text-muted-foreground/50 font-medium uppercase tracking-wider">{t('lead.followup')}</span>
                 <p className="font-semibold text-xs mt-0.5">
                   {lead.nextFollowup
                     ? new Date(lead.nextFollowup).toLocaleDateString('vi-VN')
@@ -442,6 +446,7 @@ function LeadTab() {
 
 export default function CustomerPanel() {
   const { selectedConversationId, conversationDetail, rightPanelTab, setRightPanelTab } = useCRMStore()
+  const { t } = useT()
 
   if (!selectedConversationId || !conversationDetail) {
     return (
@@ -450,16 +455,16 @@ export default function CustomerPanel() {
           <div className="h-16 w-16 mx-auto mb-4 rounded-2xl bg-foreground/[0.02] flex items-center justify-center">
             <User className="h-7 w-7" />
           </div>
-          <p className="text-sm font-medium">Chọn hội thoại để xem thông tin</p>
+          <p className="text-sm font-medium">{t('panel.selectConvo')}</p>
         </div>
       </div>
     )
   }
 
   const tabs = [
-    { value: 'info', label: 'Thông tin' },
-    { value: 'notes', label: 'Ghi chú' },
-    { value: 'lead', label: 'Lead' },
+    { value: 'info', label: t('panel.tab.info') },
+    { value: 'notes', label: t('panel.tab.notes') },
+    { value: 'lead', label: t('panel.tab.lead') },
   ]
 
   return (

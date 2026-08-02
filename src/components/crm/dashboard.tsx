@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { CHANNEL_CONFIG } from '@/lib/types'
+import { useT } from '@/i18n/useT'
 // Native scroll
 
 const CHANNEL_COLORS: Record<string, string> = {
@@ -79,6 +80,7 @@ function StatCard({ title, value, icon: Icon, subtitle, color }: {
 }
 
 export default function Dashboard() {
+  const { t } = useT()
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -118,7 +120,7 @@ export default function Dashboard() {
     .map((s) => ({ name: LEAD_STATUS_LABELS[s], value: leadFunnel[s] }))
 
   const sourceData = Object.entries(leadBySource).map(([source, info]) => ({
-    name: source || 'Khác',
+    name: source || t('dashboard.other', { count: info.count }),
     value: info.value / 1000000,
     count: info.count,
   }))
@@ -128,16 +130,16 @@ export default function Dashboard() {
       <div className="p-4 md:p-6 max-w-[1400px] mx-auto space-y-4 md:space-y-6">
         {/* Header */}
         <div>
-          <h1 className="text-lg md:text-xl font-bold">Dashboard</h1>
-          <p className="text-xs md:text-sm text-muted-foreground mt-0.5">Tổng quan hiệu suất hỗ trợ khách hàng</p>
+          <h1 className="text-lg md:text-xl font-bold">{t('dashboard.title')}</h1>
+          <p className="text-xs md:text-sm text-muted-foreground mt-0.5">{t('dashboard.subtitle')}</p>
         </div>
 
         {/* Stat cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 md:gap-4">
-          <StatCard title="Đang mở" value={summary.openConversations} icon={MessageSquare} subtitle={`${summary.pendingConversations} pending`} color="bg-emerald-500" />
-          <StatCard title="Đã giải quyết hôm nay" value={summary.resolvedToday} icon={CheckCircle} subtitle={`Tổng: ${summary.totalConversations}`} color="bg-blue-500" />
-          <StatCard title="Tin nhắn hôm nay" value={summary.todayMessages} icon={TrendingUp} subtitle={`Tổng: ${summary.totalMessages}`} color="bg-violet-500" />
-          <StatCard title="SLA vi phạm" value={summary.slaBreached} icon={AlertTriangle} subtitle={`${summary.totalCustomers} khách hàng`} color={summary.slaBreached > 0 ? 'bg-red-500' : 'bg-slate-500'} />
+          <StatCard title={t('dashboard.open')} value={summary.openConversations} icon={MessageSquare} subtitle={t('dashboard.pending', { count: summary.pendingConversations })} color="bg-emerald-500" />
+          <StatCard title={t('dashboard.resolvedToday')} value={summary.resolvedToday} icon={CheckCircle} subtitle={t('dashboard.total', { count: summary.totalConversations })} color="bg-blue-500" />
+          <StatCard title={t('dashboard.messagesToday')} value={summary.todayMessages} icon={TrendingUp} subtitle={t('dashboard.total', { count: summary.totalMessages })} color="bg-violet-500" />
+          <StatCard title={t('dashboard.slaBreached')} value={summary.slaBreached} icon={AlertTriangle} subtitle={t('dashboard.customers', { count: summary.totalCustomers })} color={summary.slaBreached > 0 ? 'bg-red-500' : 'bg-slate-500'} />
         </div>
 
         {/* Charts row 1 */}
@@ -145,7 +147,7 @@ export default function Dashboard() {
           {/* Trend chart */}
           <Card className="lg:col-span-2 min-w-0">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-semibold">Xu hướng hội thoại 7 ngày</CardTitle>
+              <CardTitle className="text-sm font-semibold">{t('dashboard.trend')}</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="h-48 md:h-64">
@@ -156,8 +158,8 @@ export default function Dashboard() {
                     <YAxis tick={{ fontSize: 10 }} className="text-muted-foreground" />
                     <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid var(--border)', fontSize: 12 }} />
                     <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11 }} />
-                    <Area type="monotone" dataKey="new" name="Mới" fill="#3b82f6" fillOpacity={0.15} stroke="#3b82f6" strokeWidth={2} />
-                    <Area type="monotone" dataKey="resolved" name="Đã giải quyết" fill="#10b981" fillOpacity={0.15} stroke="#10b981" strokeWidth={2} />
+                    <Area type="monotone" dataKey="new" name={t('dashboard.trend.new')} fill="#3b82f6" fillOpacity={0.15} stroke="#3b82f6" strokeWidth={2} />
+                    <Area type="monotone" dataKey="resolved" name={t('dashboard.trend.resolved')} fill="#10b981" fillOpacity={0.15} stroke="#10b981" strokeWidth={2} />
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
@@ -167,7 +169,7 @@ export default function Dashboard() {
           {/* Channel distribution */}
           <Card className="min-w-0">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-semibold">Phân bổ kênh</CardTitle>
+              <CardTitle className="text-sm font-semibold">{t('dashboard.channelDist')}</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="h-40 md:h-48">
@@ -200,7 +202,7 @@ export default function Dashboard() {
           {/* Agent performance */}
           <Card className="min-w-0">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-semibold">Hiệu suất Agent</CardTitle>
+              <CardTitle className="text-sm font-semibold">{t('dashboard.agentPerf')}</CardTitle>
             </CardHeader>
             <CardContent className="p-0">
               {/* Mobile: compact card layout */}
@@ -215,9 +217,9 @@ export default function Dashboard() {
                       <span className="text-xs font-medium truncate">{agent.name}</span>
                     </div>
                     <div className="flex items-center gap-2.5 flex-shrink-0 text-[10px]">
-                      <span className="text-muted-foreground">{agent.activeConversations} <span className="hidden sm:inline">active</span></span>
-                      <span className="text-muted-foreground">{agent.totalMessages} msg</span>
-                      <span className="text-emerald-600 dark:text-emerald-400 font-medium">{agent.resolvedConversations} done</span>
+                      <span className="text-muted-foreground">{agent.activeConversations} <span className="hidden sm:inline">{t('dashboard.agentPerf.active')}</span></span>
+                      <span className="text-muted-foreground">{agent.totalMessages} {t('dashboard.agentPerf.messages')}</span>
+                      <span className="text-emerald-600 dark:text-emerald-400 font-medium">{agent.resolvedConversations} {t('dashboard.agentPerf.resolved')}</span>
                     </div>
                   </div>
                 ))}
@@ -227,11 +229,11 @@ export default function Dashboard() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="text-xs">Agent</TableHead>
-                      <TableHead className="text-xs text-center">Active</TableHead>
-                      <TableHead className="text-xs text-center">Tin nhắn</TableHead>
-                      <TableHead className="text-xs text-center">Resolved</TableHead>
-                      <TableHead className="text-xs">Trạng thái</TableHead>
+                      <TableHead className="text-xs">{t('dashboard.agentPerf.agent')}</TableHead>
+                      <TableHead className="text-xs text-center">{t('dashboard.agentPerf.active')}</TableHead>
+                      <TableHead className="text-xs text-center">{t('dashboard.agentPerf.messages')}</TableHead>
+                      <TableHead className="text-xs text-center">{t('dashboard.agentPerf.resolved')}</TableHead>
+                      <TableHead className="text-xs">{t('dashboard.agentPerf.status')}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -266,7 +268,7 @@ export default function Dashboard() {
           <div className="space-y-3 md:space-y-4 min-w-0">
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-semibold">Lead Pipeline</CardTitle>
+                <CardTitle className="text-sm font-semibold">{t('dashboard.leadPipeline')}</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="h-36 md:h-44">
@@ -290,7 +292,7 @@ export default function Dashboard() {
             {sourceData.length > 0 && (
               <Card>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-semibold">Giá trị theo nguồn</CardTitle>
+                  <CardTitle className="text-sm font-semibold">{t('dashboard.valueBySource')}</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-2.5">
@@ -298,7 +300,7 @@ export default function Dashboard() {
                       <div key={s.name} className="flex items-center justify-between text-sm">
                         <span className="text-muted-foreground text-xs">{s.name}</span>
                         <div className="flex items-center gap-2">
-                          <span className="text-xs text-muted-foreground">{s.count} leads</span>
+                          <span className="text-xs text-muted-foreground">{t('dashboard.leads', { count: s.count })}</span>
                           <span className="font-semibold text-xs text-emerald-600">{s.value.toFixed(0)}M</span>
                         </div>
                       </div>

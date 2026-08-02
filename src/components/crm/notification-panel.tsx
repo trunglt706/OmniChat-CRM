@@ -9,6 +9,7 @@ import {
   MessageSquare, UserCheck, AlertTriangle, AtSign, Info,
   CheckCheck, Trash2, BellOff, Sparkles, ArrowRight,
 } from 'lucide-react'
+import { useT } from '@/i18n/useT'
 
 const NOTIF_CONFIG: Record<NotificationType, { icon: React.ElementType; color: string; bg: string }> = {
   new_message: { icon: MessageSquare, color: 'text-blue-500', bg: 'bg-blue-500/10' },
@@ -19,16 +20,16 @@ const NOTIF_CONFIG: Record<NotificationType, { icon: React.ElementType; color: s
   automation: { icon: Sparkles, color: 'text-violet-500', bg: 'bg-violet-500/10' },
 }
 
-function formatNotifTime(d: string) {
+function formatNotifTime(d: string, t: (key: string, params?: Record<string, string | number>) => string) {
   const date = new Date(d), now = new Date(), diff = now.getTime() - date.getTime()
   const m = Math.floor(diff / 60000), h = Math.floor(diff / 3600000)
-  if (m < 1) return 'Vừa xong'
-  if (m < 60) return `${m}p trước`
-  if (h < 24) return `${h}h trước`
+  if (m < 1) return t('notif.time.justNow')
+  if (m < 60) return t('notif.time.minutesAgo', { m })
+  if (h < 24) return t('notif.time.hoursAgo', { h })
   return date.toLocaleDateString('vi-VN')
 }
 
-function NotifItem({ notif, onGoto }: { notif: AppNotification; onGoto: () => void }) {
+function NotifItem({ notif, onGoto, t }: { notif: AppNotification; onGoto: () => void; t: (key: string, params?: Record<string, string | number>) => string }) {
   const cfg = NOTIF_CONFIG[notif.type]
   const Icon = cfg.icon
 
@@ -56,7 +57,7 @@ function NotifItem({ notif, onGoto }: { notif: AppNotification; onGoto: () => vo
           {!notif.read && <span className="h-2 w-2 rounded-full bg-primary flex-shrink-0" />}
         </div>
         <p className="text-[12px] text-muted-foreground/60 truncate mt-0.5 leading-relaxed">{notif.body}</p>
-        <p className="text-[10px] text-muted-foreground/40 mt-1 font-medium tabular-nums">{formatNotifTime(notif.createdAt)}</p>
+        <p className="text-[10px] text-muted-foreground/40 mt-1 font-medium tabular-nums">{formatNotifTime(notif.createdAt, t)}</p>
       </div>
     </button>
   )
@@ -74,6 +75,8 @@ export default function NotificationPanel() {
     setActiveView,
     setMobileView,
   } = useCRMStore()
+
+  const { t } = useT()
 
   const unreadCount = notifications.filter(n => !n.read).length
 
@@ -93,7 +96,7 @@ export default function NotificationPanel() {
       <div className="px-5 pt-5 pb-3">
         <div className="flex items-center justify-between mb-1">
           <div className="flex items-center gap-2.5">
-            <h2 className="text-base font-bold tracking-tight">Thong bao</h2>
+            <h2 className="text-base font-bold tracking-tight">{t('notif.panel.title')}</h2>
             {unreadCount > 0 && (
               <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-gradient-to-r from-indigo-500 to-violet-500 text-white text-[10px] font-bold flex items-center justify-center shadow-sm shadow-indigo-500/20">
                 {unreadCount}
@@ -108,7 +111,7 @@ export default function NotificationPanel() {
                 onClick={() => markAllNotificationsRead()}
               >
                 <CheckCheck className="h-3.5 w-3.5 mr-1" />
-                Doc tat ca
+                {t('notif.markAllRead')}
               </Button>
             )}
             {notifications.length > 0 && (
@@ -118,7 +121,7 @@ export default function NotificationPanel() {
                 onClick={() => clearAllNotifications()}
               >
                 <Trash2 className="h-3.5 w-3.5 mr-1" />
-                Xoa tat ca
+                {t('notif.clearAll')}
               </Button>
             )}
           </div>
@@ -134,13 +137,13 @@ export default function NotificationPanel() {
             <div className="h-16 w-16 rounded-2xl bg-foreground/[0.02] flex items-center justify-center mb-4">
               <BellOff className="h-7 w-7" />
             </div>
-            <p className="text-sm font-medium">Khong co thong bao nao</p>
-            <p className="text-[11px] mt-1 text-muted-foreground/30">Thong bao moi se xuat hien o day</p>
+            <p className="text-sm font-medium">{t('notif.empty')}</p>
+            <p className="text-[11px] mt-1 text-muted-foreground/30">{t('notif.emptyDesc')}</p>
           </div>
         ) : (
           <div className="p-3 space-y-1">
             {notifications.map((notif) => (
-              <NotifItem key={notif.id} notif={notif} onGoto={() => handleGoto(notif)} />
+              <NotifItem key={notif.id} notif={notif} onGoto={() => handleGoto(notif)} t={t} />
             ))}
           </div>
         )}

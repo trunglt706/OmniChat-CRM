@@ -66,3 +66,27 @@ Stage Summary:
 - Image upload: Files read as base64 data URLs, preview thumbnails shown before send, stored in DB with messageType='image'
 - Socket: SocketService singleton wraps SSE with on/off/emit API, auto-reconnect, granular per-conversation events
 - State optimization: React.memo on MessageBubble and ConversationItem, granular Zustand selectors throughout
+---
+Task ID: 4
+Agent: main
+Task: Add multi-language (i18n) support to OmniChat CRM
+
+Work Log:
+- Created `/src/i18n/translations.ts` with 180+ translation keys in 3 languages: Vietnamese (vi), English (en), Chinese (zh)
+- Created `/src/i18n/useT.ts` — lightweight `useT()` hook that reads language from Zustand store, returns `t(key, params?)` function with fallback to Vietnamese
+- Updated `crm-store.ts`: expanded `AppSettings.language` type from `'vi' | 'en'` to `'vi' | 'en' | 'zh'`
+- Created `/src/components/i18n/html-lang.tsx` — client component that syncs `<html lang="...">` with current language setting
+- Added language switcher to Header in `page.tsx` — compact Select dropdown with Globe icon showing all 3 locales
+- Applied i18n to all 10 CRM components: page.tsx, conversation-list.tsx, chat-area.tsx, customer-panel.tsx, notification-panel.tsx, profile-panel.tsx, settings-panel.tsx, dashboard.tsx, automation-panel.tsx
+- Applied i18n to /settings/page.tsx (all 4 tabs: profile, system, channels, staff)
+- Applied i18n to /login/page.tsx
+- Updated layout.tsx: added HtmlLangSync component, bilingual metadata description
+- Language setting persisted to localStorage via existing `omnichat_settings` key
+- Build passes successfully, zero Vietnamese UI text remaining in components
+
+Stage Summary:
+- 3 languages supported: Tiếng Việt (default), English, 中文
+- Language switcher in header allows instant switching without page reload
+- All UI text (headers, labels, buttons, tooltips, placeholders, empty states, stats) is translated
+- Translation system is extensible — add new keys to translations.ts and new locales to LOCALES array
+- HTML lang attribute auto-updates when language changes

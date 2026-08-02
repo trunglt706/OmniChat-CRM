@@ -14,6 +14,8 @@ import {
   Volume2, Monitor, Mail, Palette, Maximize2, Eye,
   UserCheck, Globe, Moon, Sun, Trash2, RotateCcw,
 } from 'lucide-react'
+import { useT } from '@/i18n/useT'
+import { LOCALE_LABELS, LOCALES, type Locale } from '@/i18n/translations'
 
 function SettingRow({
   icon: Icon, label, description, children,
@@ -39,11 +41,12 @@ function SettingRow({
 export default function SettingsPanel() {
   const { settings, updateSettings, notifications, clearAllNotifications } = useCRMStore()
   const { theme, setTheme } = useTheme()
+  const { t } = useT()
 
   return (
     <div className="flex flex-col h-full min-h-0 animate-slide-up">
       <div className="px-5 pt-5 pb-3">
-        <h2 className="text-base font-bold tracking-tight">Cai dat</h2>
+        <h2 className="text-base font-bold tracking-tight">{t('settings.title')}</h2>
       </div>
       <Separator className="opacity-40" />
 
@@ -51,12 +54,12 @@ export default function SettingsPanel() {
         {/* Appearance */}
         <div className="space-y-1">
           <h4 className="text-[10px] font-bold text-muted-foreground/40 uppercase tracking-[0.15em] px-1 mb-2">
-            Giao dien
+            {t('settings.appearance')}
           </h4>
           <SettingRow
             icon={theme === 'dark' ? Moon : Sun}
-            label="Chu de"
-            description="Chuyen doi giao dien sang/toi"
+            label={t('settings.theme')}
+            description={t('settings.themeDesc')}
           >
             <Button
               variant="outline"
@@ -65,14 +68,14 @@ export default function SettingsPanel() {
               onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
             >
               {theme === 'dark' ? <Moon className="h-3.5 w-3.5" /> : <Sun className="h-3.5 w-3.5" />}
-              {theme === 'dark' ? 'Toi' : 'Sang'}
+              {theme === 'dark' ? t('settings.dark') : t('settings.light')}
             </Button>
           </SettingRow>
 
           <SettingRow
             icon={Maximize2}
-            label="Che do nen"
-            description="Hien thi thong tin toi gian trong danh sach"
+            label={t('settings.compactMode')}
+            description={t('settings.compactModeDesc')}
           >
             <Switch
               checked={settings.compactMode}
@@ -82,8 +85,8 @@ export default function SettingsPanel() {
 
           <SettingRow
             icon={Eye}
-            label="Hien thi xem truoc"
-            description="Hien thi noi dung tin nhan cuoi trong danh sach"
+            label={t('settings.showPreview')}
+            description={t('settings.showPreviewDesc')}
           >
             <Switch
               checked={settings.showPreview}
@@ -93,15 +96,16 @@ export default function SettingsPanel() {
 
           <SettingRow
             icon={Globe}
-            label="Ngon ngu"
+            label={t('settings.language')}
           >
-            <Select value={settings.language} onValueChange={(v) => updateSettings({ language: v as 'vi' | 'en' })}>
+            <Select value={settings.language} onValueChange={(v) => updateSettings({ language: v as Locale })}>
               <SelectTrigger className="w-28 h-8 rounded-lg text-xs">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="vi">Tieng Viet</SelectItem>
-                <SelectItem value="en">English</SelectItem>
+                {LOCALES.map((locale) => (
+                  <SelectItem key={locale} value={locale}>{LOCALE_LABELS[locale]}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </SettingRow>
@@ -112,13 +116,13 @@ export default function SettingsPanel() {
         {/* Notifications */}
         <div className="space-y-1">
           <h4 className="text-[10px] font-bold text-muted-foreground/40 uppercase tracking-[0.15em] px-1 mb-2">
-            Thong bao
+            {t('settings.notifications')}
           </h4>
 
           <SettingRow
             icon={Volume2}
-            label="Am thanh"
-            description="Phat am khi co tin nhan moi"
+            label={t('settings.sound')}
+            description={t('settings.soundDesc')}
           >
             <Switch
               checked={settings.soundEnabled}
@@ -128,8 +132,8 @@ export default function SettingsPanel() {
 
           <SettingRow
             icon={Monitor}
-            label="Thong bao may tinh"
-            description="Hien thi thong bao popup tren trinh duyet"
+            label={t('settings.desktopNotif')}
+            description={t('settings.desktopNotifDesc')}
           >
             <Switch
               checked={settings.desktopNotifEnabled}
@@ -139,8 +143,8 @@ export default function SettingsPanel() {
 
           <SettingRow
             icon={Mail}
-            label="Thong bao email"
-            description="Gui email khi co tin nhan moi (chua bat)"
+            label={t('settings.emailNotif')}
+            description={t('settings.emailNotifDesc')}
           >
             <Switch
               checked={settings.emailNotifEnabled}
@@ -156,7 +160,7 @@ export default function SettingsPanel() {
               onClick={() => clearAllNotifications()}
             >
               <Trash2 className="h-3.5 w-3.5 mr-1.5" />
-              Xoa tat ca thong bao ({notifications.length})
+              {t('settings.clearAllNotifs', { count: notifications.length })}
             </Button>
           )}
         </div>
@@ -166,13 +170,13 @@ export default function SettingsPanel() {
         {/* Conversation */}
         <div className="space-y-1">
           <h4 className="text-[10px] font-bold text-muted-foreground/40 uppercase tracking-[0.15em] px-1 mb-2">
-            Hoi thoai
+            {t('settings.conversations')}
           </h4>
 
           <SettingRow
             icon={UserCheck}
-            label="Tu dong phan cong"
-            description="Tu dong gan hoi thoai moi cho nhan vien"
+            label={t('settings.autoAssign')}
+            description={t('settings.autoAssignDesc')}
           >
             <Switch
               checked={settings.autoAssign}
@@ -186,7 +190,7 @@ export default function SettingsPanel() {
         {/* Danger zone */}
         <div className="space-y-1">
           <h4 className="text-[10px] font-bold text-muted-foreground/40 uppercase tracking-[0.15em] px-1 mb-2">
-            Du lieu
+            {t('settings.data')}
           </h4>
           <Button
             variant="outline"
@@ -196,12 +200,12 @@ export default function SettingsPanel() {
               localStorage.removeItem('omnichat_settings')
               updateSettings({
                 soundEnabled: true, desktopNotifEnabled: true, emailNotifEnabled: false,
-                compactMode: false, showPreview: true, autoAssign: true, language: 'vi',
+                compactMode: false, showPreview: true, autoAssign: true, language: settings.language,
               })
             }}
           >
             <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
-            Dat lai cai dat mac dinh
+            {t('settings.resetDefaults')}
           </Button>
         </div>
       </div>

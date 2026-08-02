@@ -33,7 +33,7 @@ export interface AppSettings {
   compactMode: boolean
   showPreview: boolean
   autoAssign: boolean
-  language: 'vi' | 'en'
+  language: 'vi' | 'en' | 'zh'
 }
 
 // ─── UI Sheet state ───

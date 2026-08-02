@@ -1,0 +1,539 @@
+     1→'use client'
+     2→
+     3→import { useState, useEffect, useRef } from 'react'
+     4→import { useRouter } from 'next/navigation'
+     5→import { useCRMStore, type UserProfile } from '@/store/crm-store'
+     6→import { useTheme } from 'next-themes'
+     7→import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+     8→import { Button } from '@/components/ui/button'
+     9→import { Input } from '@/components/ui/input'
+    10→import { Textarea } from '@/components/ui/textarea'
+    11→import { Separator } from '@/components/ui/separator'
+    12→import { Switch } from '@/components/ui/switch'
+    13→import { Label } from '@/components/ui/label'
+    14→import { Badge } from '@/components/ui/badge'
+    15→import {
+    16→  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+    17→} from '@/components/ui/select'
+    18→import { cn } from '@/lib/utils'
+    19→import { CHANNEL_CONFIG, type Agent } from '@/lib/types'
+    20→import {
+    21→  ArrowLeft, User, Settings, MessageSquare, Users, Moon, Sun,
+    22→  Volume2, Monitor, Mail, Maximize2, Eye, Globe, UserCheck,
+    23→  Camera, Check, X, Shield, Clock, MessageSquareOff, Phone,
+    24→  Send, Trash2, RotateCcw, Pencil, MoreVertical, Plus, Bell,
+    25→  Globe2,
+    26→} from 'lucide-react'
+    27→
+    28→const SETTINGS_TABS = [
+    29→  { key: 'profile', label: 'Ho so', icon: User },
+    30→  { key: 'system', label: 'He thong', icon: Settings },
+    31→  { key: 'channels', label: 'Kenh chat', icon: MessageSquare },
+    32→  { key: 'staff', label: 'Nhan vien', icon: Users },
+    33→] as const
+    34→
+    35→type SettingsTab = typeof SETTINGS_TABS[number]['key']
+    36→
+    37→const GRADIENT_CLASSES = ['avatar-gradient-1', 'avatar-gradient-2', 'avatar-gradient-3', 'avatar-gradient-4', 'avatar-gradient-5', 'avatar-gradient-6']
+    38→
+    39→const STATUS_OPTIONS: { value: UserProfile['status']; label: string; color: string }[] = [
+    40→  { value: 'online', label: 'Truc tuyen', color: 'bg-emerald-500' },
+    41→  { value: 'busy', label: 'Ban', color: 'bg-amber-500' },
+    42→  { value: 'away', label: 'Vang mat', color: 'bg-orange-400' },
+    43→  { value: 'offline', label: 'Ngoai tuyen', color: 'bg-gray-400' },
+    44→]
+    45→
+    46→function SettingRow({ icon: Icon, label, description, children }: { icon: React.ElementType; label: string; description?: string; children: React.ReactNode }) {
+    47→  return (
+    48→    <div className="flex items-center justify-between gap-4 py-3.5">
+    49→      <div className="flex items-start gap-3.5 min-w-0">
+    50→        <div className="h-9 w-9 rounded-xl bg-foreground/[0.03] flex items-center justify-center flex-shrink-0 mt-0.5">
+    51→          <Icon className="h-4 w-4 text-muted-foreground/50" />
+    52→        </div>
+    53→        <div className="min-w-0">
+    54→          <p className="text-[13px] font-medium">{label}</p>
+    55→          {description && <p className="text-[11px] text-muted-foreground/50 mt-0.5 leading-relaxed">{description}</p>}
+    56→        </div>
+    57→      </div>
+    58→      <div className="flex-shrink-0">{children}</div>
+    59→    </div>
+    60→  )
+    61→}
+    62→
+    63→function SectionHeader({ title }: { title: string }) {
+    64→  return <h4 className="text-[10px] font-bold text-muted-foreground/40 uppercase tracking-[0.15em] px-1 mb-2">{title}</h4>
+    65→}
+    66→
+    67→// ═══ PROFILE TAB ═══
+    68→function ProfileTab() {
+    69→  const { currentUser, setCurrentUser } = useCRMStore()
+    70→  const [editing, setEditing] = useState(false)
+    71→  const [form, setForm] = useState({ name: '', email: '', phone: '', bio: '' })
+    72→  const fileRef = useRef<HTMLInputElement>(null)
+    73→
+    74→  useEffect(() => {
+    75→    if (currentUser) setForm({ name: currentUser.name, email: currentUser.email, phone: currentUser.phone, bio: currentUser.bio })
+    76→  }, [currentUser])
+    77→
+    78→  const handleSave = () => { if (currentUser) { setCurrentUser({ ...currentUser, ...form }); setEditing(false) } }
+    79→  const handleCancel = () => { if (currentUser) setForm({ name: currentUser.name, email: currentUser.email, phone: currentUser.phone, bio: currentUser.bio }); setEditing(false) }
+    80→  const handleStatusChange = (status: UserProfile['status']) => { if (currentUser) setCurrentUser({ ...currentUser, status }) }
+    81→
+    82→  if (!currentUser) return null
+    83→
+    84→  return (
+    85→    <div className="space-y-6 animate-fade-in">
+    86→      <div className="glass-card rounded-2xl p-6">
+    87→        <div className="flex flex-col items-center gap-4">
+    88→          <div className="relative group">
+    89→            <Avatar className={cn('h-24 w-24 ring-4 ring-background shadow-xl', GRADIENT_CLASSES[0])}>
+    90→              <AvatarFallback className="text-3xl text-white font-bold">{currentUser.name.split(' ').slice(-2).map(n => n[0]).join('')}</AvatarFallback>
+    91→            </Avatar>
+    92→            <button onClick={() => fileRef.current?.click()} className="absolute inset-0 rounded-full bg-black/0 group-hover:bg-black/30 transition-all duration-200 flex items-center justify-center opacity-0 group-hover:opacity-100">
+    93→              <Camera className="h-6 w-6 text-white" />
+    94→            </button>
+    95→            <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={() => {}} />
+    96→          </div>
+    97→          {!editing && (
+    98→            <div className="text-center">
+    99→              <h3 className="text-xl font-bold tracking-tight">{currentUser.name}</h3>
+   100→              <p className="text-sm text-muted-foreground/60 mt-1 font-medium">{currentUser.email}</p>
+   101→              <span className="inline-flex items-center gap-1.5 mt-2.5 text-xs font-medium px-3 py-1.5 rounded-full bg-foreground/[0.04] text-muted-foreground/70">
+   102→                <Shield className="h-3.5 w-3.5" />
+   103→                {currentUser.role === 'admin' ? 'Quan tri vien' : currentUser.role === 'agent' ? 'Nhan vien' : currentUser.role}
+   104→              </span>
+   105→            </div>
+   106→          )}
+   107→          <div className="flex gap-2">
+   108→            {STATUS_OPTIONS.map((opt) => (
+   109→              <button key={opt.value} onClick={() => handleStatusChange(opt.value)} className={cn('flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-medium transition-all duration-200 border', currentUser.status === opt.value ? 'border-primary/30 bg-primary/5 text-primary' : 'border-transparent text-muted-foreground/50 hover:text-foreground hover:bg-foreground/[0.03]')}>
+   110→                <span className={cn('h-2 w-2 rounded-full', opt.color, currentUser.status === opt.value && 'shadow-sm')} />
+   111→                {opt.label}
+   112→              </button>
+   113→            ))}
+   114→          </div>
+   115→        </div>
+   116→      </div>
+   117→      <div className="space-y-4">
+   118→        <SectionHeader title="Thong tin ca nhan" />
+   119→        <div className="glass-card rounded-2xl p-5 space-y-4">
+   120→          <div className="space-y-3">
+   121→            <div className="space-y-1.5">
+   122→              <Label className="text-xs font-medium text-muted-foreground/70">Ten hien thi</Label>
+   123→              <Input value={form.name} onChange={(e) => setForm(f => ({ ...f, name: e.target.value }))} disabled={!editing} className="rounded-xl glass-input h-10 text-sm" />
+   124→            </div>
+   125→            <div className="space-y-1.5">
+   126→              <Label className="text-xs font-medium text-muted-foreground/70">Email</Label>
+   127→              <Input type="email" value={form.email} onChange={(e) => setForm(f => ({ ...f, email: e.target.value }))} disabled={!editing} className="rounded-xl glass-input h-10 text-sm" />
+   128→            </div>
+   129→            <div className="space-y-1.5">
+   130→              <Label className="text-xs font-medium text-muted-foreground/70">So dien thoai</Label>
+   131→              <Input value={form.phone} onChange={(e) => setForm(f => ({ ...f, phone: e.target.value }))} disabled={!editing} className="rounded-xl glass-input h-10 text-sm" />
+   132→            </div>
+   133→            <div className="space-y-1.5">
+   134→              <Label className="text-xs font-medium text-muted-foreground/70">Tieu su</Label>
+   135→              <Textarea value={form.bio} onChange={(e) => setForm(f => ({ ...f, bio: e.target.value }))} disabled={!editing} className="rounded-xl glass-input min-h-[80px] resize-none text-sm" />
+   136→            </div>
+   137→          </div>
+   138→          {!editing ? (
+   139→            <Button onClick={() => setEditing(true)} className="w-full h-10 rounded-xl text-sm font-medium"><Pencil className="h-4 w-4 mr-1.5" /> Chinh sua thong tin</Button>
+   140→          ) : (
+   141→            <div className="flex gap-2">
+   142→              <Button variant="outline" onClick={handleCancel} className="flex-1 h-10 rounded-xl text-sm font-medium"><X className="h-4 w-4 mr-1.5" /> Huy</Button>
+   143→              <Button onClick={handleSave} className="flex-1 h-10 rounded-xl text-sm font-medium bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600"><Check className="h-4 w-4 mr-1.5" /> Luu thay doi</Button>
+   144→            </div>
+   145→          )}
+   146→        </div>
+   147→      </div>
+   148→      <div className="space-y-2">
+   149→        <SectionHeader title="Thong ke hoat dong" />
+   150→        <div className="grid grid-cols-2 gap-3">
+   151→          {[
+   152→            { label: 'Hoi thoai hom nay', value: '12', icon: MessageSquare },
+   153→            { label: 'TB phan hoi', value: '2m 30s', icon: Clock },
+   154→            { label: 'Danh gia TB', value: '4.8/5', icon: Shield },
+   155→            { label: 'Tong hoi thoai', value: '1,247', icon: User },
+   156→          ].map((stat) => (
+   157→            <div key={stat.label} className="glass-card rounded-xl p-4">
+   158→              <stat.icon className="h-4 w-4 text-muted-foreground/40 mb-2" />
+   159→              <p className="text-lg font-bold tabular-nums">{stat.value}</p>
+   160→              <p className="text-[11px] text-muted-foreground/50 mt-0.5 font-medium">{stat.label}</p>
+   161→            </div>
+   162→          ))}
+   163→        </div>
+   164→      </div>
+   165→    </div>
+   166→  )
+   167→}
+   168→
+   169→// ═══ SYSTEM TAB ═══
+   170→function SystemTab() {
+   171→  const { settings, updateSettings, notifications, clearAllNotifications } = useCRMStore()
+   172→  const { theme, setTheme } = useTheme()
+   173→  return (
+   174→    <div className="space-y-6 animate-fade-in">
+   175→      <div className="space-y-1">
+   176→        <SectionHeader title="Giao dien" />
+   177→        <div className="glass-card rounded-2xl p-5">
+   178→          <SettingRow icon={theme === 'dark' ? Moon : Sun} label="Chu de" description="Chuyen doi giao dien sang/toi">
+   179→            <Button variant="outline" size="sm" className="h-8 rounded-lg text-xs gap-1.5 border-border/40" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>
+   180→              {theme === 'dark' ? <Moon className="h-3.5 w-3.5" /> : <Sun className="h-3.5 w-3.5" />}
+   181→              {theme === 'dark' ? 'Toi' : 'Sang'}
+   182→            </Button>
+   183→          </SettingRow>
+   184→          <Separator className="opacity-30 my-1" />
+   185→          <SettingRow icon={Maximize2} label="Che do nen" description="Hien thi thong tin toi gian trong danh sach hoi thoai">
+   186→            <Switch checked={settings.compactMode} onCheckedChange={(v) => updateSettings({ compactMode: v })} />
+   187→          </SettingRow>
+   188→          <Separator className="opacity-30 my-1" />
+   189→          <SettingRow icon={Eye} label="Hien thi xem truoc" description="Hien thi noi dung tin nhan cuoi trong danh sach hoi thoai">
+   190→            <Switch checked={settings.showPreview} onCheckedChange={(v) => updateSettings({ showPreview: v })} />
+   191→          </SettingRow>
+   192→          <Separator className="opacity-30 my-1" />
+   193→          <SettingRow icon={Globe} label="Ngon ngu giao dien">
+   194→            <Select value={settings.language} onValueChange={(v) => updateSettings({ language: v as 'vi' | 'en' })}>
+   195→              <SelectTrigger className="w-32 h-8 rounded-lg text-xs"><SelectValue /></SelectTrigger>
+   196→              <SelectContent><SelectItem value="vi">Tieng Viet</SelectItem><SelectItem value="en">English</SelectItem></SelectContent>
+   197→            </Select>
+   198→          </SettingRow>
+   199→        </div>
+   200→      </div>
+   201→      <div className="space-y-1">
+   202→        <SectionHeader title="Thong bao" />
+   203→        <div className="glass-card rounded-2xl p-5">
+   204→          <SettingRow icon={Volume2} label="Am thanh" description="Phat am thanh khi co tin nhan moi">
+   205→            <Switch checked={settings.soundEnabled} onCheckedChange={(v) => updateSettings({ soundEnabled: v })} />
+   206→          </SettingRow>
+   207→          <Separator className="opacity-30 my-1" />
+   208→          <SettingRow icon={Monitor} label="Thong bao may tinh" description="Hien thi thong bao popup tren trinh duyet">
+   209→            <Switch checked={settings.desktopNotifEnabled} onCheckedChange={(v) => updateSettings({ desktopNotifEnabled: v })} />
+   210→          </SettingRow>
+   211→          <Separator className="opacity-30 my-1" />
+   212→          <SettingRow icon={Mail} label="Thong bao email" description="Gui email khi co tin nhan moi">
+   213→            <Switch checked={settings.emailNotifEnabled} onCheckedChange={(v) => updateSettings({ emailNotifEnabled: v })} />
+   214→          </SettingRow>
+   215→          {notifications.length > 0 && (
+   216→            <><Separator className="opacity-30 my-1" />
+   217→            <Button variant="ghost" size="sm" className="w-full mt-1 h-9 rounded-xl text-xs text-muted-foreground/60 hover:text-foreground hover:bg-foreground/[0.03]" onClick={() => clearAllNotifications()}>
+   218→              <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Xoa tat ca thong bao ({notifications.length})
+   219→            </Button></>
+   220→          )}
+   221→        </div>
+   222→      </div>
+   223→      <div className="space-y-1">
+   224→        <SectionHeader title="Hoi thoai" />
+   225→        <div className="glass-card rounded-2xl p-5">
+   226→          <SettingRow icon={UserCheck} label="Tu dong phan cong" description="Tu dong gan hoi thoai moi cho nhan vien san sang">
+   227→            <Switch checked={settings.autoAssign} onCheckedChange={(v) => updateSettings({ autoAssign: v })} />
+   228→          </SettingRow>
+   229→        </div>
+   230→      </div>
+   231→      <div className="space-y-1">
+   232→        <SectionHeader title="Du lieu" />
+   233→        <div className="glass-card rounded-2xl p-5">
+   234→          <SettingRow icon={Trash2} label="Xoa du lieu tam thoi" description="Xoa cache va du lieu tam thoi">
+   235→            <Button variant="outline" size="sm" className="h-8 rounded-lg text-xs border-border/40 hover:border-red-300 hover:text-red-600">Xoa cache</Button>
+   236→          </SettingRow>
+   237→          <Separator className="opacity-30 my-1" />
+   238→          <Button variant="outline" size="sm" className="w-full h-9 rounded-xl text-xs border-border/40 hover:border-red-300 hover:text-red-600" onClick={() => { localStorage.removeItem('omnichat_settings'); updateSettings({ soundEnabled: true, desktopNotifEnabled: true, emailNotifEnabled: false, compactMode: false, showPreview: true, autoAssign: true, language: 'vi' }) }}>
+   239→            <RotateCcw className="h-3.5 w-3.5 mr-1.5" /> Dat lai cai dat mac dinh
+   240→          </Button>
+   241→        </div>
+   242→      </div>
+   243→    </div>
+   244→  )
+   245→}
+   246→
+   247→// ═══ CHANNELS TAB ═══
+   248→interface ChannelSetting {
+   249→  key: string
+   250→  name: string
+   251→  description: string
+   252→  color: string
+   253→  icon: React.ElementType
+   254→  enabled: boolean
+   255→  configured: boolean
+   256→  config?: Record<string, string>
+   257→}
+   258→
+   259→function ChannelsTab() {
+   260→  const [channels, setChannels] = useState<ChannelSetting[]>([
+   261→    { key: 'facebook_messenger', name: 'Facebook Messenger', description: 'Ket noi trang Facebook va nhan tin nhan tu khach hang qua Messenger', color: '#1877f2', icon: MessageSquare, enabled: true, configured: true, config: { pageId: 'OmniChat Official', token: 'hidden' } },
+   262→    { key: 'zalo', name: 'Zalo OA', description: 'Tich hop Zalo Official Account de nhan va gui tin nhan', color: '#0068ff', icon: Phone, enabled: true, configured: true, config: { phone: '0901 234 567' } },
+   263→    { key: 'telegram', name: 'Telegram Bot', description: 'Cai dat bot Telegram de tu dong ho tro khach hang', color: '#26a5e4', icon: Send, enabled: false, configured: false, config: {} },
+   264→    { key: 'website', name: 'Website Chat Widget', description: 'Them widget chat truc tiep len website cua ban', color: '#10b981', icon: Globe2, enabled: true, configured: true, config: { webhook: 'https://omnichat.vn/widget/abc123' } },
+   265→    { key: 'email', name: 'Email IMAP/SMTP', description: 'Nhan email tu khach hang va dong bo vao he thong', color: '#ea4335', icon: Mail, enabled: false, configured: false, config: {} },
+   266→  ])
+   267→
+   268→  const [editingChannel, setEditingChannel] = useState<string | null>(null)
+   269→  const [editForm, setEditForm] = useState<Record<string, string>>({})
+   270→
+   271→  const toggleChannel = (key: string) => setChannels(prev => prev.map(ch => ch.key === key ? { ...ch, enabled: !ch.enabled } : ch))
+   272→  const startEdit = (ch: ChannelSetting) => { setEditingChannel(ch.key); setEditForm(ch.config || {}) }
+   273→  const saveChannel = (key: string) => {
+   274→    setChannels(prev => prev.map(ch => ch.key === key ? { ...ch, configured: Object.values(editForm).some(v => v.length > 0), config: { ...editForm } } : ch))
+   275→    setEditingChannel(null)
+   276→  }
+   277→
+   278→  return (
+   279→    <div className="space-y-6 animate-fade-in">
+   280→      <div>
+   281→        <h3 className="text-sm font-bold">Cau hinh kenh chat</h3>
+   282→        <p className="text-xs text-muted-foreground/60 mt-1">Quan ly va cau hinh cac kenh giao tiep da kenh.</p>
+   283→      </div>
+   284→      {channels.map((ch) => {
+   285→        const Icon = ch.icon
+   286→        const isEditing = editingChannel === ch.key
+   287→        return (
+   288→          <div key={ch.key} className="glass-card rounded-2xl overflow-hidden transition-all duration-200">
+   289→            <div className="p-5">
+   290→              <div className="flex items-start justify-between gap-4">
+   291→                <div className="flex items-start gap-3.5 min-w-0">
+   292→                  <div className="h-11 w-11 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm" style={{ backgroundColor: ch.color + '12' }}>
+   293→                    <Icon className="h-5 w-5" style={{ color: ch.color }} />
+   294→                  </div>
+   295→                  <div className="min-w-0">
+   296→                    <div className="flex items-center gap-2">
+   297→                      <h4 className="text-[13px] font-semibold">{ch.name}</h4>
+   298→                      {ch.configured && ch.enabled && <Badge className="text-[9px] px-1.5 py-0 h-[16px] bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 rounded-md font-medium"><Check className="h-2.5 w-2.5 mr-0.5" /> Da ket noi</Badge>}
+   299→                      {!ch.configured && ch.enabled && <Badge className="text-[9px] px-1.5 py-0 h-[16px] bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 rounded-md font-medium">Chua cau hinh</Badge>}
+   300→                    </div>
+   301→                    <p className="text-[11px] text-muted-foreground/50 mt-1 leading-relaxed">{ch.description}</p>
+   302→                  </div>
+   303→                </div>
+   304→                <Switch checked={ch.enabled} onCheckedChange={() => toggleChannel(ch.key)} />
+   305→              </div>
+   306→            </div>
+   307→            {isEditing && (
+   308→              <div className="px-5 pb-5 border-t border-border/30 pt-4 space-y-3 animate-slide-down">
+   309→                {ch.key === 'facebook_messenger' && (
+   310→                  <>
+   311→                    <div className="space-y-1.5">
+   312→                      <Label className="text-xs font-medium text-muted-foreground/70">Ten trang Facebook</Label>
+   313→                      <Input value={editForm.pageId || ''} onChange={(e) => setEditForm(f => ({ ...f, pageId: e.target.value }))} placeholder="VD: OmniChat Official" className="rounded-xl glass-input h-9 text-sm" />
+   314→                    </div>
+   315→                    <div className="space-y-1.5">
+   316→                      <Label className="text-xs font-medium text-muted-foreground/70">Page Access Token</Label>
+   317→                      <Input value={editForm.token || ''} onChange={(e) => setEditForm(f => ({ ...f, token: e.target.value }))} type="password" placeholder="EAAxxxxxxx..." className="rounded-xl glass-input h-9 text-sm" />
+   318→                    </div>
+   319→                  </>
+   320→                )}
+   321→                {ch.key === 'zalo' && (
+   322→                  <div className="space-y-1.5">
+   323→                    <Label className="text-xs font-medium text-muted-foreground/70">So dien thoai Zalo OA</Label>
+   324→                    <Input value={editForm.phone || ''} onChange={(e) => setEditForm(f => ({ ...f, phone: e.target.value }))} placeholder="0901 234 567" className="rounded-xl glass-input h-9 text-sm" />
+   325→                  </div>
+   326→                )}
+   327→                {ch.key === 'telegram' && (
+   328→                  <div className="space-y-1.5">
+   329→                    <Label className="text-xs font-medium text-muted-foreground/70">Bot Token</Label>
+   330→                    <Input value={editForm.token || ''} onChange={(e) => setEditForm(f => ({ ...f, token: e.target.value }))} type="password" placeholder="123456:ABC-DEF..." className="rounded-xl glass-input h-9 text-sm" />
+   331→                  </div>
+   332→                )}
+   333→                {ch.key === 'website' && (
+   334→                  <>
+   335→                    <div className="space-y-1.5">
+   336→                      <Label className="text-xs font-medium text-muted-foreground/70">Webhook URL</Label>
+   337→                      <Input value={editForm.webhook || ''} onChange={(e) => setEditForm(f => ({ ...f, webhook: e.target.value }))} placeholder="https://your-domain.com/api/webhook" className="rounded-xl glass-input h-9 text-sm" />
+   338→                    </div>
+   339→                    <p className="text-[10px] text-muted-foreground/40 mt-1">Sao chep doan ma ben duoi va dat vao website cua ban</p>
+   340→                    <div className="bg-foreground/[0.03] rounded-xl p-3 font-mono text-[11px] text-muted-foreground/70 break-all select-all">
+   341→                      {`<script src="https://omnichat.vn/widget.js" data-id="abc123"><` + `/script>`}
+   342→                    </div>
+   343→                  </>
+   344→                )}
+   345→                {ch.key === 'email' && (
+   346→                  <>
+   347→                    <div className="space-y-1.5">
+   348→                      <Label className="text-xs font-medium text-muted-foreground/70">Dia chi email</Label>
+   349→                      <Input value={editForm.email || ''} onChange={(e) => setEditForm(f => ({ ...f, email: e.target.value }))} placeholder="support@company.com" className="rounded-xl glass-input h-9 text-sm" />
+   350→                    </div>
+   351→                    <div className="space-y-1.5">
+   352→                      <Label className="text-xs font-medium text-muted-foreground/70">IMAP Server</Label>
+   353→                      <Input placeholder="imap.gmail.com:993" className="rounded-xl glass-input h-9 text-sm" />
+   354→                    </div>
+   355→                  </>
+   356→                )}
+   357→                <div className="flex gap-2 pt-1">
+   358→                  <Button variant="outline" size="sm" onClick={() => setEditingChannel(null)} className="h-8 rounded-lg text-xs"><X className="h-3.5 w-3.5 mr-1" /> Huy</Button>
+   359→                  <Button size="sm" onClick={() => saveChannel(ch.key)} className="h-8 rounded-lg text-xs bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600"><Check className="h-3.5 w-3.5 mr-1" /> Luu cau hinh</Button>
+   360→                </div>
+   361→              </div>
+   362→            )}
+   363→            {!isEditing && (
+   364→              <div className="px-5 pb-4">
+   365→                <Button variant="ghost" size="sm" className="h-8 rounded-lg text-xs text-muted-foreground/60 hover:text-foreground hover:bg-foreground/[0.03]" onClick={() => startEdit(ch)}>
+   366→                  <Pencil className="h-3.5 w-3.5 mr-1.5" />{ch.configured ? 'Chinh sua cau hinh' : 'Cau hinh kenh'}
+   367→                </Button>
+   368→              </div>
+   369→            )}
+   370→          </div>
+   371→        )
+   372→      })}
+   373→    </div>
+   374→  )
+   375→}
+   376→
+   377→// ═══ STAFF TAB ═══
+   378→function StaffTab() {
+   379→  const { agents, setAgents } = useCRMStore()
+   380→  const [staffList, setStaffList] = useState<Agent[]>([])
+   381→  const [loading, setLoading] = useState(true)
+   382→  const [showInvite, setShowInvite] = useState(false)
+   383→  const [inviteEmail, setInviteEmail] = useState('')
+   384→  const [inviteRole, setInviteRole] = useState('agent')
+   385→
+   386→  useEffect(() => {
+   387→    async function load() {
+   388→      try {
+   389→        const res = await fetch('/api/agents')
+   390→        const data = await res.json()
+   391→        if (Array.isArray(data)) { setStaffList(data); setAgents(data) }
+   392→      } catch (e) { console.error('Failed', e) }
+   393→      finally { setLoading(false) }
+   394→    }
+   395→    load()
+   396→  }, [setAgents])
+   397→
+   398→  const handleInvite = () => {
+   399→    if (!inviteEmail.trim()) return
+   400→    const newAgent: Agent = { id: `agent_${Date.now()}`, name: inviteEmail.split('@')[0], email: inviteEmail, avatar: null, role: inviteRole, status: 'offline' }
+   401→    setStaffList(prev => [...prev, newAgent])
+   402→    setAgents([...staffList, newAgent])
+   403→    setInviteEmail('')
+   404→    setShowInvite(false)
+   405→  }
+   406→
+   407→  const roleLabel = (role: string) => role === 'admin' ? 'Quan tri vien' : role === 'supervisor' ? 'Giam sat' : role === 'agent' ? 'Nhan vien' : role
+   408→  const roleBadge = (role: string) => role === 'admin' ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-400' : role === 'supervisor' ? 'bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-400' : 'bg-slate-100 text-slate-600 dark:bg-slate-800/40 dark:text-slate-400'
+   409→
+   410→  return (
+   411→    <div className="space-y-6 animate-fade-in">
+   412→      <div className="flex items-center justify-between">
+   413→        <div>
+   414→          <h3 className="text-sm font-bold">Quan ly nhan vien</h3>
+   415→          <p className="text-xs text-muted-foreground/60 mt-1">{staffList.length} nhan vien trong he thong</p>
+   416→        </div>
+   417→        <Button size="sm" className="h-8 rounded-xl text-xs gap-1.5 bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600" onClick={() => setShowInvite(!showInvite)}>
+   418→          <Plus className="h-3.5 w-3.5" /> Moi nhan vien
+   419→        </Button>
+   420→      </div>
+   421→      {showInvite && (
+   422→        <div className="glass-card rounded-2xl p-5 animate-slide-down">
+   423→          <h4 className="text-[13px] font-semibold mb-3">Moi nhan vien moi</h4>
+   424→          <div className="flex gap-2">
+   425→            <Input value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} placeholder="email@company.com" className="flex-1 rounded-xl glass-input h-9 text-sm" onKeyDown={(e) => e.key === 'Enter' && handleInvite()} />
+   426→            <Select value={inviteRole} onValueChange={setInviteRole}>
+   427→              <SelectTrigger className="w-28 h-9 rounded-xl text-xs"><SelectValue /></SelectTrigger>
+   428→              <SelectContent><SelectItem value="agent">Nhan vien</SelectItem><SelectItem value="supervisor">Giam sat</SelectItem><SelectItem value="admin">Admin</SelectItem></SelectContent>
+   429→            </Select>
+   430→            <Button size="sm" onClick={handleInvite} className="h-9 rounded-xl text-xs"><Send className="h-3.5 w-3.5 mr-1" /> Gui</Button>
+   431→          </div>
+   432→        </div>
+   433→      )}
+   434→      <div className="space-y-2">
+   435→        {loading ? (
+   436→          <div className="space-y-3">{[1, 2, 3, 4].map((i) => (<div key={i} className="glass-card rounded-xl p-4 flex items-center gap-3"><div className="skeleton-line h-10 w-10 rounded-full flex-shrink-0" /><div className="flex-1 space-y-2"><div className="skeleton-line h-3.5 w-1/3" /><div className="skeleton-line h-3 w-1/4" /></div></div>))}</div>
+   437→        ) : (
+   438→          staffList.map((agent, idx) => (
+   439→            <div key={agent.id} className="glass-card rounded-xl p-4 flex items-center gap-3.5 transition-all duration-200 hover:shadow-sm card-lift">
+   440→              <Avatar className={cn('h-10 w-10', GRADIENT_CLASSES[idx % GRADIENT_CLASSES.length])}>
+   441→                <AvatarFallback className="text-xs text-white font-semibold">{agent.name.split(' ').slice(-2).map(n => n[0]).join('')}</AvatarFallback>
+   442→              </Avatar>
+   443→              <div className="flex-1 min-w-0">
+   444→                <div className="flex items-center gap-2">
+   445→                  <span className="text-[13px] font-semibold truncate">{agent.name}</span>
+   446→                  <div className={cn('h-2 w-2 rounded-full flex-shrink-0', agent.status === 'online' ? 'bg-emerald-500' : agent.status === 'busy' ? 'bg-amber-500' : 'bg-gray-400')} />
+   447→                </div>
+   448→                <p className="text-[11px] text-muted-foreground/50 truncate mt-0.5">{agent.email}</p>
+   449→              </div>
+   450→              <Badge className={cn('text-[10px] px-2 py-0.5 h-[20px] rounded-md font-medium', roleBadge(agent.role))}>{roleLabel(agent.role)}</Badge>
+   451→              <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-muted-foreground/40 hover:text-foreground hover:bg-foreground/5"><MoreVertical className="h-4 w-4" /></Button>
+   452→            </div>
+   453→          ))
+   454→        )}
+   455→      </div>
+   456→    </div>
+   457→  )
+   458→}
+   459→
+   460→// ═══ MAIN PAGE ═══
+   461→export default function SettingsPage() {
+   462→  const router = useRouter()
+   463→  const [activeTab, setActiveTab] = useState<SettingsTab>('profile')
+   464→
+   465→  useEffect(() => {
+   466→    try {
+   467→      const saved = localStorage.getItem('omnichat_settings')
+   468→      if (saved) useCRMStore.getState().updateSettings(JSON.parse(saved))
+   469→    } catch {}
+   470→  }, [])
+   471→
+   472→  const renderContent = () => {
+   473→    switch (activeTab) {
+   474→      case 'profile': return <ProfileTab />
+   475→      case 'system': return <SystemTab />
+   476→      case 'channels': return <ChannelsTab />
+   477→      case 'staff': return <StaffTab />
+   478→      default: return null
+   479→    }
+   480→  }
+   481→
+   482→  return (
+   483→    <div className="h-dvh h-screen flex flex-col bg-background overflow-hidden">
+   484→      <header className="h-12 md:h-14 border-b border-border/30 glass flex items-center justify-between px-3 md:px-6 flex-shrink-0 z-50">
+   485→        <div className="flex items-center gap-3">
+   486→          <Button variant="ghost" size="icon" className="h-8 w-8 rounded-xl hover:bg-foreground/5" onClick={() => router.push('/')}>
+   487→            <ArrowLeft className="h-4 w-4" />
+   488→          </Button>
+   489→          <div className="flex items-center gap-2.5">
+   490→            <div className="h-8 w-8 rounded-xl bg-gradient-to-br from-indigo-500 via-violet-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+   491→              <Settings className="h-4 w-4 text-white" />
+   492→            </div>
+   493→            <div>
+   494→              <h1 className="text-sm font-bold tracking-tight">Cai dat & Ho so</h1>
+   495→              <p className="text-[10px] text-muted-foreground/50 font-medium hidden sm:block">Quan ly tai khoan, he thong va kenh chat</p>
+   496→            </div>
+   497→          </div>
+   498→        </div>
+   499→      </header>
+   500→      <div className="flex-1 min-h-0 overflow-hidden">
+   501→        <div className="hidden md:flex h-full">
+   502→          <nav className="w-56 md:w-64 border-r border-border/20 flex-shrink-0 flex-col p-3 space-y-1 overflow-y-auto">
+   503→            {SETTINGS_TABS.map((tab) => {
+   504→              const Icon = tab.icon
+   505→              const active = activeTab === tab.key
+   506→              return (
+   507→                <button key={tab.key} onClick={() => setActiveTab(tab.key)} className={cn('w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-[13px] font-medium transition-all duration-250', active ? 'bg-gradient-to-r from-indigo-500/10 to-violet-500/10 text-primary border border-primary/10' : 'text-muted-foreground/70 hover:text-foreground hover:bg-foreground/[0.03] border border-transparent')}>
+   508→                  <Icon className={cn('h-4 w-4', active && 'text-primary')} />
+   509→                  {tab.label}
+   510→                </button>
+   511→              )
+   512→            })}
+   513→          </nav>
+   514→          <main className="flex-1 min-h-0 overflow-y-auto p-4 md:p-6 lg:p-8">
+   515→            <div className="max-w-2xl mx-auto">{renderContent()}</div>
+   516→          </main>
+   517→        </div>
+   518→        <div className="md:hidden flex flex-col h-full">
+   519→          <div className="flex-shrink-0 border-b border-border/20 flex overflow-x-auto scrollbar-none">
+   520→            {SETTINGS_TABS.map((tab) => {
+   521→              const Icon = tab.icon
+   522→              const active = activeTab === tab.key
+   523→              return (
+   524→                <button key={tab.key} onClick={() => setActiveTab(tab.key)} className={cn('flex items-center gap-1.5 px-4 py-3 text-xs font-medium whitespace-nowrap transition-all duration-250 border-b-2 flex-shrink-0', active ? 'text-primary border-primary' : 'text-muted-foreground/60 border-transparent hover:text-foreground')}>
+   525→                  <Icon className="h-3.5 w-3.5" />
+   526→                  {tab.label}
+   527→                </button>
+   528→              )
+   529→            })}
+   530→          </div>
+   531→          <main className="flex-1 min-h-0 overflow-y-auto p-4">
+   532→            <div className="max-w-2xl mx-auto">{renderContent()}</div>
+   533→          </main>
+   534→        </div>
+   535→      </div>
+   536→    </div>
+   537→  )
+   538→}
+   539→

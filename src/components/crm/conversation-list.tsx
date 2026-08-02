@@ -11,22 +11,23 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { socket } from '@/lib/socket'
+import { useT } from '@/i18n/useT'
 
 const FILTER_TABS = [
-  { key: 'open', label: 'Mo', icon: Inbox },
-  { key: 'unassigned', label: 'Chua phan', icon: User },
-  { key: 'resolved', label: 'Xong', icon: CheckCircle },
-  { key: 'spam', label: 'Spam', icon: MessageSquareOff },
-  { key: 'archived', label: 'Luu tru', icon: Archive },
+  { key: 'open', labelKey: 'convo.filter.open' as const, icon: Inbox },
+  { key: 'unassigned', labelKey: 'convo.filter.unassigned' as const, icon: User },
+  { key: 'resolved', labelKey: 'convo.filter.resolved' as const, icon: CheckCircle },
+  { key: 'spam', labelKey: 'convo.filter.spam' as const, icon: MessageSquareOff },
+  { key: 'archived', labelKey: 'convo.filter.archived' as const, icon: Archive },
 ]
 
 const CHANNEL_FILTERS = [
-  { key: 'all', label: 'Tat ca' },
-  { key: 'facebook_messenger', label: 'FB', color: '#1877f2' },
-  { key: 'zalo', label: 'Zalo', color: '#0068ff' },
-  { key: 'telegram', label: 'TG', color: '#26a5e4' },
-  { key: 'website', label: 'Web', color: '#10b981' },
-  { key: 'email', label: 'Mail', color: '#ea4335' },
+  { key: 'all', labelKey: 'convo.channel.all' as const },
+  { key: 'facebook_messenger', labelKey: 'convo.channel.fb' as const, color: '#1877f2' },
+  { key: 'zalo', labelKey: 'convo.channel.zalo' as const, color: '#0068ff' },
+  { key: 'telegram', labelKey: 'convo.channel.tg' as const, color: '#26a5e4' },
+  { key: 'website', labelKey: 'convo.channel.web' as const, color: '#10b981' },
+  { key: 'email', labelKey: 'convo.channel.mail' as const, color: '#ea4335' },
 ]
 
 const GRADIENT_CLASSES = ['avatar-gradient-1', 'avatar-gradient-2', 'avatar-gradient-3', 'avatar-gradient-4', 'avatar-gradient-5', 'avatar-gradient-6', 'avatar-gradient-7', 'avatar-gradient-8']
@@ -36,13 +37,13 @@ function getChannelLetter(ch: string) {
   return m[ch] || '?'
 }
 
-function formatTime(d: string) {
+function formatTime(d: string, t: (key: string, params?: Record<string, string | number>) => string) {
   const date = new Date(d), now = new Date(), diff = now.getTime() - date.getTime()
   const m = Math.floor(diff / 60000), h = Math.floor(diff / 3600000), days = Math.floor(diff / 86400000)
-  if (m < 1) return 'vua xong'
-  if (m < 60) return `${m}p`
-  if (h < 24) return `${h}h`
-  if (days < 7) return `${days}d`
+  if (m < 1) return t('convo.time.justNow')
+  if (m < 60) return t('convo.time.minutes', { count: m })
+  if (h < 24) return t('convo.time.hours', { count: h })
+  if (days < 7) return t('convo.time.days', { count: days })
   return date.toLocaleDateString('vi-VN')
 }
 
@@ -59,6 +60,7 @@ interface ConvoItemProps {
 }
 
 const ConversationItem = memo(function ConversationItem({ convo, index }: ConvoItemProps) {
+  const { t } = useT()
   const selectedId = useCRMStore((s) => s.selectedConversationId)
   const setSelected = useCRMStore((s) => s.setSelectedConversationId)
   const setMobileView = useCRMStore((s) => s.setMobileView)
@@ -68,6 +70,14 @@ const ConversationItem = memo(function ConversationItem({ convo, index }: ConvoI
   const chCfg = CHANNEL_CONFIG[convo.channel as keyof typeof CHANNEL_CONFIG]
   const unread = unreadCounts[convo.id] || 0
   const gradient = GRADIENT_CLASSES[index % GRADIENT_CLASSES.length]
+
+  const priorityLabel = convo.priority === 'urgent'
+    ? t('convo.priority.urgent')
+    : convo.priority === 'high'
+      ? t('convo.priority.high')
+      : convo.priority === 'low'
+        ? t('convo.priority.low')
+        : ''
 
   return (
     <button
@@ -108,7 +118,7 @@ const ConversationItem = memo(function ConversationItem({ convo, index }: ConvoI
           <span className={cn(
             'text-[11px] flex-shrink-0 tabular-nums transition-colors duration-200',
             unread > 0 ? 'text-primary font-semibold' : 'text-muted-foreground/60'
-          )}>{formatTime(convo.updatedAt)}</span>
+          )}>{formatTime(convo.updatedAt, t)}</span>
         </div>
         {convo.subject && (
           <p className="text-[12px] text-foreground/50 truncate mt-0.5 leading-tight group-hover:text-foreground/65 transition-colors duration-200">{convo.subject}</p>
@@ -126,7 +136,7 @@ const ConversationItem = memo(function ConversationItem({ convo, index }: ConvoI
               convo.priority === 'high' ? 'bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400 badge-glow-amber' :
               'bg-slate-50 text-slate-500 dark:bg-slate-800/40 dark:text-slate-400'
             )}>
-              {convo.priority === 'urgent' ? 'Khan' : convo.priority === 'high' ? 'Cao' : convo.priority === 'low' ? 'Thap' : ''}
+              {priorityLabel}
             </span>
           )}
           {convo.tags.slice(0, 2).map((ct) => (
@@ -152,6 +162,7 @@ const ConversationItem = memo(function ConversationItem({ convo, index }: ConvoI
 })
 
 export default function ConversationList() {
+  const { t } = useT()
   const activeFilter = useCRMStore((s) => s.activeFilter)
   const activeChannel = useCRMStore((s) => s.activeChannel)
   const searchQuery = useCRMStore((s) => s.searchQuery)
@@ -207,8 +218,8 @@ export default function ConversationList() {
       <div className="px-3 md:px-4 pt-3 md:pt-4 pb-2 flex-shrink-0">
         <div className="flex items-center justify-between mb-3">
           <div>
-            <h2 className="text-sm font-bold tracking-tight">Hoi thoai</h2>
-            <p className="text-[11px] text-muted-foreground/60 mt-0.5 font-medium">{totalConversations} cuoc tro chuyen</p>
+            <h2 className="text-sm font-bold tracking-tight">{t('convo.title')}</h2>
+            <p className="text-[11px] text-muted-foreground/60 mt-0.5 font-medium">{t('convo.count', { count: totalConversations })}</p>
           </div>
           {simulationRunning && (
             <span className="sim-live flex items-center gap-1.5 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2.5 py-1 rounded-full shadow-sm shadow-emerald-500/10 animate-scale-bounce">
@@ -224,7 +235,7 @@ export default function ConversationList() {
         <div className="relative mb-2">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/40" />
           <Input
-            placeholder="Tim ten, SDT, email..."
+            placeholder={t('convo.search')}
             className="pl-9 h-8 md:h-9 text-[13px] rounded-xl glass-input focus-visible:ring-0 focus-visible:border-primary/30"
             value={searchQuery}
             onChange={(e) => handleSearch(e.target.value)}
@@ -244,7 +255,7 @@ export default function ConversationList() {
                     : 'text-muted-foreground hover:text-foreground hover:bg-foreground/[0.05]'
                 )} style={{ transitionDelay: `${idx * 20}ms` }}>
                 <Icon className="h-3 w-3" />
-                {tab.label}
+                {t(tab.labelKey)}
               </button>
             )
           })}
@@ -266,7 +277,7 @@ export default function ConversationList() {
                 'h-1.5 w-1.5 rounded-full transition-all duration-300',
                 active && 'shadow-sm'
               )} style={{ backgroundColor: ch.color, boxShadow: active ? `0 0 6px ${ch.color}40` : 'none' }} />}
-              {ch.label}
+              {t(ch.labelKey)}
             </button>
           )
         })}
@@ -290,8 +301,8 @@ export default function ConversationList() {
             <div className="empty-state-icon h-16 w-16 rounded-2xl flex items-center justify-center mb-4">
               <Inbox className="h-7 w-7" />
             </div>
-            <p className="text-sm font-semibold">Khong co hoi thoai nao</p>
-            <p className="text-xs mt-1 text-muted-foreground/40">Cuoc tro chuyen moi se xuat hien o day</p>
+            <p className="text-sm font-semibold">{t('convo.empty')}</p>
+            <p className="text-xs mt-1 text-muted-foreground/40">{t('convo.emptyDesc')}</p>
           </div>
         ) : (
           conversations.map((convo, i) => <ConversationItem key={convo.id} convo={convo} index={i} />)

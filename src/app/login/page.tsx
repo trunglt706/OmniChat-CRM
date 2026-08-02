@@ -6,8 +6,10 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { useTheme } from 'next-themes'
 import { Sun, Moon } from 'lucide-react'
+import { useT } from '@/i18n/useT'
 
 export default function LoginPage() {
+  const { t } = useT()
   const [loading, setLoading] = useState(false)
   const { theme, setTheme } = useTheme()
   const isGoogleAuth = !!process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID
@@ -43,11 +45,11 @@ export default function LoginPage() {
         {/* Login Card */}
         <div className="login-card rounded-2xl p-7 space-y-6">
           <div className="text-center space-y-1">
-            <h2 className="text-lg font-bold tracking-tight">Đăng nhập</h2>
+            <h2 className="text-lg font-bold tracking-tight">{t('login.title')}</h2>
             <p className="text-xs text-muted-foreground/50 font-medium">
               {isGoogleAuth
-                ? 'Đăng nhập bằng tài khoản Google'
-                : 'Chào mừng đến với OmniChat Demo'}
+                ? t('login.googleDesc')
+                : t('login.demoDesc')}
             </p>
           </div>
 
@@ -69,7 +71,7 @@ export default function LoginPage() {
             ) : (
               <Mail className="h-4 w-4" />
             )}
-            {isGoogleAuth ? 'Đăng nhập bằng Google' : 'Đăng nhập Demo'}
+            {isGoogleAuth ? t('login.googleBtn') : t('login.demoBtn')}
           </Button>
 
           <div className="relative">
@@ -77,7 +79,7 @@ export default function LoginPage() {
               <span className="w-full border-t border-border/40" />
             </div>
             <div className="relative flex justify-center text-[11px] uppercase font-medium">
-              <span className="bg-card/80 backdrop-blur-sm px-3 text-muted-foreground/40 rounded-full">hoặc</span>
+              <span className="bg-card/80 backdrop-blur-sm px-3 text-muted-foreground/40 rounded-full">{t('login.or')}</span>
             </div>
           </div>
 
@@ -92,7 +94,7 @@ export default function LoginPage() {
             ) : (
               <Headphones className="h-4 w-4" />
             )}
-            Tiếp tục với Demo Account
+            {t('login.demoBtn')}
           </Button>
         </div>
 
@@ -109,7 +111,7 @@ export default function LoginPage() {
         </div>
 
         <p className="text-center text-[11px] text-muted-foreground/30 font-medium">
-          OmniChat CRM v1.0 — Multi-Channel Chat System
+          {t('login.footer')}
         </p>
       </div>
     </div>
