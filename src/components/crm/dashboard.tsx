@@ -32,8 +32,8 @@ const PIE_COLORS = ['#10b981', '#f59e0b', '#3b82f6', '#8b5cf6', '#ef4444', '#6b7
 
 const LEAD_STATUS_ORDER = ['new', 'contacted', 'qualified', 'proposal', 'negotiation', 'won', 'lost']
 const LEAD_STATUS_LABELS: Record<string, string> = {
-  new: 'New', contacted: 'Contacted', qualified: 'Qualified',
-  proposal: 'Proposal', negotiation: 'Negotiation', won: 'Won', lost: 'Lost',
+  new: 'lead.status.new', contacted: 'lead.status.contacted', qualified: 'lead.status.qualified',
+  proposal: 'lead.status.proposal', negotiation: 'lead.status.negotiation', won: 'lead.status.won', lost: 'lead.status.lost',
 }
 
 interface DashboardData {
@@ -117,7 +117,7 @@ export default function Dashboard() {
 
   const funnelData = LEAD_STATUS_ORDER
     .filter((s) => leadFunnel[s])
-    .map((s) => ({ name: LEAD_STATUS_LABELS[s], value: leadFunnel[s] }))
+    .map((s) => ({ name: t(LEAD_STATUS_LABELS[s]), value: leadFunnel[s] }))
 
   const sourceData = Object.entries(leadBySource).map(([source, info]) => ({
     name: source || t('dashboard.other', { count: info.count }),

@@ -316,7 +316,7 @@ export default function AutomationPanel() {
                         {/* Action type badges */}
                         {hasReply && (
                           <div className="flex items-center gap-1 text-[11px] bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-md font-medium">
-                            <Bot className="h-3 w-3" /> Auto-reply
+                            <Bot className="h-3 w-3" /> {t('auto.badge.autoReply')}
                           </div>
                         )}
                         {hasAssign && (
@@ -370,7 +370,7 @@ export default function AutomationPanel() {
         <DialogContent className="max-w-md rounded-2xl">
           <DialogHeader>
             <DialogTitle className="text-base flex items-center gap-2">
-              {editing ? t('auto.edit') : t('auto.createTitle')} Automation Rule
+              {editing ? t('auto.edit') : t('auto.createTitle')} {t('auto.ruleTitle')}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">

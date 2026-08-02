@@ -395,7 +395,7 @@ function LeadTab() {
               </Badge>
               {lead.value && (
                 <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">
-                  {(lead.value / 1000000).toFixed(0)}M <span className="text-[10px] font-medium text-muted-foreground/60">VNĐ</span>
+                  {(lead.value / 1000000).toFixed(0)}M <span className="text-[10px] font-medium text-muted-foreground/60">{t('lead.currency')}</span>
                 </span>
               )}
             </div>
@@ -422,13 +422,13 @@ function LeadTab() {
                 </p>
               </div>
               <div className="bg-foreground/[0.02] rounded-lg p-2.5">
-                <span className="text-[10px] text-muted-foreground/50 font-medium uppercase tracking-wider">Owner</span>
+                <span className="text-[10px] text-muted-foreground/50 font-medium uppercase tracking-wider">{t('lead.owner')}</span>
                 <p className="font-semibold text-xs mt-0.5">{lead.owner?.name || '-'}</p>
               </div>
             </div>
             {lead.campaign && (
               <div className="text-xs text-muted-foreground/60">
-                <span className="font-medium text-muted-foreground/40">Campaign: </span>
+                <span className="font-medium text-muted-foreground/40">{t('lead.campaign')}</span>
                 <span className="font-medium">{lead.campaign}</span>
               </div>
             )}

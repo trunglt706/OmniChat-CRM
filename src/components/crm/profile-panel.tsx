@@ -131,7 +131,7 @@ export default function ProfilePanel() {
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-muted-foreground/70">Email</Label>
+              <Label className="text-xs font-medium text-muted-foreground/70">{t('profile.email')}</Label>
               <Input
                 type="email"
                 value={form.email}

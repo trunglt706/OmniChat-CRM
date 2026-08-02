@@ -26,10 +26,11 @@ import {
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
+import ReportsPage from '@/app/reports/page'
 import {
   Settings, PanelRightClose, PanelRightOpen,
   Headphones, LogOut, User, ChevronDown, Moon, Sun,
-  Inbox, LayoutDashboard, Zap,
+  Inbox, LayoutDashboard, Zap, BarChart3,
   Loader2, Activity, Bell, Globe,
 } from 'lucide-react'
 import {
@@ -66,10 +67,11 @@ function Header() {
 
   const unreadNotifCount = notifications.filter(n => !n.read).length
 
-  const navItems: { key: 'inbox' | 'dashboard' | 'automation'; label: string; icon: React.ElementType }[] = [
+  const navItems: { key: 'inbox' | 'dashboard' | 'automation' | 'reports'; label: string; icon: React.ElementType }[] = [
     { key: 'inbox', label: t('nav.inbox'), icon: Inbox },
     { key: 'dashboard', label: t('nav.dashboard'), icon: LayoutDashboard },
     { key: 'automation', label: t('nav.automation'), icon: Zap },
+    { key: 'reports', label: t('nav.reports'), icon: BarChart3 },
   ]
 
   const toggleSimulation = async () => {
@@ -418,6 +420,7 @@ export default function CRMPage() {
         {activeView === 'inbox' && renderInbox()}
         {activeView === 'dashboard' && <Dashboard />}
         {activeView === 'automation' && <AutomationPanel />}
+        {activeView === 'reports' && <ReportsPage />}
       </div>
 
       {/* Notification Sheet */}

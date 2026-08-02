@@ -98,7 +98,7 @@ const MessageBubble = memo(function MessageBubble({ message, isLastInGroup, show
               : 'bg-gradient-to-br from-indigo-500 to-violet-600'
         )}>
           <AvatarFallback className="text-[10px] text-white font-semibold">
-            {message.senderType === 'bot' ? <Bot className="h-3.5 w-3.5" /> : isCustomer ? (message.senderName || 'KH').split(' ').slice(-2).map(n => n[0]).join('') : 'NV'}
+            {message.senderType === 'bot' ? <Bot className="h-3.5 w-3.5" /> : isCustomer ? (message.senderName || t('chat.customerInit')).split(' ').slice(-2).map(n => n[0]).join('') : t('chat.agentInit')}
           </AvatarFallback>
         </Avatar>
       )}

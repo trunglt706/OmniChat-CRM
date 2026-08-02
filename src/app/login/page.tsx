@@ -37,7 +37,7 @@ export default function LoginPage() {
           <div className="text-center">
             <h1 className="text-2xl font-bold tracking-tight bg-gradient-to-r from-foreground to-foreground/60 bg-clip-text">OmniChat</h1>
             <p className="text-sm text-muted-foreground/60 mt-1.5 font-medium">
-              Multi-Channel Customer Support
+              {t('login.subtitle')}
             </p>
           </div>
         </div>

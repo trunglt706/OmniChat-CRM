@@ -98,8 +98,8 @@ interface CRMState {
   setIsLoadingConversation: (v: boolean) => void
 
   // View
-  activeView: 'inbox' | 'dashboard' | 'automation'
-  setActiveView: (v: 'inbox' | 'dashboard' | 'automation') => void
+  activeView: 'inbox' | 'dashboard' | 'automation' | 'reports'
+  setActiveView: (v: 'inbox' | 'dashboard' | 'automation' | 'reports') => void
 
   // Bot
   botEnabled: boolean
