@@ -1,0 +1,1438 @@
+    30→import * as XLSX from 'xlsx'
+    31→import { toPng } from 'html-to-image'
+    32→
+    33→// ─── Types ───
+    34→type ReportTab = 'conversations' | 'agents' | 'sla' | 'channels' | 'customers' | 'messages' | 'responseTime' | 'botPerformance' | 'tags' | 'resolutionTrends'
+    35→type PresetKey = 'today' | '7' | '30' | 'thisMonth' | 'lastMonth' | 'custom'
+    36→
+    37→interface DetailView {
+    38→  type: string
+    39→  id: string | number
+    40→  label: string
+    41→}
+    42→
+    43→// ─── Date locale mapping ───
+    44→function getDateLocale(locale: string) {
+    45→  switch (locale) {
+    46→    case 'en': return dateEn
+    47→    case 'zh': return dateZhCN
+    48→    default: return dateVi
+    49→  }
+    50→}
+    51→
+    52→// ─── Summary stat card ───
+    53→function SummaryCard({ label, value, icon: Icon, gradient }: {
+    54→  label: string; value: string; icon: React.ElementType; gradient: string
+    55→}) {
+    56→  return (
+    57→    <div className={cn(
+    58→      'glass-card rounded-2xl p-4 md:p-5 relative overflow-hidden group transition-all duration-300 hover:shadow-lg',
+    59→      'card-lift'
+    60→    )}>
+    61→      <div className={cn('absolute inset-0 opacity-[0.07] group-hover:opacity-[0.12] transition-opacity duration-300', gradient)} />
+    62→      <div className="relative z-10 flex items-start justify-between">
+    63→        <div className="min-w-0">
+    64→          <p className="text-[11px] md:text-xs text-muted-foreground font-medium truncate">{label}</p>
+    65→          <p className="text-xl md:text-2xl font-bold mt-1 tabular-nums tracking-tight">{value}</p>
+    66→        </div>
+    67→        <div className={cn('h-9 w-9 md:h-10 md:w-10 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm', gradient)}>
+    68→          <Icon className="h-4.5 w-4.5 md:h-5 md:w-5 text-white" />
+    69→        </div>
+    70→      </div>
+    71→    </div>
+    72→  )
+    73→}
+    74→
+    75→// ─── Detail stat row ───
+    76→function DetailStatRow({ label, value }: { label: string; value: string }) {
+    77→  return (
+    78→    <div className="flex items-center justify-between py-2.5 border-b border-border/40 last:border-0">
+    79→      <span className="text-xs text-muted-foreground">{label}</span>
+    80→      <span className="text-xs font-semibold tabular-nums">{value}</span>
+    81→    </div>
+    82→  )
+    83→}
+    84→
+    85→export default function ReportsPage() {
+    86→  const { t, locale } = useT()
+    87→  const dateLocale = useMemo(() => getDateLocale(locale), [locale])
+    88→  const setActiveView = useCRMStore((s) => s.setActiveView)
+    89→
+    90→  // ─── Date range state ───
+    91→  const [preset, setPreset] = useState<PresetKey>('7')
+    92→  const [startDate, setStartDate] = useState<Date | undefined>(subDays(new Date(), 6))
+    93→  const [endDate, setEndDate] = useState<Date | undefined>(new Date())
+    94→  const [calOpen, setCalOpen] = useState<'start' | 'end' | null>(null)
+    95→
+    96→  // ─── Tab & data state ───
+    97→  const [activeTab, setActiveTab] = useState<ReportTab>('conversations')
+    98→  const [loading, setLoading] = useState(false)
+    99→  const [detailView, setDetailView] = useState<DetailView | null>(null)
+   100→  const [detailData, setDetailData] = useState<any>(null)
+   101→  const [detailLoading, setDetailLoading] = useState(false)
+   102→
+   103→  // ─── Report data state ───
+   104→  const [conversationsData, setConversationsData] = useState<any[]>([])
+   105→  const [agentsData, setAgentsData] = useState<any[]>([])
+   106→  const [slaData, setSlaData] = useState<any[]>([])
+   107→  const [channelsData, setChannelsData] = useState<any[]>([])
+   108→  const [customersData, setCustomersData] = useState<any[]>([])
+   109→  const [messagesData, setMessagesData] = useState<{ hourly: any[]; peakHour: string } | null>(null)
+   110→  const [responseTimeData, setResponseTimeData] = useState<any>(null)
+   111→  const [botPerformanceData, setBotPerformanceData] = useState<any>(null)
+   112→  const [tagsData, setTagsData] = useState<any[]>([])
+   113→  const [resolutionTrendsData, setResolutionTrendsData] = useState<any[]>([])
+   114→
+   115→  // ─── Chart container refs for image export ───
+   116→  const chartRefMessages = useRef<HTMLDivElement>(null)
+   117→  const chartRefResponseTime = useRef<HTMLDivElement>(null)
+   118→  const chartRefResolutionTrends = useRef<HTMLDivElement>(null)
+   119→
+   120→  const chartTabs: ReportTab[] = ['messages', 'responseTime', 'resolutionTrends']
+   121→
+   122→  // ─── Presets ───
+   123→  const presets: { key: PresetKey; label: string }[] = [
+   124→    { key: 'today', label: t('reports.today') },
+   125→    { key: '7', label: t('reports.7days') },
+   126→    { key: '30', label: t('reports.30days') },
+   127→    { key: 'thisMonth', label: t('reports.thisMonth') },
+   128→    { key: 'lastMonth', label: t('reports.lastMonth') },
+   129→    { key: 'custom', label: t('reports.custom') },
+   130→  ]
+   131→
+   132→  const handlePreset = useCallback((key: PresetKey) => {
+   133→    const now = new Date()
+   134→    setPreset(key)
+   135→    setDetailView(null)
+   136→    switch (key) {
+   137→      case 'today':
+   138→        setStartDate(now)
+   139→        setEndDate(now)
+   140→        break
+   141→      case '7':
+   142→        setStartDate(subDays(now, 6))
+   143→        setEndDate(now)
+   144→        break
+   145→      case '30':
+   146→        setStartDate(subDays(now, 29))
+   147→        setEndDate(now)
+   148→        break
+   149→      case 'thisMonth':
+   150→        setStartDate(startOfMonth(now))
+   151→        setEndDate(endOfMonth(now))
+   152→        break
+   153→      case 'lastMonth': {
+   154→        const last = subMonths(now, 1)
+   155→        setStartDate(startOfMonth(last))
+   156→        setEndDate(endOfMonth(last))
+   157→        break
+   158→      }
+   159→      case 'custom':
+   160→        break
+   161→    }
+   162→  }, [])
+   163→
+   164→  // ─── Build query params ───
+   165→  const queryParams = useMemo(() => {
+   166→    const params = new URLSearchParams()
+   167→    if (startDate && endDate && preset !== '7') {
+   168→      params.set('startDate', format(startDate, 'yyyy-MM-dd'))
+   169→      params.set('endDate', format(endDate, 'yyyy-MM-dd'))
+   170→    } else if (startDate && endDate) {
+   171→      const dayCount = Math.ceil((endDate.getTime() - startDate.getTime()) / 86400000) + 1
+   172→      params.set('days', String(dayCount))
+   173→      params.set('startDate', format(startDate, 'yyyy-MM-dd'))
+   174→      params.set('endDate', format(endDate, 'yyyy-MM-dd'))
+   175→    } else {
+   176→      params.set('days', '7')
+   177→    }
+   178→    return params.toString()
+   179→  }, [startDate, endDate, preset])
+   180→
+   181→  // ─── Fetch all report data ───
+   182→  const fetchAll = useCallback(async () => {
+   183→    setLoading(true)
+   184→    try {
+   185→      const base = `/api/reports?${queryParams}`
+   186→      const [conv, agents, sla, channels, customers, messages, rt, bot, tags, trends] = await Promise.all([
+   187→        fetch(`${base}&type=conversations`).then(r => r.json()),
+   188→        fetch(`${base}&type=agents`).then(r => r.json()),
+   189→        fetch(`${base}&type=sla`).then(r => r.json()),
+   190→        fetch(`${base}&type=channels`).then(r => r.json()),
+   191→        fetch(`${base}&type=customers`).then(r => r.json()),
+   192→        fetch(`${base}&type=messages`).then(r => r.json()),
+   193→        fetch(`${base}&type=responseTime`).then(r => r.json()),
+   194→        fetch(`${base}&type=botPerformance`).then(r => r.json()),
+   195→        fetch(`${base}&type=tags`).then(r => r.json()),
+   196→        fetch(`${base}&type=resolutionTrends`).then(r => r.json()),
+   197→      ])
+   198→      setConversationsData(Array.isArray(conv) ? conv : [])
+   199→      setAgentsData(Array.isArray(agents) ? agents : [])
+   200→      setSlaData(Array.isArray(sla) ? sla : [])
+   201→      setChannelsData(Array.isArray(channels) ? channels : [])
+   202→      setCustomersData(Array.isArray(customers) ? customers : [])
+   203→      if (messages && messages.hourly) setMessagesData(messages)
+   204→      if (rt && rt.buckets) setResponseTimeData(rt)
+   205→      if (bot && bot.metrics) setBotPerformanceData(bot)
+   206→      setTagsData(Array.isArray(tags) ? tags : [])
+   207→      setResolutionTrendsData(Array.isArray(trends) ? trends : [])
+   208→    } catch (e) {
+   209→      console.error('Reports fetch error', e)
+   210→    } finally {
+   211→      setLoading(false)
+   212→    }
+   213→  }, [queryParams])
+   214→
+   215→  // ─── Fetch detail ───
+   216→  const fetchDetail = useCallback(async (type: string, id: string | number) => {
+   217→    setDetailLoading(true)
+   218→    try {
+   219→      const params = new URLSearchParams({ detailType: type, detailId: String(id) })
+   220→      if (startDate) params.set('startDate', format(startDate, 'yyyy-MM-dd'))
+   221→      if (endDate) params.set('endDate', format(endDate, 'yyyy-MM-dd'))
+   222→      const res = await fetch(`/api/reports?${params}`)
+   223→      const data = await res.json()
+   224→      setDetailData(data)
+   225→    } catch (e) {
+   226→      console.error('Detail fetch error', e)
+   227→    } finally {
+   228→      setDetailLoading(false)
+   229→    }
+   230→  }, [startDate, endDate])
+   231→
+   232→  useEffect(() => { fetchAll() }, [fetchAll])
+   233→
+   234→  const handleRowClick = useCallback((type: string, id: string | number, label: string) => {
+   235→    setDetailView({ type, id, label })
+   236→    fetchDetail(type, id)
+   237→  }, [fetchDetail])
+   238→
+   239→  // ─── Summary stats ───
+   240→  const totalConvs = conversationsData.reduce((s, d) => s + (d.total || 0), 0)
+   241→  const totalResolved = conversationsData.reduce((s, d) => s + (d.resolved || 0), 0)
+   242→  const avgSatisfaction = agentsData.length
+   243→    ? (agentsData.reduce((s: number, d: any) => s + parseFloat(d.satisfaction || 0), 0) / agentsData.length).toFixed(1)
+   244→    : '0.0'
+   245→  const slaCompliance = slaData.length
+   246→    ? (slaData.reduce((s: number, d: any) => { const n = parseInt(d.compliance); return s + (isNaN(n) ? 0 : n) }, 0) / slaData.length).toFixed(0) + '%'
+   247→    : '0%'
+   248→
+   249→  // ─── Tabs definition ───
+   250→  const tabs: { key: ReportTab; label: string; icon: React.ElementType }[] = [
+   251→    { key: 'conversations', label: t('reports.tab.conversations'), icon: MessageSquare },
+   252→    { key: 'agents', label: t('reports.tab.agents'), icon: Star },
+   253→    { key: 'responseTime', label: t('reports.tab.responseTime'), icon: Timer },
+   254→    { key: 'channels', label: t('reports.tab.channels'), icon: BarChart3 },
+   255→    { key: 'customers', label: t('reports.tab.customers'), icon: Zap },
+   256→    { key: 'messages', label: t('reports.tab.messages'), icon: TrendingUp },
+   257→    { key: 'sla', label: t('reports.tab.sla'), icon: Shield },
+   258→    { key: 'botPerformance', label: t('reports.tab.botPerformance'), icon: Bot },
+   259→    { key: 'tags', label: t('reports.tab.tags'), icon: Tag },
+   260→    { key: 'resolutionTrends', label: t('reports.tab.resolutionTrends'), icon: CheckCircle },
+   261→  ]
+   262→
+   263→  const CHANNEL_NAMES_MAP: Record<string, string> = {
+   264→    facebook_messenger: 'Facebook Messenger', zalo: 'Zalo',
+   265→    telegram: 'Telegram', website: 'Website', email: 'Email',
+   266→  }
+   267→
+   268→  // ═══════════════════════════════════════════
+   269→  // ─── Export helpers ───
+   270→  // ═══════════════════════════════════════════
+   271→
+   272→  const getDateRangeLabel = useCallback(() => {
+   273→    if (!startDate || !endDate) return '7d'
+   274→    return `${format(startDate, 'yyyy-MM-dd')}_${format(endDate, 'yyyy-MM-dd')}`
+   275→  }, [startDate, endDate])
+   276→
+   277→  const handleExportExcel = useCallback(() => {
+   278→    const wb = XLSX.utils.book_new()
+   279→    const dateRange = getDateRangeLabel()
+   280→    let sheetName: string | undefined
+   281→
+   282→    switch (activeTab) {
+   283→      case 'conversations': {
+   284→        const headers = [
+   285→          t('reports.conversations.col.date'),
+   286→          t('reports.conversations.col.total'),
+   287→          t('reports.conversations.col.open'),
+   288→          t('reports.conversations.col.resolved'),
+   289→          t('reports.conversations.col.closed'),
+   290→          t('reports.conversations.col.avgResponse'),
+   291→          t('reports.conversations.col.avgResolution'),
+   292→        ]
+   293→        const rows = conversationsData.map((r) => [
+   294→          r.date, r.total, r.open, r.resolved, r.closed, r.avgResponseTime, r.avgResolutionTime,
+   295→        ])
+   296→        const ws = XLSX.utils.aoa_to_sheet([headers, ...rows])
+   297→        XLSX.utils.book_append_sheet(wb, ws, 'Conversations')
+   298→        sheetName = `omnichat-report-conversations-${dateRange}.xlsx`
+   299→        break
+   300→      }
+   301→      case 'agents': {
+   302→        const headers = [
+   303→          t('reports.agents.col.name'),
+   304→          t('reports.agents.col.conversations'),
+   305→          t('reports.agents.col.messages'),
+   306→          t('reports.agents.col.avgResponse'),
+   307→          t('reports.agents.col.resolved'),
+   308→          t('reports.agents.col.satisfaction'),
+   309→          t('reports.agents.col.activeHours'),
+   310→        ]
+   311→        const rows = agentsData.map((r) => [
+   312→          r.name, r.conversations, r.messages, r.avgResponseTime, r.resolved, r.satisfaction, r.activeHours,
+   313→        ])
+   314→        const ws = XLSX.utils.aoa_to_sheet([headers, ...rows])
+   315→        XLSX.utils.book_append_sheet(wb, ws, 'Agents')
+   316→        sheetName = `omnichat-report-agents-${dateRange}.xlsx`
+   317→        break
+   318→      }
+   319→      case 'responseTime': {
+   320→        // Main sheet: buckets
+   321→        const headers = [
+   322→          t('reports.responseTime.col.bucket'),
+   323→          t('reports.responseTime.col.count'),
+   324→          t('reports.responseTime.col.percentage'),
+   325→          t('reports.responseTime.col.avgSatisfaction'),
+   326→        ]
+   327→        const buckets = responseTimeData?.buckets || []
+   328→        const rows = buckets.map((r: any) => [
+   329→          r.bucket, r.count, r.percentage, r.avgSatisfaction,
+   330→        ])
+   331→        const ws = XLSX.utils.aoa_to_sheet([headers, ...rows])
+   332→        XLSX.utils.book_append_sheet(wb, ws, 'Response Time')
+   333→        // Second sheet: percentile stats
+   334→        if (responseTimeData?.stats) {
+   335→          const { stats } = responseTimeData
+   336→          const pHeaders = [t('reports.responseTime.avgLabel'), t('reports.responseTime.p50'), t('reports.responseTime.p90'), t('reports.responseTime.p99')]
+   337→          const pValues = [stats.avg, stats.p50, stats.p90, stats.p99]
+   338→          const ws2 = XLSX.utils.aoa_to_sheet([pHeaders, pValues])
+   339→          XLSX.utils.book_append_sheet(wb, ws2, 'Percentiles')
+   340→        }
+   341→        sheetName = `omnichat-report-responseTime-${dateRange}.xlsx`
+   342→        break
+   343→      }
+   344→      case 'channels': {
+   345→        const headers = [
+   346→          t('reports.channels.col.channel'),
+   347→          t('reports.channels.col.conversations'),
+   348→          t('reports.channels.col.messages'),
+   349→          t('reports.channels.col.avgResponse'),
+   350→          t('reports.channels.col.resolution'),
+   351→          t('reports.channels.col.satisfaction'),
+   352→        ]
+   353→        const rows = channelsData.map((r) => [
+   354→          r.channel, r.conversations, r.messages, r.avgResponseTime, r.resolutionRate, r.satisfaction,
+   355→        ])
+   356→        const ws = XLSX.utils.aoa_to_sheet([headers, ...rows])
+   357→        XLSX.utils.book_append_sheet(wb, ws, 'Channels')
+   358→        sheetName = `omnichat-report-channels-${dateRange}.xlsx`
+   359→        break
+   360→      }
+   361→      case 'customers': {
+   362→        const headers = [
+   363→          t('reports.customers.col.name'),
+   364→          t('reports.customers.col.conversations'),
+   365→          t('reports.customers.col.messages'),
+   366→          t('reports.customers.col.lastActive'),
+   367→          t('reports.customers.col.channel'),
+   368→          t('reports.customers.col.value'),
+   369→        ]
+   370→        const rows = customersData.map((r) => [
+   371→          r.name, r.conversations, r.messages, r.lastActive, r.primaryChannel, r.value,
+   372→        ])
+   373→        const ws = XLSX.utils.aoa_to_sheet([headers, ...rows])
+   374→        XLSX.utils.book_append_sheet(wb, ws, 'Customers')
+   375→        sheetName = `omnichat-report-customers-${dateRange}.xlsx`
+   376→        break
+   377→      }
+   378→      case 'messages': {
+   379→        const headers = [
+   380→          t('reports.messages.col.period'),
+   381→          t('reports.messages.col.incoming'),
+   382→          t('reports.messages.col.outgoing'),
+   383→          t('reports.messages.col.total'),
+   384→        ]
+   385→        const hourly = messagesData?.hourly || []
+   386→        const rows = hourly.map((r) => [
+   387→          r.period, r.incoming, r.outgoing, r.total,
+   388→        ])
+   389→        const ws = XLSX.utils.aoa_to_sheet([headers, ...rows])
+   390→        XLSX.utils.book_append_sheet(wb, ws, 'Messages')
+   391→        sheetName = `omnichat-report-messages-${dateRange}.xlsx`
+   392→        break
+   393→      }
+   394→      case 'sla': {
+   395→        const headers = [
+   396→          t('reports.sla.col.metric'),
+   397→          t('reports.sla.col.target'),
+   398→          t('reports.sla.col.actual'),
+   399→          t('reports.sla.col.compliance'),
+   400→        ]
+   401→        const rows = slaData.map((r) => [
+   402→          r.metric, r.target, r.actual, r.compliance,
+   403→        ])
+   404→        const ws = XLSX.utils.aoa_to_sheet([headers, ...rows])
+   405→        XLSX.utils.book_append_sheet(wb, ws, 'SLA')
+   406→        sheetName = `omnichat-report-sla-${dateRange}.xlsx`
+   407→        break
+   408→      }
+   409→      case 'botPerformance': {
+   410→        const headers = [
+   411→          t('reports.botPerformance.col.metric'),
+   412→          t('reports.botPerformance.col.value'),
+   413→          t('reports.botPerformance.col.trend'),
+   414→        ]
+   415→        const metrics = botPerformanceData?.metrics || []
+   416→        const rows = metrics.map((r: any) => {
+   417→          const metricMap: Record<string, string> = {
+   418→            totalHandled: t('reports.botPerformance.totalHandled'),
+   419→            handoffRate: t('reports.botPerformance.handoffRate'),
+   420→            avgResolutionTime: t('reports.botPerformance.avgResolutionTime'),
+   421→            customerSatisfaction: t('reports.botPerformance.customerSatisfaction'),
+   422→            conversationsSaved: t('reports.botPerformance.conversationsSaved'),
+   423→            accuracy: t('reports.botPerformance.accuracy'),
+   424→          }
+   425→          return [metricMap[r.metric] || r.metric, r.value, r.trend]
+   426→        })
+   427→        const ws = XLSX.utils.aoa_to_sheet([headers, ...rows])
+   428→        XLSX.utils.book_append_sheet(wb, ws, 'Bot Performance')
+   429→        sheetName = `omnichat-report-botPerformance-${dateRange}.xlsx`
+   430→        break
+   431→      }
+   432→      case 'tags': {
+   433→        const headers = [
+   434→          t('reports.tags.col.tag'),
+   435→          t('reports.tags.col.count'),
+   436→          t('reports.tags.col.conversations'),
+   437→          t('reports.tags.col.avgResolution'),
+   438→          t('reports.tags.col.satisfaction'),
+   439→        ]
+   440→        const rows = tagsData.map((r) => [
+   441→          r.tag, r.count, r.conversations, r.avgResolution, r.satisfaction,
+   442→        ])
+   443→        const ws = XLSX.utils.aoa_to_sheet([headers, ...rows])
+   444→        XLSX.utils.book_append_sheet(wb, ws, 'Tags')
+   445→        sheetName = `omnichat-report-tags-${dateRange}.xlsx`
+   446→        break
+   447→      }
+   448→      case 'resolutionTrends': {
+   449→        const headers = [
+   450→          t('reports.resolutionTrends.col.period'),
+   451→          t('reports.resolutionTrends.col.total'),
+   452→          t('reports.resolutionTrends.col.resolved'),
+   453→          t('reports.resolutionTrends.col.rate'),
+   454→          t('reports.resolutionTrends.col.avgTime'),
+   455→        ]
+   456→        const rows = resolutionTrendsData.map((r) => [
+   457→          r.period, r.total, r.resolved, r.rate, r.avgTime,
+   458→        ])
+   459→        const ws = XLSX.utils.aoa_to_sheet([headers, ...rows])
+   460→        XLSX.utils.book_append_sheet(wb, ws, 'Resolution Trends')
+   461→        sheetName = `omnichat-report-resolutionTrends-${dateRange}.xlsx`
+   462→        break
+   463→      }
+   464→    }
+   465→
+   466→    if (sheetName) {
+   467→      XLSX.writeFile(wb, sheetName)
+   468→    }
+   469→  }, [activeTab, t, getDateRangeLabel, conversationsData, agentsData, responseTimeData, channelsData, customersData, messagesData, slaData, botPerformanceData, tagsData, resolutionTrendsData])
+   470→
+   471→  const handleExportChartImage = useCallback(() => {
+   472→    const refMap: Record<string, React.RefObject<HTMLDivElement | null>> = {
+   473→      messages: chartRefMessages,
+   474→      responseTime: chartRefResponseTime,
+   475→      resolutionTrends: chartRefResolutionTrends,
+   476→    }
+   477→    const el = refMap[activeTab]?.current
+   478→    if (!el) return
+   479→    toPng(el, { backgroundColor: '#ffffff', pixelRatio: 2 }).then((dataUrl) => {
+   480→      const link = document.createElement('a')
+   481→      link.download = `omnichat-chart-${activeTab}-${getDateRangeLabel()}.png`
+   482→      link.href = dataUrl
+   483→      link.click()
+   484→    }).catch((err) => {
+   485→      console.error('Chart image export error', err)
+   486→    })
+   487→  }, [activeTab, getDateRangeLabel])
+   488→
+   489→  // ═══════════════════════════════════════════
+   490→  // ─── Tab renderers ───
+   491→  // ═══════════════════════════════════════════
+   492→
+   493→  const renderConversationsTable = () => (
+   494→    <div className="glass-card rounded-2xl p-4 md:p-5">
+   495→      <div className="overflow-x-auto">
+   496→        <Table>
+   497→          <TableHeader>
+   498→            <TableRow className="hover:bg-transparent">
+   499→              <TableHead className="text-xs font-semibold">{t('reports.conversations.col.date')}</TableHead>
+   500→              <TableHead className="text-xs font-semibold text-right">{t('reports.conversations.col.total')}</TableHead>
+   501→              <TableHead className="text-xs font-semibold text-right">{t('reports.conversations.col.open')}</TableHead>
+   502→              <TableHead className="text-xs font-semibold text-right">{t('reports.conversations.col.resolved')}</TableHead>
+   503→              <TableHead className="text-xs font-semibold text-right">{t('reports.conversations.col.closed')}</TableHead>
+   504→              <TableHead className="text-xs font-semibold text-right">{t('reports.conversations.col.avgResponse')}</TableHead>
+   505→              <TableHead className="text-xs font-semibold text-right">{t('reports.conversations.col.avgResolution')}</TableHead>
+   506→            </TableRow>
+   507→          </TableHeader>
+   508→          <TableBody>
+   509→            {conversationsData.map((row, i) => (
+   510→              <TableRow
+   511→                key={i}
+   512→                className="text-xs cursor-pointer hover:bg-foreground/[0.04] transition-colors"
+   513→                onClick={() => handleRowClick('conversations', row.date, row.date)}
+   514→              >
+   515→                <TableCell className="font-medium">{row.date}</TableCell>
+   516→                <TableCell className="text-right tabular-nums font-semibold">{row.total}</TableCell>
+   517→                <TableCell className="text-right tabular-nums">
+   518→                  <Badge variant="secondary" className="text-[10px] h-5 px-1.5 bg-amber-500/10 text-amber-600 dark:text-amber-400 hover:bg-amber-500/15">{row.open}</Badge>
+   519→                </TableCell>
+   520→                <TableCell className="text-right tabular-nums">
+   521→                  <Badge variant="secondary" className="text-[10px] h-5 px-1.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/15">{row.resolved}</Badge>
+   522→                </TableCell>
+   523→                <TableCell className="text-right tabular-nums">{row.closed}</TableCell>
+   524→                <TableCell className="text-right tabular-nums text-muted-foreground">{row.avgResponseTime}</TableCell>
+   525→                <TableCell className="text-right tabular-nums text-muted-foreground">{row.avgResolutionTime}</TableCell>
+   526→              </TableRow>
+   527→            ))}
+   528→          </TableBody>
+   529→        </Table>
+   530→      </div>
+   531→      {conversationsData.length === 0 && !loading && (
+   532→        <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+   533→          <MessageSquare className="h-8 w-8 mb-2 opacity-40" />
+   534→          <p className="text-xs">{t('reports.noData')}</p>
+   535→        </div>
+   536→      )}
+   537→    </div>
+   538→  )
+   539→
+   540→  const renderAgentsTable = () => (
+   541→    <div className="glass-card rounded-2xl p-4 md:p-5">
+   542→      <div className="overflow-x-auto">
+   543→        <Table>
+   544→          <TableHeader>
+   545→            <TableRow className="hover:bg-transparent">
+   546→              <TableHead className="text-xs font-semibold">{t('reports.agents.col.name')}</TableHead>
+   547→              <TableHead className="text-xs font-semibold text-right">{t('reports.agents.col.conversations')}</TableHead>
+   548→              <TableHead className="text-xs font-semibold text-right">{t('reports.agents.col.messages')}</TableHead>
+   549→              <TableHead className="text-xs font-semibold text-right">{t('reports.agents.col.avgResponse')}</TableHead>
+   550→              <TableHead className="text-xs font-semibold text-right">{t('reports.agents.col.resolved')}</TableHead>
+   551→              <TableHead className="text-xs font-semibold text-right">{t('reports.agents.col.satisfaction')}</TableHead>
+   552→              <TableHead className="text-xs font-semibold text-right">{t('reports.agents.col.activeHours')}</TableHead>
+   553→            </TableRow>
+   554→          </TableHeader>
+   555→          <TableBody>
+   556→            {agentsData.map((row, i) => (
+   557→              <TableRow
+   558→                key={i}
+   559→                className="text-xs cursor-pointer hover:bg-foreground/[0.04] transition-colors"
+   560→                onClick={() => handleRowClick('agents', row.id, row.name)}
+   561→              >
+   562→                <TableCell className="font-medium">
+   563→                  <div className="flex items-center gap-2">
+   564→                    <div className={cn(
+   565→                      'h-2 w-2 rounded-full flex-shrink-0',
+   566→                      row.status === 'online' ? 'bg-emerald-500' : row.status === 'busy' ? 'bg-amber-500' : 'bg-gray-400'
+   567→                    )} />
+   568→                    {row.name}
+   569→                  </div>
+   570→                </TableCell>
+   571→                <TableCell className="text-right tabular-nums">{row.conversations}</TableCell>
+   572→                <TableCell className="text-right tabular-nums">{row.messages}</TableCell>
+   573→                <TableCell className="text-right tabular-nums text-muted-foreground">{row.avgResponseTime}</TableCell>
+   574→                <TableCell className="text-right tabular-nums">
+   575→                  <Badge variant="secondary" className="text-[10px] h-5 px-1.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/15">{row.resolved}</Badge>
+   576→                </TableCell>
+   577→                <TableCell className="text-right tabular-nums">
+   578→                  <span className={cn(
+   579→                    'font-semibold',
+   580→                    parseFloat(row.satisfaction) >= 4.5 ? 'text-emerald-500' : parseFloat(row.satisfaction) >= 4.0 ? 'text-amber-500' : 'text-rose-500'
+   581→                  )}>
+   582→                    {row.satisfaction} ★
+   583→                  </span>
+   584→                </TableCell>
+   585→                <TableCell className="text-right tabular-nums text-muted-foreground">{row.activeHours}</TableCell>
+   586→              </TableRow>
+   587→            ))}
+   588→          </TableBody>
+   589→        </Table>
+   590→      </div>
+   591→    </div>
+   592→  )
+   593→
+   594→  const renderSlaTable = () => (
+   595→    <div className="glass-card rounded-2xl p-4 md:p-5">
+   596→      <div className="overflow-x-auto">
+   597→        <Table>
+   598→          <TableHeader>
+   599→            <TableRow className="hover:bg-transparent">
+   600→              <TableHead className="text-xs font-semibold">{t('reports.sla.col.metric')}</TableHead>
+   601→              <TableHead className="text-xs font-semibold text-center">{t('reports.sla.col.target')}</TableHead>
+   602→              <TableHead className="text-xs font-semibold text-center">{t('reports.sla.col.actual')}</TableHead>
+   603→              <TableHead className="text-xs font-semibold text-right">{t('reports.sla.col.compliance')}</TableHead>
+   604→            </TableRow>
+   605→          </TableHeader>
+   606→          <TableBody>
+   607→            {slaData.map((row, i) => {
+   608→              const complianceNum = parseInt(row.compliance) || 0
+   609→              return (
+   610→                <TableRow key={i} className="text-xs">
+   611→                  <TableCell className="font-medium">{row.metric}</TableCell>
+   612→                  <TableCell className="text-center">
+   613→                    <Badge variant="outline" className="text-[10px] h-5 px-2 font-mono">{row.target}</Badge>
+   614→                  </TableCell>
+   615→                  <TableCell className="text-center tabular-nums font-medium">{row.actual}</TableCell>
+   616→                  <TableCell className="text-right">
+   617→                    <Badge variant="secondary" className={cn(
+   618→                      'text-[10px] h-5 px-2 font-mono font-semibold',
+   619→                      complianceNum >= 85 ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/15'
+   620→                        : complianceNum >= 70 ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 hover:bg-amber-500/15'
+   621→                        : 'bg-rose-500/10 text-rose-600 dark:text-rose-400 hover:bg-rose-500/15'
+   622→                    )}>
+   623→                      {row.compliance}
+   624→                    </Badge>
+   625→                  </TableCell>
+   626→                </TableRow>
+   627→              )
+   628→            })}
+   629→          </TableBody>
+   630→        </Table>
+   631→      </div>
+   632→    </div>
+   633→  )
+   634→
+   635→  const renderChannelsTable = () => (
+   636→    <div className="glass-card rounded-2xl p-4 md:p-5">
+   637→      <div className="overflow-x-auto">
+   638→        <Table>
+   639→          <TableHeader>
+   640→            <TableRow className="hover:bg-transparent">
+   641→              <TableHead className="text-xs font-semibold">{t('reports.channels.col.channel')}</TableHead>
+   642→              <TableHead className="text-xs font-semibold text-right">{t('reports.channels.col.conversations')}</TableHead>
+   643→              <TableHead className="text-xs font-semibold text-right">{t('reports.channels.col.messages')}</TableHead>
+   644→              <TableHead className="text-xs font-semibold text-right">{t('reports.channels.col.avgResponse')}</TableHead>
+   645→              <TableHead className="text-xs font-semibold text-right">{t('reports.channels.col.resolution')}</TableHead>
+   646→              <TableHead className="text-xs font-semibold text-right">{t('reports.channels.col.satisfaction')}</TableHead>
+   647→            </TableRow>
+   648→          </TableHeader>
+   649→          <TableBody>
+   650→            {channelsData.map((row, i) => (
+   651→              <TableRow
+   652→                key={i}
+   653→                className="text-xs cursor-pointer hover:bg-foreground/[0.04] transition-colors"
+   654→                onClick={() => handleRowClick('channels', row.id, row.channel)}
+   655→              >
+   656→                <TableCell className="font-medium">{row.channel}</TableCell>
+   657→                <TableCell className="text-right tabular-nums">{row.conversations}</TableCell>
+   658→                <TableCell className="text-right tabular-nums">{row.messages}</TableCell>
+   659→                <TableCell className="text-right tabular-nums text-muted-foreground">{row.avgResponseTime}</TableCell>
+   660→                <TableCell className="text-right tabular-nums">{row.resolutionRate}</TableCell>
+   661→                <TableCell className="text-right tabular-nums">
+   662→                  <span className={cn(
+   663→                    'font-semibold',
+   664→                    parseFloat(row.satisfaction) >= 4.5 ? 'text-emerald-500' : parseFloat(row.satisfaction) >= 4.0 ? 'text-amber-500' : 'text-rose-500'
+   665→                  )}>
+   666→                    {row.satisfaction} ★
+   667→                  </span>
+   668→                </TableCell>
+   669→              </TableRow>
+   670→            ))}
+   671→          </TableBody>
+   672→        </Table>
+   673→      </div>
+   674→    </div>
+   675→  )
+   676→
+   677→  const renderCustomersTable = () => (
+   678→    <div className="glass-card rounded-2xl p-4 md:p-5">
+   679→      <div className="overflow-x-auto">
+   680→        <Table>
+   681→          <TableHeader>
+   682→            <TableRow className="hover:bg-transparent">
+   683→              <TableHead className="text-xs font-semibold">{t('reports.customers.col.name')}</TableHead>
+   684→              <TableHead className="text-xs font-semibold text-right">{t('reports.customers.col.conversations')}</TableHead>
+   685→              <TableHead className="text-xs font-semibold text-right">{t('reports.customers.col.messages')}</TableHead>
+   686→              <TableHead className="text-xs font-semibold text-right">{t('reports.customers.col.lastActive')}</TableHead>
+   687→              <TableHead className="text-xs font-semibold text-center">{t('reports.customers.col.channel')}</TableHead>
+   688→              <TableHead className="text-xs font-semibold text-right">{t('reports.customers.col.value')}</TableHead>
+   689→            </TableRow>
+   690→          </TableHeader>
+   691→          <TableBody>
+   692→            {customersData.map((row, i) => (
+   693→              <TableRow
+   694→                key={i}
+   695→                className="text-xs cursor-pointer hover:bg-foreground/[0.04] transition-colors"
+   696→                onClick={() => handleRowClick('customers', row.id, row.name)}
+   697→              >
+   698→                <TableCell className="font-medium">{row.name}</TableCell>
+   699→                <TableCell className="text-right tabular-nums">{row.conversations}</TableCell>
+   700→                <TableCell className="text-right tabular-nums">{row.messages}</TableCell>
+   701→                <TableCell className="text-right tabular-nums text-muted-foreground">{row.lastActive}</TableCell>
+   702→                <TableCell className="text-center">
+   703→                  <Badge variant="outline" className="text-[10px] h-5 px-1.5">{CHANNEL_NAMES_MAP[row.primaryChannel] || row.primaryChannel}</Badge>
+   704→                </TableCell>
+   705→                <TableCell className="text-right tabular-nums font-semibold text-emerald-600 dark:text-emerald-400">{row.value}</TableCell>
+   706→              </TableRow>
+   707→            ))}
+   708→          </TableBody>
+   709→        </Table>
+   710→      </div>
+   711→    </div>
+   712→  )
+   713→
+   714→  const renderMessagesTab = () => (
+   715→    <div className="space-y-4">
+   716→      {messagesData && (
+   717→        <div className="glass-card rounded-2xl p-4 md:p-5 flex items-center gap-3">
+   718→          <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center shadow-sm">
+   719→            <TrendingUp className="h-4.5 w-4.5 text-white" />
+   720→          </div>
+   721→          <div>
+   722→            <p className="text-[11px] text-muted-foreground font-medium">{t('reports.messages.peakHour')}</p>
+   723→            <p className="text-sm font-bold tabular-nums">{messagesData.peakHour}</p>
+   724→          </div>
+   725→        </div>
+   726→      )}
+   727→      <div id="chart-messages" ref={chartRefMessages} className="glass-card rounded-2xl p-4 md:p-5">
+   728→        <p className="text-xs font-semibold mb-4">{t('reports.messages.byHour')}</p>
+   729→        {messagesData && messagesData.hourly && (
+   730→          <div className="h-64 md:h-80">
+   731→            <ResponsiveContainer width="100%" height="100%">
+   732→              <BarChart data={messagesData.hourly} margin={{ top: 4, right: 4, left: -20, bottom: 4 }}>
+   733→                <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
+   734→                <XAxis dataKey="period" tick={{ fontSize: 10 }} interval={2} />
+   735→                <YAxis tick={{ fontSize: 10 }} />
+   736→                <Tooltip contentStyle={{ fontSize: 12, borderRadius: 12, border: '1px solid oklch(0 0 0 / 0.06)', boxShadow: '0 4px 12px oklch(0 0 0 / 0.08)' }} />
+   737→                <Legend wrapperStyle={{ fontSize: 11 }} />
+   738→                <Bar dataKey="incoming" name={t('reports.messages.col.incoming')} fill="#10b981" radius={[3, 3, 0, 0]} />
+   739→                <Bar dataKey="outgoing" name={t('reports.messages.col.outgoing')} fill="#8b5cf6" radius={[3, 3, 0, 0]} />
+   740→              </BarChart>
+   741→            </ResponsiveContainer>
+   742→          </div>
+   743→        )}
+   744→      </div>
+   745→      <div className="glass-card rounded-2xl p-4 md:p-5">
+   746→        <div className="overflow-x-auto max-h-96 overflow-y-auto">
+   747→          <Table>
+   748→            <TableHeader>
+   749→              <TableRow className="hover:bg-transparent">
+   750→                <TableHead className="text-xs font-semibold">{t('reports.messages.col.period')}</TableHead>
+   751→                <TableHead className="text-xs font-semibold text-right">{t('reports.messages.col.incoming')}</TableHead>
+   752→                <TableHead className="text-xs font-semibold text-right">{t('reports.messages.col.outgoing')}</TableHead>
+   753→                <TableHead className="text-xs font-semibold text-right">{t('reports.messages.col.total')}</TableHead>
+   754→              </TableRow>
+   755→            </TableHeader>
+   756→            <TableBody>
+   757→              {messagesData?.hourly?.map((row, i) => (
+   758→                <TableRow key={i} className="text-xs">
+   759→                  <TableCell className="font-medium font-mono">{row.period}</TableCell>
+   760→                  <TableCell className="text-right tabular-nums text-emerald-600 dark:text-emerald-400">{row.incoming}</TableCell>
+   761→                  <TableCell className="text-right tabular-nums text-violet-600 dark:text-violet-400">{row.outgoing}</TableCell>
+   762→                  <TableCell className="text-right tabular-nums font-semibold">{row.total}</TableCell>
+   763→                </TableRow>
+   764→              ))}
+   765→            </TableBody>
+   766→          </Table>
+   767→        </div>
+   768→      </div>
+   769→    </div>
+   770→  )
+   771→
+   772→  // ─── Response Time Distribution ───
+   773→  const renderResponseTimeTab = () => {
+   774→    if (!responseTimeData) return null
+   775→    const { buckets, stats } = responseTimeData
+   776→    return (
+   777→      <div className="space-y-4">
+   778→        {/* Percentile stats */}
+   779→        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+   780→          {[
+   781→            { label: t('reports.responseTime.avgLabel'), value: stats.avg, color: 'from-blue-500 to-cyan-500' },
+   782→            { label: t('reports.responseTime.p50'), value: stats.p50, color: 'from-emerald-500 to-teal-500' },
+   783→            { label: t('reports.responseTime.p90'), value: stats.p90, color: 'from-amber-500 to-orange-500' },
+   784→            { label: t('reports.responseTime.p99'), value: stats.p99, color: 'from-rose-500 to-pink-500' },
+   785→          ].map((s, i) => (
+   786→            <div key={i} className="glass-card rounded-xl p-3 text-center">
+   787→              <p className="text-[10px] text-muted-foreground font-medium">{s.label}</p>
+   788→              <p className="text-sm font-bold mt-1 tabular-nums">{s.value}</p>
+   789→            </div>
+   790→          ))}
+   791→        </div>
+   792→        {/* Chart */}
+   793→        <div id="chart-responseTime" ref={chartRefResponseTime} className="glass-card rounded-2xl p-4 md:p-5">
+   794→          <div className="h-56 md:h-64">
+   795→            <ResponsiveContainer width="100%" height="100%">
+   796→              <BarChart data={buckets} margin={{ top: 4, right: 4, left: -20, bottom: 4 }}>
+   797→                <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
+   798→                <XAxis dataKey="bucket" tick={{ fontSize: 10 }} />
+   799→                <YAxis tick={{ fontSize: 10 }} />
+   800→                <Tooltip contentStyle={{ fontSize: 12, borderRadius: 12, border: '1px solid oklch(0 0 0 / 0.06)' }} />
+   801→                <Bar dataKey="count" name={t('reports.responseTime.col.count')} fill="#8b5cf6" radius={[3, 3, 0, 0]} />
+   802→              </BarChart>
+   803→            </ResponsiveContainer>
+   804→          </div>
+   805→        </div>
+   806→        {/* Table */}
+   807→        <div className="glass-card rounded-2xl p-4 md:p-5">
+   808→          <div className="overflow-x-auto">
+   809→            <Table>
+   810→              <TableHeader>
+   811→                <TableRow className="hover:bg-transparent">
+   812→                  <TableHead className="text-xs font-semibold">{t('reports.responseTime.col.bucket')}</TableHead>
+   813→                  <TableHead className="text-xs font-semibold text-right">{t('reports.responseTime.col.count')}</TableHead>
+   814→                  <TableHead className="text-xs font-semibold text-right">{t('reports.responseTime.col.percentage')}</TableHead>
+   815→                  <TableHead className="text-xs font-semibold text-right">{t('reports.responseTime.col.avgSatisfaction')}</TableHead>
+   816→                </TableRow>
+   817→              </TableHeader>
+   818→              <TableBody>
+   819→                {buckets.map((row: any, i: number) => (
+   820→                  <TableRow key={i} className="text-xs">
+   821→                    <TableCell className="font-medium">{row.bucket}</TableCell>
+   822→                    <TableCell className="text-right tabular-nums font-semibold">{row.count}</TableCell>
+   823→                    <TableCell className="text-right tabular-nums">{row.percentage}</TableCell>
+   824→                    <TableCell className="text-right tabular-nums">
+   825→                      <span className={cn(
+   826→                        'font-semibold',
+   827→                        parseFloat(row.avgSatisfaction) >= 4.5 ? 'text-emerald-500' : parseFloat(row.avgSatisfaction) >= 4.0 ? 'text-amber-500' : 'text-rose-500'
+   828→                      )}>
+   829→                        {row.avgSatisfaction} ★
+   830→                      </span>
+   831→                    </TableCell>
+   832→                  </TableRow>
+   833→                ))}
+   834→              </TableBody>
+   835→            </Table>
+   836→          </div>
+   837→        </div>
+   838→      </div>
+   839→    )
+   840→  }
+   841→
+   842→  // ─── Bot Performance ───
+   843→  const renderBotPerformanceTab = () => {
+   844→    if (!botPerformanceData) return null
+   845→    const trendIcon = (trend: string) => {
+   846→      if (trend === 'up') return <ArrowUpRight className="h-3.5 w-3.5 text-emerald-500" />
+   847→      if (trend === 'down') return <ArrowDownRight className="h-3.5 w-3.5 text-rose-500" />
+   848→      return <Minus className="h-3.5 w-3.5 text-amber-500" />
+   849→    }
+   850→    const metricLabel = (key: string) => {
+   851→      const map: Record<string, string> = {
+   852→        totalHandled: t('reports.botPerformance.totalHandled'),
+   853→        handoffRate: t('reports.botPerformance.handoffRate'),
+   854→        avgResolutionTime: t('reports.botPerformance.avgResolutionTime'),
+   855→        customerSatisfaction: t('reports.botPerformance.customerSatisfaction'),
+   856→        conversationsSaved: t('reports.botPerformance.conversationsSaved'),
+   857→        accuracy: t('reports.botPerformance.accuracy'),
+   858→      }
+   859→      return map[key] || key
+   860→    }
+   861→    return (
+   862→      <div className="glass-card rounded-2xl p-4 md:p-5">
+   863→        <div className="overflow-x-auto">
+   864→          <Table>
+   865→            <TableHeader>
+   866→              <TableRow className="hover:bg-transparent">
+   867→                <TableHead className="text-xs font-semibold">{t('reports.botPerformance.col.metric')}</TableHead>
+   868→                <TableHead className="text-xs font-semibold text-right">{t('reports.botPerformance.col.value')}</TableHead>
+   869→                <TableHead className="text-xs font-semibold text-center">{t('reports.botPerformance.col.trend')}</TableHead>
+   870→              </TableRow>
+   871→            </TableHeader>
+   872→            <TableBody>
+   873→              {botPerformanceData.metrics.map((row: any, i: number) => (
+   874→                <TableRow key={i} className="text-xs">
+   875→                  <TableCell className="font-medium">{metricLabel(row.metric)}</TableCell>
+   876→                  <TableCell className="text-right tabular-nums font-semibold">{row.value}</TableCell>
+   877→                  <TableCell className="text-center">
+   878→                    <div className="flex items-center justify-center gap-1.5">
+   879→                      {trendIcon(row.trend)}
+   880→                      <span className="text-[10px] text-muted-foreground">{t(`reports.botPerformance.trend.${row.trend}`)}</span>
+   881→                    </div>
+   882→                  </TableCell>
+   883→                </TableRow>
+   884→              ))}
+   885→            </TableBody>
+   886→          </Table>
+   887→        </div>
+   888→      </div>
+   889→    )
+   890→  }
+   891→
+   892→  // ─── Tags Analysis ───
+   893→  const renderTagsTable = () => (
+   894→    <div className="glass-card rounded-2xl p-4 md:p-5">
+   895→      <div className="overflow-x-auto">
+   896→        <Table>
+   897→          <TableHeader>
+   898→            <TableRow className="hover:bg-transparent">
+   899→              <TableHead className="text-xs font-semibold">{t('reports.tags.col.tag')}</TableHead>
+   900→              <TableHead className="text-xs font-semibold text-right">{t('reports.tags.col.count')}</TableHead>
+   901→              <TableHead className="text-xs font-semibold text-right">{t('reports.tags.col.conversations')}</TableHead>
+   902→              <TableHead className="text-xs font-semibold text-right">{t('reports.tags.col.avgResolution')}</TableHead>
+   903→              <TableHead className="text-xs font-semibold text-right">{t('reports.tags.col.satisfaction')}</TableHead>
+   904→            </TableRow>
+   905→          </TableHeader>
+   906→          <TableBody>
+   907→            {tagsData.map((row, i) => (
+   908→              <TableRow
+   909→                key={i}
+   910→                className="text-xs cursor-pointer hover:bg-foreground/[0.04] transition-colors"
+   911→                onClick={() => handleRowClick('tags', row.id, row.tag)}
+   912→              >
+   913→                <TableCell className="font-medium">
+   914→                  <div className="flex items-center gap-1.5">
+   915→                    <Tag className="h-3 w-3 text-violet-500" />
+   916→                    {row.tag}
+   917→                  </div>
+   918→                </TableCell>
+   919→                <TableCell className="text-right tabular-nums">{row.count}</TableCell>
+   920→                <TableCell className="text-right tabular-nums font-semibold">{row.conversations}</TableCell>
+   921→                <TableCell className="text-right tabular-nums text-muted-foreground">{row.avgResolution}</TableCell>
+   922→                <TableCell className="text-right tabular-nums">
+   923→                  <span className={cn(
+   924→                    'font-semibold',
+   925→                    parseFloat(row.satisfaction) >= 4.5 ? 'text-emerald-500' : parseFloat(row.satisfaction) >= 4.0 ? 'text-amber-500' : 'text-rose-500'
+   926→                  )}>
+   927→                    {row.satisfaction} ★
+   928→                  </span>
+   929→                </TableCell>
+   930→              </TableRow>
+   931→            ))}
+   932→          </TableBody>
+   933→        </Table>
+   934→      </div>
+   935→    </div>
+   936→  )
+   937→
+   938→  // ─── Resolution Trends ───
+   939→  const renderResolutionTrendsTab = () => (
+   940→    <div className="space-y-4">
+   941→      <div id="chart-resolutionTrends" ref={chartRefResolutionTrends} className="glass-card rounded-2xl p-4 md:p-5">
+   942→        <div className="h-64 md:h-72">
+   943→          <ResponsiveContainer width="100%" height="100%">
+   944→            <LineChart data={resolutionTrendsData} margin={{ top: 4, right: 4, left: -20, bottom: 4 }}>
+   945→              <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
+   946→              <XAxis dataKey="period" tick={{ fontSize: 9 }} interval={0} angle={-15} textAnchor="end" height={50} />
+   947→              <YAxis tick={{ fontSize: 10 }} />
+   948→              <Tooltip contentStyle={{ fontSize: 12, borderRadius: 12, border: '1px solid oklch(0 0 0 / 0.06)' }} />
+   949→              <Legend wrapperStyle={{ fontSize: 11 }} />
+   950→              <Line type="monotone" dataKey="total" name={t('reports.resolutionTrends.col.total')} stroke="#8b5cf6" strokeWidth={2} dot={{ r: 3 }} />
+   951→              <Line type="monotone" dataKey="resolved" name={t('reports.resolutionTrends.col.resolved')} stroke="#10b981" strokeWidth={2} dot={{ r: 3 }} />
+   952→            </LineChart>
+   953→          </ResponsiveContainer>
+   954→        </div>
+   955→      </div>
+   956→      <div className="glass-card rounded-2xl p-4 md:p-5">
+   957→        <div className="overflow-x-auto">
+   958→          <Table>
+   959→            <TableHeader>
+   960→              <TableRow className="hover:bg-transparent">
+   961→                <TableHead className="text-xs font-semibold">{t('reports.resolutionTrends.col.period')}</TableHead>
+   962→                <TableHead className="text-xs font-semibold text-right">{t('reports.resolutionTrends.col.total')}</TableHead>
+   963→                <TableHead className="text-xs font-semibold text-right">{t('reports.resolutionTrends.col.resolved')}</TableHead>
+   964→                <TableHead className="text-xs font-semibold text-right">{t('reports.resolutionTrends.col.rate')}</TableHead>
+   965→                <TableHead className="text-xs font-semibold text-right">{t('reports.resolutionTrends.col.avgTime')}</TableHead>
+   966→              </TableRow>
+   967→            </TableHeader>
+   968→            <TableBody>
+   969→              {resolutionTrendsData.map((row, i) => (
+   970→                <TableRow key={i} className="text-xs">
+   971→                  <TableCell className="font-medium font-mono text-[11px]">{row.period}</TableCell>
+   972→                  <TableCell className="text-right tabular-nums font-semibold">{row.total}</TableCell>
+   973→                  <TableCell className="text-right tabular-nums text-emerald-600 dark:text-emerald-400">{row.resolved}</TableCell>
+   974→                  <TableCell className="text-right tabular-nums">
+   975→                    <Badge variant="secondary" className={cn(
+   976→                      'text-[10px] h-5 px-1.5 font-mono font-semibold',
+   977→                      parseFloat(row.rate) >= 80 ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/15'
+   978→                        : parseFloat(row.rate) >= 60 ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 hover:bg-amber-500/15'
+   979→                        : 'bg-rose-500/10 text-rose-600 dark:text-rose-400 hover:bg-rose-500/15'
+   980→                    )}>
+   981→                      {row.rate}
+   982→                    </Badge>
+   983→                  </TableCell>
+   984→                  <TableCell className="text-right tabular-nums text-muted-foreground">{row.avgTime}</TableCell>
+   985→                </TableRow>
+   986→              ))}
+   987→            </TableBody>
+   988→          </Table>
+   989→        </div>
+   990→      </div>
+   991→    </div>
+   992→  )
+   993→
+   994→  // ═══════════════════════════════════════════
+   995→  // ─── Detail view renderer ───
+   996→  // ═══════════════════════════════════════════
+   997→
+   998→  const renderConversationDetail = () => {
+   999→    if (!detailData) return null
+  1000→    return (
+  1001→      <div className="glass-card rounded-2xl p-4 md:p-5">
+  1002→        <div className="overflow-x-auto max-h-[60vh] overflow-y-auto">
+  1003→          <Table>
+  1004→            <TableHeader>
+  1005→              <TableRow className="hover:bg-transparent">
+  1006→                <TableHead className="text-xs font-semibold">{t('reports.conversationDetail.col.id')}</TableHead>
+  1007→                <TableHead className="text-xs font-semibold">{t('reports.conversationDetail.col.customer')}</TableHead>
+  1008→                <TableHead className="text-xs font-semibold text-center">{t('reports.conversationDetail.col.channel')}</TableHead>
+  1009→                <TableHead className="text-xs font-semibold text-center">{t('reports.conversationDetail.col.status')}</TableHead>
+  1010→                <TableHead className="text-xs font-semibold">{t('reports.conversationDetail.col.agent')}</TableHead>
+  1011→                <TableHead className="text-xs font-semibold text-right">{t('reports.conversationDetail.col.messages')}</TableHead>
+  1012→                <TableHead className="text-xs font-semibold text-right">{t('reports.conversationDetail.col.waitTime')}</TableHead>
+  1013→                <TableHead className="text-xs font-semibold text-right">{t('reports.conversationDetail.col.resolutionTime')}</TableHead>
+  1014→                <TableHead className="text-xs font-semibold text-right">{t('reports.conversationDetail.col.satisfaction')}</TableHead>
+  1015→              </TableRow>
+  1016→            </TableHeader>
+  1017→            <TableBody>
+  1018→              {(detailData.conversations || []).map((c: any, i: number) => (
+  1019→                <TableRow key={i} className="text-xs">
+  1020→                  <TableCell className="font-mono text-[10px] text-muted-foreground">{c.id}</TableCell>
+  1021→                  <TableCell className="font-medium">{c.customer}</TableCell>
+  1022→                  <TableCell className="text-center">
+  1023→                    <Badge variant="outline" className="text-[10px] h-5 px-1.5">{c.channel}</Badge>
+  1024→                  </TableCell>
+  1025→                  <TableCell className="text-center">
+  1026→                    <Badge variant="secondary" className={cn(
+  1027→                      'text-[10px] h-5 px-1.5',
+  1028→                      c.status === 'resolved' ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+  1029→                        : c.status === 'open' ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
+  1030→                        : 'bg-gray-500/10 text-gray-500'
+  1031→                    )}>{c.status}</Badge>
+  1032→                  </TableCell>
+  1033→                  <TableCell>{c.agent}</TableCell>
+  1034→                  <TableCell className="text-right tabular-nums">{c.messages}</TableCell>
+  1035→                  <TableCell className="text-right tabular-nums text-muted-foreground">{c.waitTime}</TableCell>
+  1036→                  <TableCell className="text-right tabular-nums">{c.resolutionTime}</TableCell>
+  1037→                  <TableCell className="text-right tabular-nums">
+  1038→                    <span className={cn(
+  1039→                      'font-semibold',
+  1040→                      parseFloat(c.satisfaction) >= 4.5 ? 'text-emerald-500' : parseFloat(c.satisfaction) >= 4.0 ? 'text-amber-500' : 'text-rose-500'
+  1041→                    )}>{c.satisfaction} ★</span>
+  1042→                  </TableCell>
+  1043→                </TableRow>
+  1044→              ))}
+  1045→            </TableBody>
+  1046→          </Table>
+  1047→        </div>
+  1048→      </div>
+  1049→    )
+  1050→  }
+  1051→
+  1052→  const renderAgentDetail = () => {
+  1053→    if (!detailData) return null
+  1054→    const { agent, recentConversations } = detailData
+  1055→    return (
+  1056→      <div className="space-y-4">
+  1057→        <div className="glass-card rounded-2xl p-4 md:p-5">
+  1058→          <p className="text-sm font-bold mb-3">{t('reports.detail.agent', { name: agent.name })}</p>
+  1059→          <DetailStatRow label={t('reports.detail.agent.totalConvos')} value={String(agent.conversations)} />
+  1060→          <DetailStatRow label={t('reports.detail.agent.totalMessages')} value={String(agent.messages)} />
+  1061→          <DetailStatRow label={t('reports.detail.agent.avgResponseTime')} value={agent.avgResponseTime} />
+  1062→          <DetailStatRow label={t('reports.detail.agent.resolvedCount')} value={String(agent.resolved)} />
+  1063→          <DetailStatRow label={t('reports.detail.agent.satisfaction')} value={`${agent.satisfaction} ★`} />
+  1064→          <DetailStatRow label={t('reports.detail.agent.activeHours')} value={agent.activeHours} />
+  1065→        </div>
+  1066→        <div className="glass-card rounded-2xl p-4 md:p-5">
+  1067→          <p className="text-xs font-semibold mb-3">{t('reports.detail.agent.recentConversations')}</p>
+  1068→          <div className="overflow-x-auto">
+  1069→            <Table>
+  1070→              <TableHeader>
+  1071→                <TableRow className="hover:bg-transparent">
+  1072→                  <TableHead className="text-xs font-semibold">ID</TableHead>
+  1073→                  <TableHead className="text-xs font-semibold">{t('reports.conversationDetail.col.customer')}</TableHead>
+  1074→                  <TableHead className="text-xs font-semibold text-center">{t('reports.conversationDetail.col.channel')}</TableHead>
+  1075→                  <TableHead className="text-xs font-semibold text-center">{t('reports.conversationDetail.col.status')}</TableHead>
+  1076→                  <TableHead className="text-xs font-semibold text-right">{t('reports.conversationDetail.col.messages')}</TableHead>
+  1077→                  <TableHead className="text-xs font-semibold text-right">{t('reports.conversationDetail.col.satisfaction')}</TableHead>
+  1078→                </TableRow>
+  1079→              </TableHeader>
+  1080→              <TableBody>
+  1081→                {(recentConversations || []).map((c: any, i: number) => (
+  1082→                  <TableRow key={i} className="text-xs">
+  1083→                    <TableCell className="font-mono text-[10px] text-muted-foreground">{c.id}</TableCell>
+  1084→                    <TableCell className="font-medium">{c.customer}</TableCell>
+  1085→                    <TableCell className="text-center"><Badge variant="outline" className="text-[10px] h-5 px-1.5">{c.channel}</Badge></TableCell>
+  1086→                    <TableCell className="text-center">
+  1087→                      <Badge variant="secondary" className={cn(
+  1088→                        'text-[10px] h-5 px-1.5',
+  1089→                        c.status === 'resolved' ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+  1090→                          : c.status === 'open' ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
+  1091→                          : 'bg-gray-500/10 text-gray-500'
+  1092→                      )}>{c.status}</Badge>
+  1093→                    </TableCell>
+  1094→                    <TableCell className="text-right tabular-nums">{c.messages}</TableCell>
+  1095→                    <TableCell className="text-right tabular-nums font-semibold">{c.satisfaction} ★</TableCell>
+  1096→                  </TableRow>
+  1097→                ))}
+  1098→              </TableBody>
+  1099→            </Table>
+  1100→          </div>
+  1101→        </div>
+  1102→      </div>
+  1103→    )
+  1104→  }
+  1105→
+  1106→  const renderChannelDetail = () => {
+  1107→    if (!detailData) return null
+  1108→    const { channel, dailyBreakdown } = detailData
+  1109→    return (
+  1110→      <div className="space-y-4">
+  1111→        <div className="glass-card rounded-2xl p-4 md:p-5">
+  1112→          <p className="text-sm font-bold mb-3">{t('reports.detail.channel', { name: channel.name })}</p>
+  1113→          <DetailStatRow label={t('reports.detail.channel.totalConvos')} value={String(channel.conversations)} />
+  1114→          <DetailStatRow label={t('reports.detail.channel.totalMessages')} value={String(channel.messages)} />
+  1115→          <DetailStatRow label={t('reports.detail.channel.avgResponseTime')} value={channel.avgResponseTime} />
+  1116→          <DetailStatRow label={t('reports.detail.channel.resolutionRate')} value={channel.resolutionRate} />
+  1117→          <DetailStatRow label={t('reports.detail.channel.satisfaction')} value={`${channel.satisfaction} ★`} />
+  1118→        </div>
+  1119→        <div className="glass-card rounded-2xl p-4 md:p-5">
+  1120→          <p className="text-xs font-semibold mb-3">{t('reports.detail.channel.dailyBreakdown')}</p>
+  1121→          <div className="overflow-x-auto">
+  1122→            <Table>
+  1123→              <TableHeader>
+  1124→                <TableRow className="hover:bg-transparent">
+  1125→                  <TableHead className="text-xs font-semibold">{t('reports.conversations.col.date')}</TableHead>
+  1126→                  <TableHead className="text-xs font-semibold text-right">{t('reports.conversations.col.total')}</TableHead>
+  1127→                  <TableHead className="text-xs font-semibold text-right">{t('reports.conversations.col.resolved')}</TableHead>
+  1128→                  <TableHead className="text-xs font-semibold text-right">{t('reports.channels.col.messages')}</TableHead>
+  1129→                </TableRow>
+  1130→              </TableHeader>
+  1131→              <TableBody>
+  1132→                {(dailyBreakdown || []).map((d: any, i: number) => (
+  1133→                  <TableRow key={i} className="text-xs">
+  1134→                    <TableCell className="font-medium">{d.date}</TableCell>
+  1135→                    <TableCell className="text-right tabular-nums font-semibold">{d.conversations}</TableCell>
+  1136→                    <TableCell className="text-right tabular-nums text-emerald-600 dark:text-emerald-400">{d.resolved}</TableCell>
+  1137→                    <TableCell className="text-right tabular-nums">{d.messages}</TableCell>
+  1138→                  </TableRow>
+  1139→                ))}
+  1140→              </TableBody>
+  1141→            </Table>
+  1142→          </div>
+  1143→        </div>
+  1144→      </div>
+  1145→    )
+  1146→  }
+  1147→
+  1148→  const renderCustomerDetail = () => {
+  1149→    if (!detailData) return null
+  1150→    const { customer, conversationHistory } = detailData
+  1151→    return (
+  1152→      <div className="space-y-4">
+  1153→        <div className="glass-card rounded-2xl p-4 md:p-5">
+  1154→          <p className="text-sm font-bold mb-3">{t('reports.detail.customer', { name: customer.name })}</p>
+  1155→          <DetailStatRow label={t('reports.detail.customer.totalConvos')} value={String(customer.conversations)} />
+  1156→          <DetailStatRow label={t('reports.detail.customer.totalMessages')} value={String(customer.messages)} />
+  1157→          <DetailStatRow label={t('reports.detail.customer.lastActive')} value={customer.lastActive} />
+  1158→          <DetailStatRow label={t('reports.detail.customer.primaryChannel')} value={customer.primaryChannel} />
+  1159→          <DetailStatRow label={t('reports.detail.customer.value')} value={customer.value} />
+  1160→        </div>
+  1161→        <div className="glass-card rounded-2xl p-4 md:p-5">
+  1162→          <p className="text-xs font-semibold mb-3">{t('reports.detail.customer.conversationHistory')}</p>
+  1163→          <div className="overflow-x-auto">
+  1164→            <Table>
+  1165→              <TableHeader>
+  1166→                <TableRow className="hover:bg-transparent">
+  1167→                  <TableHead className="text-xs font-semibold">ID</TableHead>
+  1168→                  <TableHead className="text-xs font-semibold">{t('reports.conversations.col.date')}</TableHead>
+  1169→                  <TableHead className="text-xs font-semibold text-center">{t('reports.conversationDetail.col.channel')}</TableHead>
+  1170→                  <TableHead className="text-xs font-semibold text-center">{t('reports.conversationDetail.col.status')}</TableHead>
+  1171→                  <TableHead className="text-xs font-semibold">{t('reports.conversationDetail.col.agent')}</TableHead>
+  1172→                  <TableHead className="text-xs font-semibold text-right">{t('reports.conversationDetail.col.messages')}</TableHead>
+  1173→                  <TableHead className="text-xs font-semibold text-right">{t('reports.conversationDetail.col.resolutionTime')}</TableHead>
+  1174→                </TableRow>
+  1175→              </TableHeader>
+  1176→              <TableBody>
+  1177→                {(conversationHistory || []).map((c: any, i: number) => (
+  1178→                  <TableRow key={i} className="text-xs">
+  1179→                    <TableCell className="font-mono text-[10px] text-muted-foreground">{c.id}</TableCell>
+  1180→                    <TableCell className="font-medium">{c.date}</TableCell>
+  1181→                    <TableCell className="text-center"><Badge variant="outline" className="text-[10px] h-5 px-1.5">{c.channel}</Badge></TableCell>
+  1182→                    <TableCell className="text-center">
+  1183→                      <Badge variant="secondary" className={cn(
+  1184→                        'text-[10px] h-5 px-1.5',
+  1185→                        c.status === 'resolved' ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+  1186→                          : c.status === 'open' ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
+  1187→                          : 'bg-gray-500/10 text-gray-500'
+  1188→                      )}>{c.status}</Badge>
+  1189→                    </TableCell>
+  1190→                    <TableCell>{c.agent}</TableCell>
+  1191→                    <TableCell className="text-right tabular-nums">{c.messages}</TableCell>
+  1192→                    <TableCell className="text-right tabular-nums text-muted-foreground">{c.resolutionTime}</TableCell>
+  1193→                  </TableRow>
+  1194→                ))}
+  1195→              </TableBody>
+  1196→            </Table>
+  1197→          </div>
+  1198→        </div>
+  1199→      </div>
+  1200→    )
+  1201→  }
+  1202→
+  1203→  const renderTagDetail = () => {
+  1204→    if (!detailData) return null
+  1205→    return (
+  1206→      <div className="glass-card rounded-2xl p-4 md:p-5">
+  1207→        <p className="text-sm font-bold mb-3">{t('reports.tags.detail.title', { tag: detailData.tag })}</p>
+  1208→        <div className="overflow-x-auto max-h-[60vh] overflow-y-auto">
+  1209→          <Table>
+  1210→            <TableHeader>
+  1211→              <TableRow className="hover:bg-transparent">
+  1212→                <TableHead className="text-xs font-semibold">ID</TableHead>
+  1213→                <TableHead className="text-xs font-semibold">{t('reports.conversationDetail.col.customer')}</TableHead>
+  1214→                <TableHead className="text-xs font-semibold text-center">{t('reports.conversationDetail.col.channel')}</TableHead>
+  1215→                <TableHead className="text-xs font-semibold text-center">{t('reports.conversationDetail.col.status')}</TableHead>
+  1216→                <TableHead className="text-xs font-semibold">{t('reports.conversationDetail.col.agent')}</TableHead>
+  1217→                <TableHead className="text-xs font-semibold text-right">{t('reports.conversationDetail.col.messages')}</TableHead>
+  1218→                <TableHead className="text-xs font-semibold text-right">{t('reports.conversationDetail.col.resolutionTime')}</TableHead>
+  1219→                <TableHead className="text-xs font-semibold text-right">{t('reports.conversationDetail.col.satisfaction')}</TableHead>
+  1220→              </TableRow>
+  1221→            </TableHeader>
+  1222→            <TableBody>
+  1223→              {(detailData.conversations || []).map((c: any, i: number) => (
+  1224→                <TableRow key={i} className="text-xs">
+  1225→                  <TableCell className="font-mono text-[10px] text-muted-foreground">{c.id}</TableCell>
+  1226→                  <TableCell className="font-medium">{c.customer}</TableCell>
+  1227→                  <TableCell className="text-center"><Badge variant="outline" className="text-[10px] h-5 px-1.5">{c.channel}</Badge></TableCell>
+  1228→                  <TableCell className="text-center">
+  1229→                    <Badge variant="secondary" className={cn(
+  1230→                      'text-[10px] h-5 px-1.5',
+  1231→                      c.status === 'resolved' ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+  1232→                        : c.status === 'open' ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
+  1233→                        : 'bg-gray-500/10 text-gray-500'
+  1234→                    )}>{c.status}</Badge>
+  1235→                  </TableCell>
+  1236→                  <TableCell>{c.agent}</TableCell>
+  1237→                  <TableCell className="text-right tabular-nums">{c.messages}</TableCell>
+  1238→                  <TableCell className="text-right tabular-nums">{c.resolutionTime}</TableCell>
+  1239→                  <TableCell className="text-right tabular-nums font-semibold">{c.satisfaction} ★</TableCell>
+  1240→                </TableRow>
+  1241→              ))}
+  1242→            </TableBody>
+  1243→          </Table>
+  1244→        </div>
+  1245→      </div>
+  1246→    )
+  1247→  }
+  1248→
+  1249→  const renderDetailContent = () => {
+  1250→    if (detailLoading) {
+  1251→      return (
+  1252→        <div className="glass-card rounded-2xl p-4 md:p-5">
+  1253→          <div className="skeleton-line h-4 w-40 mb-4" />
+  1254→          <div className="space-y-3">
+  1255→            {[1,2,3,4,5].map(i => (
+  1256→              <div key={i} className="flex gap-4 items-center">
+  1257→                <div className="skeleton-line h-3 w-16 flex-shrink-0" />
+  1258→                <div className="skeleton-line h-3 w-10 flex-shrink-0" />
+  1259→                <div className="flex-1" />
+  1260→                <div className="skeleton-line h-3 w-12 flex-shrink-0" />
+  1261→              </div>
+  1262→            ))}
+  1263→          </div>
+  1264→        </div>
+  1265→      )
+  1266→    }
+  1267→    switch (detailView?.type) {
+  1268→      case 'conversations': return renderConversationDetail()
+  1269→      case 'agents': return renderAgentDetail()
+  1270→      case 'channels': return renderChannelDetail()
+  1271→      case 'customers': return renderCustomerDetail()
+  1272→      case 'tags': return renderTagDetail()
+  1273→      default: return null
+  1274→    }
+  1275→  }
+  1276→
+  1277→  // ═══════════════════════════════════════════
+  1278→  // ─── Main content switch ───
+  1279→  // ═══════════════════════════════════════════
+  1280→
+  1281→  const renderTabContent = () => {
+  1282→    if (loading) {
+  1283→      return (
+  1284→        <div className="space-y-4">
+  1285→          <div className="glass-card rounded-2xl p-4 md:p-5">
+  1286→            <div className="space-y-3">
+  1287→              {[1,2,3,4,5,6].map(i => (
+  1288→                <div key={i} className="flex gap-4 items-center">
+  1289→                  <div className="skeleton-line h-3 w-20 flex-shrink-0" />
+  1290→                  <div className="skeleton-line h-3 w-12 flex-shrink-0" />
+  1291→                  <div className="skeleton-line h-3 w-14 flex-shrink-0" />
+  1292→                  <div className="skeleton-line h-3 w-16 flex-shrink-0" />
+  1293→                  <div className="flex-1" />
+  1294→                  <div className="skeleton-line h-3 w-14 flex-shrink-0" />
+  1295→                </div>
+  1296→              ))}
+  1297→            </div>
+  1298→          </div>
+  1299→        </div>
+  1300→      )
+  1301→    }
+  1302→    switch (activeTab) {
+  1303→      case 'conversations': return renderConversationsTable()
+  1304→      case 'agents': return renderAgentsTable()
+  1305→      case 'sla': return renderSlaTable()
+  1306→      case 'channels': return renderChannelsTable()
+  1307→      case 'customers': return renderCustomersTable()
+  1308→      case 'messages': return renderMessagesTab()
+  1309→      case 'responseTime': return renderResponseTimeTab()
+  1310→      case 'botPerformance': return renderBotPerformanceTab()
+  1311→      case 'tags': return renderTagsTable()
+  1312→      case 'resolutionTrends': return renderResolutionTrendsTab()
+  1313→      default: return null
+  1314→    }
+  1315→  }
+  1316→
+  1317→  return (
+  1318→    <div className="h-dvh h-screen flex flex-col bg-background overflow-hidden">
+  1319→      {/* Header */}
+  1320→      <div className="flex-shrink-0 px-4 md:px-6 pt-4 md:pt-5 pb-3">
+  1321→        <div className="flex items-center justify-between gap-3">
+  1322→          <div className="flex items-center gap-3 min-w-0">
+  1323→            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-xl flex-shrink-0"
+  1324→              onClick={() => detailView ? setDetailView(null) : setActiveView('dashboard')}>
+  1325→              <ArrowLeft className="h-4 w-4" />
+  1326→            </Button>
+  1327→            <div className="min-w-0">
+  1328→              <h1 className="text-base md:text-lg font-bold tracking-tight truncate">
+  1329→                {detailView ? t('reports.detail.title') + ': ' + detailView.label : t('reports.title')}
+  1330→              </h1>
+  1331→              <p className="text-[11px] md:text-xs text-muted-foreground truncate">{t('reports.subtitle')}</p>
+  1332→            </div>
+  1333→          </div>
+  1334→          <div className="flex items-center gap-2 flex-shrink-0">
+  1335→            <Button variant="outline" size="sm" className="h-8 rounded-xl text-xs gap-1.5 border-border/40"
+  1336→              onClick={fetchAll} disabled={loading}>
+  1337→              {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+  1338→              <span className="hidden sm:inline">{t('reports.refresh')}</span>
+  1339→            </Button>
+  1340→            <Button variant="outline" size="sm" className="h-8 rounded-xl text-xs gap-1.5 border-border/40"
+  1341→              onClick={handleExportExcel} disabled={loading || !!detailView}>
+  1342→              <Download className="h-3.5 w-3.5" />
+  1343→              <span className="hidden sm:inline">{t('reports.export')}</span>
+  1344→            </Button>
+  1345→            {!detailView && chartTabs.includes(activeTab) && (
+  1346→              <Button variant="outline" size="sm" className="h-8 rounded-xl text-xs gap-1.5 border-border/40"
+  1347→                onClick={handleExportChartImage}>
+  1348→                <ImageIcon className="h-3.5 w-3.5" />
+  1349→                <span className="hidden sm:inline">{t('reports.exportChart') || 'PNG'}</span>
+  1350→              </Button>
+  1351→            )}
+  1352→          </div>
+  1353→        </div>
+  1354→
+  1355→        {/* Date Range Picker */}
+  1356→        {!detailView && (
+  1357→          <div className="flex items-center gap-2 mt-3 flex-wrap">
+  1358→            {/* Presets */}
+  1359→            <div className="flex items-center gap-1 p-0.5 bg-foreground/[0.03] rounded-lg overflow-x-auto scrollbar-none">
+  1360→              {presets.map((p) => (
+  1361→                <button
+  1362→                  key={p.key}
+  1363→                  onClick={() => handlePreset(p.key)}
+  1364→                  className={cn(
+  1365→                    'px-2.5 py-1.5 rounded-md text-[11px] font-medium transition-all duration-200 whitespace-nowrap',
+  1366→                    preset === p.key
+  1367→                      ? 'bg-gradient-to-r from-violet-500 to-indigo-500 text-white shadow-sm'
+  1368→                      : 'text-muted-foreground/70 hover:text-foreground hover:bg-foreground/[0.03]'
+  1369→                  )}
+  1370→                >
+  1371→                  {p.label}
+  1372→                </button>
+  1373→              ))}
+  1374→            </div>
+  1375→
+  1376→            {/* Custom date pickers (always visible) */}
+  1377→            <div className="flex items-center gap-1.5">
+  1378→              <Popover open={calOpen === 'start'} onOpenChange={(open) => setCalOpen(open ? 'start' : null)}>
+  1379→                <PopoverTrigger asChild>
+  1380→                  <Button variant="outline" size="sm"
+  1381→                    className={cn('h-8 rounded-lg text-[11px] gap-1.5 border-border/40 min-w-[130px] justify-start', preset === 'custom' && 'border-violet-500/50 bg-violet-500/5')}>
+  1382→                    <CalendarIcon className="h-3.5 w-3.5 text-muted-foreground" />
+  1383→                    {startDate ? format(startDate, 'dd/MM/yyyy', { locale: dateLocale }) : t('reports.startDate')}
+  1384→                  </Button>
+  1385→                </PopoverTrigger>
+  1386→                <PopoverContent className="w-auto p-0" align="start">
+  1387→                  <Calendar
+  1388→                    mode="single"
+  1389→                    selected={startDate}
+  1390→                    onSelect={(d) => { setStartDate(d); setPreset('custom') }}
+  1391→                    disabled={{ after: endDate || new Date() }}
+  1392→                    defaultMonth={startDate || new Date()}
+  1393→                  />
+  1394→                </PopoverContent>
+  1395→              </Popover>
+  1396→
+  1397→              <span className="text-[11px] text-muted-foreground">→</span>
+  1398→
+  1399→              <Popover open={calOpen === 'end'} onOpenChange={(open) => setCalOpen(open ? 'end' : null)}>
+  1400→                <PopoverTrigger asChild>
+  1401→                  <Button variant="outline" size="sm"
+  1402→                    className={cn('h-8 rounded-lg text-[11px] gap-1.5 border-border/40 min-w-[130px] justify-start', preset === 'custom' && 'border-violet-500/50 bg-violet-500/5')}>
+  1403→                    <CalendarIcon className="h-3.5 w-3.5 text-muted-foreground" />
+  1404→                    {endDate ? format(endDate, 'dd/MM/yyyy', { locale: dateLocale }) : t('reports.endDate')}
+  1405→                  </Button>
+  1406→                </PopoverTrigger>
+  1407→                <PopoverContent className="w-auto p-0" align="start">
+  1408→                  <Calendar
+  1409→                    mode="single"
+  1410→                    selected={endDate}
+  1411→                    onSelect={(d) => { setEndDate(d); setPreset('custom') }}
+  1412→                    disabled={{ before: startDate, after: new Date() }}
+  1413→                    defaultMonth={endDate || new Date()}
+  1414→                  />
+  1415→                </PopoverContent>
+  1416→              </Popover>
+  1417→            </div>
+  1418→          </div>
+  1419→        )}
+  1420→      </div>
+  1421→
+  1422→      {/* Scrollable content */}
+  1423→      <div className="flex-1 min-h-0 overflow-y-auto px-4 md:px-6 pb-6">
+  1424→        {detailView ? (
+  1425→          renderDetailContent()
+  1426→        ) : (
+  1427→          <>
+  1428→            {/* Summary stats */}
+  1429→            <div className="grid grid-cols-2 md:grid-cols-5 gap-3 md:gap-4 mb-5">
+  1430→              <SummaryCard label={t('reports.summary.conversations')} value={totalConvs.toLocaleString()} icon={MessageSquare} gradient="bg-gradient-to-br from-violet-500 to-purple-600" />
+  1431→              <SummaryCard label={t('reports.summary.resolved')} value={totalResolved.toLocaleString()} icon={CheckCircle} gradient="bg-gradient-to-br from-emerald-500 to-teal-600" />
+  1432→              <SummaryCard label={t('reports.summary.avgResponse')} value={conversationsData.length > 0 ? conversationsData[conversationsData.length - 1]?.avgResponseTime || '-' : '-'} icon={Clock} gradient="bg-gradient-to-br from-amber-500 to-orange-600" />
+  1433→              <SummaryCard label={t('reports.summary.satisfaction')} value={avgSatisfaction} icon={Star} gradient="bg-gradient-to-br from-rose-500 to-pink-600" />
+  1434→              <SummaryCard label={t('reports.summary.slaCompliance')} value={slaCompliance} icon={Shield} gradient="bg-gradient-to-br from-cyan-500 to-blue-600" />
+  1435→            </div>
+  1436→
+  1437→            {/* Tab navigation */}
+  1438→            <div className="flex items-center gap-1 p-1 bg-foreground/[0.03] rounded-xl mb-5 overflow-x-auto scrollbar-none">
+  1439→              {tabs.map((tab) => (
+  1440→                <button
+  1441→                  key={tab.key}
+  1442→                  onClick={() => { setActiveTab(tab.key); setDetailView(null) }}
+  1443→                  className={cn(
+  1444→                    'relative flex items-center gap-1.5 px-3 md:px-4 py-2 rounded-lg text-xs font-medium transition-all duration-200 whitespace-nowrap flex-shrink-0',
+  1445→                    activeTab === tab.key
+  1446→                      ? 'text-primary-foreground'
+  1447→                      : 'text-muted-foreground/70 hover:text-foreground hover:bg-foreground/[0.03]'
+  1448→                  )}
+  1449→                >
+  1450→                  {activeTab === tab.key && (
+  1451→                    <span className="absolute inset-0 rounded-lg bg-gradient-to-r from-violet-500 to-indigo-500 shadow-md shadow-violet-500/20 animate-scale-in" />
+  1452→                  )}
+  1453→                  <tab.icon className={cn('relative z-10 h-3.5 w-3.5', activeTab !== tab.key && 'opacity-50')} />
+  1454→                  <span className="relative z-10">{tab.label}</span>
+  1455→                </button>
+  1456→              ))}
+  1457→            </div>
+  1458→
+  1459→            {/* Tab content */}
+  1460→            {renderTabContent()}
+  1461→          </>
+  1462→        )}
+  1463→      </div>
+  1464→    </div>
+  1465→  )
+  1466→}
+  1467→
