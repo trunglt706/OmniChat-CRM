@@ -198,7 +198,7 @@ function generateTags(dayCount: number) {
 
 function generateResolutionTrends(dates: Date[], dayCount: number) {
   // Group by week
-  const weeks: { period: string; total: number; resolved: number; avgTime: string }[] = []
+  const weeks: { period: string; total: number; resolved: number; rate: string; avgTime: string }[] = []
   for (let w = 0; w < Math.ceil(dayCount / 7); w++) {
     const weekDates = dates.slice(w * 7, (w + 1) * 7)
     const periodLabel = weekDates.length > 0
