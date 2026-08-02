@@ -78,10 +78,12 @@ interface BubbleProps {
   isLastInGroup: boolean
   showAvatar: boolean
   gradientIdx: number
+  customerInit: string
+  agentInit: string
   onImageClick?: (url: string) => void
 }
 
-const MessageBubble = memo(function MessageBubble({ message, isLastInGroup, showAvatar, gradientIdx, onImageClick }: BubbleProps) {
+const MessageBubble = memo(function MessageBubble({ message, isLastInGroup, showAvatar, gradientIdx, customerInit, agentInit, onImageClick }: BubbleProps) {
   const isCustomer = message.senderType === 'customer'
   const gradient = GRADIENT_CLASSES[gradientIdx % GRADIENT_CLASSES.length]
   const isImage = message.messageType === 'image'
@@ -98,7 +100,7 @@ const MessageBubble = memo(function MessageBubble({ message, isLastInGroup, show
               : 'bg-gradient-to-br from-indigo-500 to-violet-600'
         )}>
           <AvatarFallback className="text-[10px] text-white font-semibold">
-            {message.senderType === 'bot' ? <Bot className="h-3.5 w-3.5" /> : isCustomer ? (message.senderName || t('chat.customerInit')).split(' ').slice(-2).map(n => n[0]).join('') : t('chat.agentInit')}
+            {message.senderType === 'bot' ? <Bot className="h-3.5 w-3.5" /> : isCustomer ? (message.senderName || customerInit).split(' ').slice(-2).map(n => n[0]).join('') : agentInit}
           </AvatarFallback>
         </Avatar>
       )}
@@ -782,7 +784,7 @@ export default function ChatArea() {
                     </span>
                   </div>
                 )}
-                <MessageBubble message={msg} isLastInGroup={isLastInGroup} showAvatar={showAvatar} gradientIdx={gradientIdx} onImageClick={handleImageClick} />
+                <MessageBubble message={msg} isLastInGroup={isLastInGroup} showAvatar={showAvatar} gradientIdx={gradientIdx} customerInit={t('chat.customerInit')} agentInit={t('chat.agentInit')} onImageClick={handleImageClick} />
               </div>
             )
           })}
