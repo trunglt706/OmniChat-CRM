@@ -2,34 +2,46 @@ import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
 
 // Channel metadata (static config, not from DB)
-const CHANNEL_META: Record<string, { order: number; fields: { key: string; label: string; type: 'text' | 'password' | 'url'; placeholder: string }[] }> = {
+// Production-ready: each field reflects the real credential requirements for the platform.
+const CHANNEL_META: Record<string, {
+  order: number
+  fields: { key: string; label: string; type: 'text' | 'password' | 'url'; placeholder: string }[]
+  skipConfigCheck?: string[] // field keys that are optional or auto-generated
+}> = {
   facebook_messenger: {
     order: 1,
     fields: [
-      { key: 'pageId', label: 'Page ID', type: 'text', placeholder: 'VD: OmniChat Official' },
-      { key: 'token', label: 'Page Access Token', type: 'password', placeholder: 'EAAxxxxxxx...' },
-      { key: 'verifyToken', label: 'Verify Token', type: 'text', placeholder: 'custom_verify_string' },
+      { key: 'appId', label: 'Facebook App ID', type: 'text', placeholder: 'VD: 1234567890123456' },
+      { key: 'appSecret', label: 'App Secret', type: 'password', placeholder: 'VD: abc123def456...' },
+      { key: 'pageId', label: 'Page ID', type: 'text', placeholder: 'VD: 987654321098765' },
+      { key: 'pageAccessToken', label: 'Page Access Token', type: 'password', placeholder: 'EAAxxxxxxx...' },
+      { key: 'verifyToken', label: 'Webhook Verify Token', type: 'text', placeholder: 'custom_verify_string' },
     ],
   },
   facebook_comment: {
     order: 2,
     fields: [
-      { key: 'pageId', label: 'Page ID', type: 'text', placeholder: 'VD: OmniChat Official' },
-      { key: 'token', label: 'Page Access Token', type: 'password', placeholder: 'EAAxxxxxxx...' },
+      { key: 'appId', label: 'Facebook App ID', type: 'text', placeholder: 'VD: 1234567890123456' },
+      { key: 'appSecret', label: 'App Secret', type: 'password', placeholder: 'VD: abc123def456...' },
+      { key: 'pageId', label: 'Page ID', type: 'text', placeholder: 'VD: 987654321098765' },
+      { key: 'pageAccessToken', label: 'Page Access Token', type: 'password', placeholder: 'EAAxxxxxxx...' },
     ],
   },
   zalo: {
     order: 3,
     fields: [
+      { key: 'appId', label: 'Zalo App ID', type: 'text', placeholder: 'VD: 123456789012345678' },
+      { key: 'appSecret', label: 'App Secret', type: 'password', placeholder: 'VD: abc123def456...' },
       { key: 'oaId', label: 'OA ID', type: 'text', placeholder: 'VD: 123456789012345678' },
-      { key: 'token', label: 'Access Token', type: 'password', placeholder: 'ZAxxxxxxx...' },
-      { key: 'phone', label: 'Số điện thoại OA', type: 'text', placeholder: '0901 234 567' },
+      { key: 'accessToken', label: 'Access Token (OA Token)', type: 'password', placeholder: 'ZAxxxxxxx...' },
+      { key: 'webhookUrl', label: 'Webhook URL', type: 'url', placeholder: 'https://your-domain.com/api/webhook/zalo' },
     ],
   },
   telegram: {
     order: 4,
     fields: [
-      { key: 'token', label: 'Bot Token', type: 'password', placeholder: '123456:ABC-DEF...' },
+      { key: 'botToken', label: 'Bot Token', type: 'password', placeholder: '123456789:ABCdefGHI...' },
+      { key: 'webhookUrl', label: 'Webhook URL', type: 'url', placeholder: 'https://your-domain.com/api/webhook/telegram' },
     ],
   },
   chatwork: {
@@ -41,9 +53,11 @@ const CHANNEL_META: Record<string, { order: number; fields: { key: string; label
   },
   website: {
     order: 6,
+    skipConfigCheck: ['widgetId'],
     fields: [
-      { key: 'webhook', label: 'Webhook URL', type: 'url', placeholder: 'https://your-domain.com/api/webhook/messenger' },
       { key: 'widgetId', label: 'Widget ID', type: 'text', placeholder: 'Tự động tạo khi lưu' },
+      { key: 'webhookUrl', label: 'Webhook URL', type: 'url', placeholder: 'https://your-domain.com/api/webhook/website' },
+      { key: 'allowedDomains', label: 'Allowed Domains', type: 'text', placeholder: 'your-domain.com, app.your-domain.com' },
     ],
   },
   email: {
@@ -53,9 +67,11 @@ const CHANNEL_META: Record<string, { order: number; fields: { key: string; label
       { key: 'imapHost', label: 'IMAP Server', type: 'text', placeholder: 'imap.gmail.com' },
       { key: 'imapPort', label: 'IMAP Port', type: 'text', placeholder: '993' },
       { key: 'imapUser', label: 'IMAP Username', type: 'text', placeholder: 'support@company.com' },
-      { key: 'imapPass', label: 'IMAP Password', type: 'password', placeholder: 'app-password' },
+      { key: 'imapPass', label: 'IMAP Password / App Password', type: 'password', placeholder: 'app-password' },
       { key: 'smtpHost', label: 'SMTP Server', type: 'text', placeholder: 'smtp.gmail.com' },
       { key: 'smtpPort', label: 'SMTP Port', type: 'text', placeholder: '587' },
+      { key: 'smtpUser', label: 'SMTP Username', type: 'text', placeholder: 'support@company.com (để trống = giống IMAP)' },
+      { key: 'smtpPass', label: 'SMTP Password / App Password', type: 'password', placeholder: 'để trống = giống IMAP Password' },
     ],
   },
 }
@@ -70,8 +86,9 @@ export async function GET() {
     .map(([key, meta]) => {
       const dbCfg = configMap.get(key)
       const config: Record<string, string> = dbCfg ? JSON.parse(dbCfg.config) : {}
+      const skipKeys = meta.skipConfigCheck || []
       const isConfigured = meta.fields
-        .filter(f => f.key !== 'widgetId') // widgetId is auto-generated
+        .filter(f => !skipKeys.includes(f.key))
         .some(f => config[f.key] && config[f.key].length > 0)
 
       return {

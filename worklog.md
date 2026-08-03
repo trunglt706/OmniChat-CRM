@@ -78,3 +78,36 @@ Stage Summary:
 - Config persistence qua DB (ChannelConfig model)
 - Test Connection hoạt động thật cho Telegram + ChatWork, validate cho các kênh khác
 - UI ChannelsTab hoàn toàn dynamic, load từ API, không hardcode
+---
+Task ID: 2
+Agent: main
+Task: Kiểm tra cấu hình kênh chat production readiness, thêm Chatwork, thêm test connection
+
+Work Log:
+- Fixed chunk loading error by clearing .next cache
+- Updated /api/channels CHANNEL_META with production-ready fields:
+  - Facebook Messenger: added appId, appSecret, renamed token→pageAccessToken, verifyToken→Webhook Verify Token
+  - Facebook Comment: added appId, appSecret, renamed token→pageAccessToken
+  - Zalo: added appId, appSecret, renamed token→accessToken, added webhookUrl
+  - Telegram: renamed token→botToken, added webhookUrl
+  - Chatwork: already existed with apiToken + roomId (unchanged)
+  - Website: renamed webhook→webhookUrl, added allowedDomains, used skipConfigCheck for widgetId
+  - Email: added smtpUser, smtpPass fields
+- Created /api/channels/test/route.ts with real API verification for all 7 channels:
+  - Facebook: calls graph.facebook.com/v21.0/me with token
+  - Zalo: calls openapi.zalo.me/v2.0/oa/getoa with Bearer token
+  - Telegram: calls api.telegram.org/bot{token}/getMe
+  - Chatwork: calls api.chatwork.com/v2/me + optional room check
+  - Website: validates webhook URL format + HTTPS requirement
+  - Email: validates IMAP/SMTP host format and port numbers
+  - All external fetch calls use 10s AbortController timeout
+  - Test results persisted to DB (lastTestAt, lastTestOk, lastTestMsg)
+- Updated isConfigured logic to use skipConfigCheck array instead of hardcoded widgetId check
+- Verified all endpoints via curl: GET /api/channels, POST /api/channels/test for all channels
+- Confirmed test results persist across server restarts via DB
+
+Stage Summary:
+- 7 channels with production-ready credential fields
+- Test connection API working for all channels with proper timeout handling
+- Chatwork was already present in the codebase (types, icons, colors, i18n, API meta)
+- All changes are API-driven, no hardcoded data
