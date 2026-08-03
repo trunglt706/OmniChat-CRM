@@ -1,1 +1,54 @@
-Here are all the generated files.
+# ═══════════════════════════════════════════════════════════
+# OmniChat Configuration
+# ═══════════════════════════════════════════════════════════
+
+# ─── Database ─────────────────────────────────────────────────────
+# Provider: sqlite | mysql
+# For SQLite:  DATABASE_URL=file:./db/custom.db
+# For MySQL:   DATABASE_URL=mysql://USER:PASSWORD@HOST:3306/DATABASE_NAME
+DATABASE_PROVIDER=sqlite
+DATABASE_URL=./db/custom.db
+
+# MySQL-specific (only used when DATABASE_PROVIDER=mysql)
+DATABASE_POOL_MIN=2
+DATABASE_POOL_MAX=10
+DATABASE_CONNECTION_TIMEOUT=30
+
+# ─── Authentication ────────────────────────────────────────────────
+NEXTAUTH_SECRET=omnichat-dev-secret-change-in-production
+SESSION_MAX_AGE=2592000
+
+# ─── Redis ────────────────────────────────────────────────────────
+REDIS_URL=
+
+# ─── CSRF Protection ──────────────────────────────────────────────
+CSRF_ENABLED=true
+CSRF_TOKEN_TTL=3600
+
+# ─── Rate Limiting (IP + User + Tenant) ──────────────────────────
+RATE_LIMIT_ENABLED=true
+RATE_LIMIT_PER_MINUTE=60
+RATE_LIMIT_BURST=10
+RATE_LIMIT_WINDOW=60
+
+# ─── Business Rate Limiting ───────────────────────────────────────
+BUSINESS_RATE_LIMIT_ENABLED=true
+BUSINESS_RATE_LIMIT_MESSAGES=100
+BUSINESS_RATE_LIMIT_BOT=20
+
+# ─── Webhook Security ─────────────────────────────────────────────
+WEBHOOK_SECRET=
+WEBHOOK_SIGNATURE_HEADER=x-webhook-signature
+WEBHOOK_TIMESTAMP_TOLERANCE=300
+
+# ─── File Upload ───────────────────────────────────────────────────
+UPLOAD_MAX_SIZE=10485760
+UPLOAD_MAX_FILES=5
+UPLOAD_ALLOWED_MIME=image/jpeg,image/png,image/gif,image/webp,image/svg+xml,application/pdf,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,audio/mpeg,audio/wav,audio/ogg,video/mp4,video/webm
+
+# ─── Content Security Policy ───────────────────────────────────────
+CSP_ENABLED=true
+CSP_REPORT_URI=
+
+# ─── Multi-tenant Mode ────────────────────────────────────────────
+TENANT_MODE=false
