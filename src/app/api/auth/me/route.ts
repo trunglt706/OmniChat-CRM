@@ -7,15 +7,9 @@ export async function GET(req: NextRequest) {
     if (!user) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
     }
-    return NextResponse.json({
-      sub: user.id,
-      name: user.name,
-      email: user.email,
-      picture: user.avatar,
-      role: user.role,
-    })
+    return NextResponse.json(user)
   } catch (error) {
-    console.error('Userinfo error:', error)
+    console.error('Auth me error:', error)
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })
   }
 }

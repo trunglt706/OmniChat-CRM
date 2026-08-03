@@ -93,12 +93,27 @@ function SectionHeader({ title }: { title: string }) {
 }
 
 // ═══ PROFILE TAB ═══
+interface AgentStats {
+  conversationsToday: number
+  avgResponse: string
+  avgRating: string
+  totalConversations: number
+}
+
 function ProfileTab() {
   const { currentUser, setCurrentUser } = useCRMStore()
   const { t } = useT()
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState({ name: '', email: '', phone: '', bio: '' })
   const fileRef = useRef<HTMLInputElement>(null)
+  const [stats, setStats] = useState<AgentStats | null>(null)
+
+  useEffect(() => {
+    fetch('/api/agents/me/stats')
+      .then(res => res.ok ? res.json() : null)
+      .then(data => { if (data) setStats(data) })
+      .catch(() => {})
+  }, [])
 
   useEffect(() => {
     if (currentUser) setForm({ name: currentUser.name, email: currentUser.email, phone: currentUser.phone, bio: currentUser.bio })
@@ -178,10 +193,10 @@ function ProfileTab() {
         <SectionHeader title={t('profile.stats.title')} />
         <div className="grid grid-cols-2 gap-3">
           {[
-            { label: t('profile.stat.conversationsToday'), value: '12', icon: MessageSquare },
-            { label: t('profile.stat.avgResponse'), value: '2m 30s', icon: Clock },
-            { label: t('profile.stat.avgRating'), value: '4.8/5', icon: Shield },
-            { label: t('profile.stat.totalConversations'), value: '1,247', icon: User },
+            { label: t('profile.stat.conversationsToday'), value: stats ? String(stats.conversationsToday) : '--', icon: MessageSquare },
+            { label: t('profile.stat.avgResponse'), value: stats?.avgResponse || '--', icon: Clock },
+            { label: t('profile.stat.avgRating'), value: stats?.avgRating || '--', icon: Shield },
+            { label: t('profile.stat.totalConversations'), value: stats ? String(stats.totalConversations) : '--', icon: User },
           ].map((stat) => (
             <div key={stat.label} className="glass-card rounded-xl p-4">
               <stat.icon className="h-4 w-4 text-muted-foreground/40 mb-2" />
@@ -1106,6 +1121,8 @@ export default function SettingsPage() {
   const searchParams = useSearchParams()
   const { t } = useT()
   const [activeTab, setActiveTab] = useState<SettingsTab>('profile')
+  const setCurrentUser = useCRMStore((s) => s.setCurrentUser)
+  const setAuthenticated = useCRMStore((s) => s.setAuthenticated)
 
   // Restore tab from URL ?tab=xxx
   useEffect(() => {
@@ -1114,6 +1131,31 @@ export default function SettingsPage() {
       setActiveTab(tabParam as SettingsTab)
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Load current user from API on mount (separate route, need own fetch)
+  useEffect(() => {
+    fetch('/api/auth/me')
+      .then(res => {
+        if (!res.ok) throw new Error('Not authenticated')
+        return res.json()
+      })
+      .then(user => {
+        setAuthenticated(true)
+        setCurrentUser({
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          phone: user.phone || '',
+          role: user.role,
+          avatar: user.avatar,
+          status: user.status || 'online',
+          bio: '',
+        })
+      })
+      .catch(() => {
+        window.location.href = '/login'
+      })
+  }, [])
 
   useEffect(() => {
     try {

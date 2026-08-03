@@ -344,6 +344,8 @@ export default function CRMPage() {
   const showRightPanel = useCRMStore((s) => s.showRightPanel)
   const incrementUnread = useCRMStore((s) => s.incrementUnread)
   const addNotification = useCRMStore((s) => s.addNotification)
+  const setCurrentUser = useCRMStore((s) => s.setCurrentUser)
+  const setAuthenticated = useCRMStore((s) => s.setAuthenticated)
   const openSheet = useCRMStore((s) => s.openSheet)
   const setOpenSheet = useCRMStore((s) => s.setOpenSheet)
   const simulationRunning = useCRMStore((s) => s.simulationRunning)
@@ -359,6 +361,32 @@ export default function CRMPage() {
       }
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Load current user from API on mount
+  useEffect(() => {
+    fetch('/api/auth/me')
+      .then(res => {
+        if (!res.ok) throw new Error('Not authenticated')
+        return res.json()
+      })
+      .then(user => {
+        setAuthenticated(true)
+        setCurrentUser({
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          phone: user.phone || '',
+          role: user.role,
+          avatar: user.avatar,
+          status: user.status || 'online',
+          bio: '',
+        })
+      })
+      .catch(() => {
+        // Not authenticated, redirect to login
+        window.location.href = '/login'
+      })
+  }, [])
 
   // Load settings from localStorage on mount
   useEffect(() => {

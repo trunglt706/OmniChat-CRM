@@ -1,5 +1,6 @@
 import { db } from '@/lib/db';
 import { NextRequest, NextResponse } from 'next/server';
+import { getAuthUser } from '@/lib/session';
 
 const DEFAULT_LIMIT = 15;
 
@@ -54,7 +55,10 @@ export async function POST(
   } = body;
 
   const actualSenderType = senderType || 'agent';
-  const actualSenderName = senderName || 'Pham Minh Tuan';
+
+  // Get authenticated user for agent messages
+  const authUser = actualSenderType === 'agent' ? await getAuthUser(request) : null;
+  const actualSenderName = senderName || authUser?.name || 'Unknown';
 
   if (actualSenderType === 'agent') {
     await db.message.updateMany({
@@ -67,7 +71,7 @@ export async function POST(
     data: {
       conversationId: id,
       senderType: actualSenderType,
-      senderId: actualSenderType === 'agent' ? 'mock_current_user' : null,
+      senderId: actualSenderType === 'agent' ? (authUser?.id || null) : null,
       senderName: actualSenderName,
       messageType,
       content: content || null,

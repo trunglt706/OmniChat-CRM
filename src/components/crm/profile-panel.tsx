@@ -23,12 +23,28 @@ const STATUS_OPTIONS: { value: UserProfile['status']; labelKey: string; color: s
   { value: 'offline', labelKey: 'profile.status.offline', color: 'bg-gray-400' },
 ]
 
+interface AgentStats {
+  conversationsToday: number
+  avgResponse: string
+  avgRating: string
+  totalConversations: number
+}
+
 export default function ProfilePanel() {
   const { currentUser, setCurrentUser, settings, setOpenSheet } = useCRMStore()
   const { t } = useT()
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState({ name: '', email: '', phone: '', bio: '' })
   const fileRef = useRef<HTMLInputElement>(null)
+  const [stats, setStats] = useState<AgentStats | null>(null)
+
+  // Fetch agent stats from API
+  useEffect(() => {
+    fetch('/api/agents/me/stats')
+      .then(res => res.ok ? res.json() : null)
+      .then(data => { if (data) setStats(data) })
+      .catch(() => {})
+  }, [])
 
   useEffect(() => {
     if (currentUser) {
@@ -194,10 +210,10 @@ export default function ProfilePanel() {
           </h4>
           <div className="grid grid-cols-2 gap-2">
             {[
-              { label: t('profile.stat.conversationsToday'), value: '12', icon: MessageSquare },
-              { label: t('profile.stat.avgResponse'), value: '2m 30s', icon: Clock },
-              { label: t('profile.stat.avgRating'), value: '4.8/5', icon: Shield },
-              { label: t('profile.stat.totalConversations'), value: '1,247', icon: User },
+              { label: t('profile.stat.conversationsToday'), value: stats ? String(stats.conversationsToday) : '--', icon: MessageSquare },
+              { label: t('profile.stat.avgResponse'), value: stats?.avgResponse || '--', icon: Clock },
+              { label: t('profile.stat.avgRating'), value: stats?.avgRating || '--', icon: Shield },
+              { label: t('profile.stat.totalConversations'), value: stats ? String(stats.totalConversations) : '--', icon: User },
             ].map((stat) => (
               <div key={stat.label} className="bg-foreground/[0.02] rounded-xl p-3">
                 <stat.icon className="h-4 w-4 text-muted-foreground/40 mb-1.5" />

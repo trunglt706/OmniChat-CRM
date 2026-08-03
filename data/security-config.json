@@ -1,0 +1,5 @@
+{
+  "rateLimitPerMinute": 60,
+  "rateLimitEnabled": true,
+  "blacklistEnabled": true
+}

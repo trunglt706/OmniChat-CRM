@@ -1,5 +1,6 @@
 import { db } from '@/lib/db';
 import { NextRequest, NextResponse } from 'next/server';
+import { getAuthUser } from '@/lib/session';
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -14,9 +15,12 @@ export async function GET(request: NextRequest) {
 
   const where: Record<string, unknown> = {};
 
+  // Get current user from session
+  const currentUser = await getAuthUser(request);
+
   if (status && status !== 'all') where.status = status;
   if (channel && channel !== 'all') where.channel = channel;
-  if (assigned === 'me') where.ownerId = 'mock_current_user';
+  if (assigned === 'me' && currentUser) where.ownerId = currentUser.id;
   if (assigned === 'unassigned') where.ownerId = null;
   if (tag) {
     where.tags = { some: { tag: { name: tag } } };

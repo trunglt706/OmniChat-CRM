@@ -24,3 +24,30 @@ Stage Summary:
 - 0 TypeScript errors trong src/
 - Tất cả trang (/, /reports, /settings) trả về 200
 - API endpoints hoạt động bình thường
+---
+Task ID: 1
+Agent: Main Agent
+Task: Audit và fix toàn bộ hardcoded data → API calls
+
+Work Log:
+- Audit toàn bộ 39 files trong src/app/, src/components/, src/store/, src/lib/
+- Tìm 7 vị trí hardcoded data cần sửa
+- Tạo helper session.ts (getAuthUser) dùng chung cho mọi API route
+- Tạo API /api/auth/me trả về user thật từ DB qua JWT decode
+- Fix /api/auth/mock/login: lookup user từ DB theo email, auto-provision nếu chưa có
+- Fix /api/auth/mock/userinfo: đọc JWT → trả về user từ DB
+- Fix crm-store.ts: xóa DEFAULT_USER, currentUser = null, isAuthenticated = false
+- Fix page.tsx: thêm useEffect fetch /api/auth/me để load user vào store
+- Fix settings/page.tsx: thêm useEffect fetch /api/auth/me (separate route)
+- Fix conversations/route.ts: thay 'mock_current_user' bằng session user ID
+- Fix messages/route.ts: thay 'mock_current_user' bằng session user ID + senderName từ auth
+- Tạo API /api/agents/me/stats: tính thống kê thật từ DB (conversationsToday, avgResponse, totalConversations)
+- Fix profile-panel.tsx: fetch stats từ /api/agents/me/stats thay vì hardcode '12', '2m 30s', '4.8/5', '1,247'
+- Fix settings/page.tsx ProfileTab: fetch stats từ /api/agents/me/stats
+
+Stage Summary:
+- Tất cả 7 vị trí hardcoded data đã được sửa
+- Tất cả data giờ đến từ API → DB, không còn hardcode
+- Verified: login → tạo user từ DB, /api/auth/me trả về user thật, stats tính từ DB
+- Conversations filter 'assigned=me' dùng đúng user ID từ session
+- Agent messages ghi đúng senderId từ session

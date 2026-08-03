@@ -1,5 +1,6 @@
 import { encode } from 'next-auth/jwt'
 import { NextResponse } from 'next/server'
+import { db } from '@/lib/db'
 
 const SECRET = process.env.NEXTAUTH_SECRET || 'omnichat-dev-secret-change-in-production'
 
@@ -8,13 +9,28 @@ export async function POST(request: Request) {
     const body = await request.json().catch(() => ({}))
     const email = body?.email || 'admin@omnichat.vn'
 
+    // Look up user from DB
+    let user = await db.user.findUnique({ where: { email } })
+
+    // If user doesn't exist, create one (auto-provision for demo)
+    if (!user) {
+      user = await db.user.create({
+        data: {
+          email,
+          name: email.split('@')[0].replace(/[._]/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+          role: 'admin',
+          status: 'online',
+        },
+      })
+    }
+
     const token = await encode({
       token: {
-        sub: 'user_01',
-        name: 'Phạm Minh Tuấn',
-        email,
-        picture: null,
-        role: 'admin',
+        sub: user.id,
+        name: user.name,
+        email: user.email,
+        picture: user.avatar,
+        role: user.role,
         iat: Math.floor(Date.now() / 1000),
         exp: Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
       },

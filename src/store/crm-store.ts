@@ -164,17 +164,6 @@ const DEFAULT_SETTINGS: AppSettings = {
   language: 'vi',
 }
 
-const DEFAULT_USER: UserProfile = {
-  id: 'user_01',
-  name: 'Pham Minh Tuan',
-  email: 'tuan.pm@omnichat.vn',
-  phone: '0901 234 567',
-  role: 'admin',
-  avatar: null,
-  status: 'online',
-  bio: 'Senior Customer Support Agent',
-}
-
 let _notifCounter = 0
 
 export const useCRMStore = create<CRMState>((set, get) => ({
@@ -260,9 +249,9 @@ export const useCRMStore = create<CRMState>((set, get) => ({
   clearSimulationMessages: () => set({ simulationMessages: [] }),
 
   // Auth
-  isAuthenticated: true,
+  isAuthenticated: false,
   setAuthenticated: (v) => set({ isAuthenticated: v }),
-  currentUser: DEFAULT_USER,
+  currentUser: null,
   setCurrentUser: (u) => set({ currentUser: u }),
 
   // Unread counts per conversation
