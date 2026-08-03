@@ -111,3 +111,32 @@ Stage Summary:
 - Test connection API working for all channels with proper timeout handling
 - Chatwork was already present in the codebase (types, icons, colors, i18n, API meta)
 - All changes are API-driven, no hardcoded data
+---
+Task ID: 3
+Agent: main
+Task: Security hardening - CSP, CSRF, Rate Limit (Redis), Idempotency, Webhook, Upload, XSS, WS Auth
+
+Work Log:
+- Installed ioredis package
+- Created src/lib/redis.ts: Redis client with in-memory fallback, all security env config (SecurityEnv)
+- Created src/lib/csrf.ts: Double-submit cookie CSRF protection (generate/validate/extract)
+- Created src/lib/rate-limit.ts: Multi-dimensional rate limiting (IP + User + Tenant + Burst) via Redis
+- Created src/lib/idempotency.ts: Idempotency key support for POST/PUT (24h cache)
+- Created src/lib/webhook-verify.ts: HMAC-SHA256 webhook verification for FB/Zalo/Telegram/Chatwork/Website
+- Created src/lib/upload-guard.ts: File upload validation (MIME type + Magic Bytes + size + SVG XSS check)
+- Created src/lib/security-headers.ts: CSP builder + security headers + XSS output encoding helpers
+- Created src/lib/ws-auth.ts: WebSocket private channel auth (JWT + channel-level authorization + presence)
+- Created src/lib/api-client.ts: Client-side secure fetch (auto CSRF + idempotency key)
+- Created src/lib/middleware-helpers.ts: withIdempotency + withBusinessRateLimit wrappers for API routes
+- Created src/app/api/upload/route.ts: Secure upload endpoint with validation
+- Created src/app/api/webhook/[channel]/route.ts: Universal webhook receiver with signature verification
+- Rewrote src/proxy.ts: Integrated all security layers (blacklist → auth → rate limit → CSRF → idempotency → CSP headers)
+- Updated .env with all security configuration variables and comments
+- Updated next.config.ts with backup security headers
+- Build verified: all code compiles successfully
+
+Stage Summary:
+- 12 new security files created
+- proxy.ts rewritten with 6-layer security pipeline
+- All config via .env (Redis URL, rate limits, CSRF, upload, CSP, webhook secret)
+- Fallback to in-memory when Redis not available (dev mode)

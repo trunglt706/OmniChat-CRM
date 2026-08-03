@@ -1,90 +1,156 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { getToken } from 'next-auth/jwt'
+import { randomBytes } from 'crypto'
 
-// ─── In-memory rate limit store ───
-interface RateLimitEntry {
-  count: number
-  resetAt: number
-}
-const rateLimitStore = new Map<string, RateLimitEntry>()
+// ─── Security imports ───
+import { getRedis, getSecurityEnv } from '@/lib/redis'
+import { checkApiRateLimit, rateLimitResponse, checkBotRateLimit } from '@/lib/rate-limit'
+import { generateCsrfToken, csrfCookieValue, validateCsrfToken, CSRF_HEADER } from '@/lib/csrf'
+import { extractIdempotencyKey, getIdempotencyResult, idempotencyResponse } from '@/lib/idempotency'
+import { getSecurityHeaders } from '@/lib/security-headers'
+import { isBlacklisted } from '@/lib/security'
 
-// Default rate limit: can be overridden via RATE_LIMIT_PER_MINUTE env var
-const DEFAULT_RATE_LIMIT = parseInt(process.env.RATE_LIMIT_PER_MINUTE || '60', 10)
+// ─── Route configuration ───
+const PUBLIC_PATHS = ['/login', '/api/auth', '/api/webhook']
+const CSRF_EXEMPT_PATHS = ['/api/auth', '/api/webhook'] // Auth & webhooks don't need CSRF
+const IDEMPOTENCY_METHODS = ['POST', 'PUT', 'PATCH']
 
-// ─── Routes that don't require auth ───
-const PUBLIC_PATHS = ['/login', '/api/auth']
-
-// ─── API routes to rate-limit ───
+// API prefixes that need rate limiting
 const RATE_LIMITED_API_PREFIXES = [
   '/api/conversations', '/api/customers', '/api/dashboard',
   '/api/reports', '/api/bot', '/api/simulation', '/api/agents',
-  '/api/tags', '/api/automation', '/api/channels',
+  '/api/tags', '/api/automation', '/api/channels', '/api/backup',
+  '/api/security',
 ]
 
 export async function proxy(request: NextRequest) {
-  const { pathname } = request.nextUrl
-  const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+  const { pathname, searchParams } = request.nextUrl
+  const method = request.method
+  const env = getSecurityEnv()
+  const ip =
+    request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
     request.headers.get('x-real-ip') ||
     '127.0.0.1'
 
-  // ─── 1. Auth guard ───
-  const isPublic = PUBLIC_PATHS.some(p => pathname.startsWith(p)) ||
+  // ─── 0. Blacklist check (before everything) ───
+  if (isBlacklisted(ip)) {
+    return new NextResponse(
+      JSON.stringify({ error: 'Forbidden', message: 'IP đã bị chặn' }),
+      { status: 403, headers: { 'Content-Type': 'application/json' } }
+    )
+  }
+
+  // ─── 1. Webhook routes: no auth, no CSRF, only signature verification ───
+  if (pathname.startsWith('/api/webhook')) {
+    // Webhook signature verification is done in the route handler itself
+    // using verifyWebhookByChannel(). The proxy just passes through.
+    return NextResponse.next()
+  }
+
+  // ─── 2. Auth guard ───
+  const isPublic =
+    PUBLIC_PATHS.some(p => pathname.startsWith(p)) ||
     pathname.startsWith('/_next') ||
     pathname.startsWith('/favicon') ||
-    pathname.includes('.') // static files
+    pathname.includes('.')
+
+  let userId: string | undefined
+  let tenantId: string | undefined
 
   if (!isPublic) {
     try {
       const token = await getToken({
         req: request,
-        secret: process.env.NEXTAUTH_SECRET || 'omnichat-dev-secret-change-in-production',
+        secret: env.NEXTAUTH_SECRET,
+        cookieName: 'next-auth.session-token',
       })
       if (!token) {
         const loginUrl = new URL('/login', request.url)
         loginUrl.searchParams.set('callbackUrl', pathname)
         return NextResponse.redirect(loginUrl)
       }
+      userId = token.sub as string
+      tenantId = token.tenantId as string | undefined
     } catch {
-      // If token check fails (e.g., no cookie), redirect to login
       const loginUrl = new URL('/login', request.url)
       loginUrl.searchParams.set('callbackUrl', pathname)
       return NextResponse.redirect(loginUrl)
     }
   }
 
-  // ─── 2. Rate limiting for API routes ───
+  // ─── 3. Rate limiting for API routes ───
   if (RATE_LIMITED_API_PREFIXES.some(p => pathname.startsWith(p))) {
-    const now = Date.now()
-    const key = `rl:${ip}`
-    const entry = rateLimitStore.get(key)
+    const result = await checkApiRateLimit(ip, userId, tenantId)
+    if (!result.allowed) {
+      return rateLimitResponse(result)
+    }
 
-    if (!entry || entry.resetAt <= now) {
-      rateLimitStore.set(key, { count: 1, resetAt: now + 60_000 })
-    } else {
-      entry.count++
-      if (entry.count > DEFAULT_RATE_LIMIT) {
-        return new NextResponse(
-          JSON.stringify({
-            error: 'Too Many Requests',
-            message: `Rate limit exceeded. Max ${DEFAULT_RATE_LIMIT} requests per minute.`,
-            retryAfter: Math.ceil((entry.resetAt - now) / 1000),
-          }),
-          {
-            status: 429,
-            headers: {
-              'Content-Type': 'application/json',
-              'Retry-After': String(Math.ceil((entry.resetAt - now) / 1000)),
-              'X-RateLimit-Limit': String(DEFAULT_RATE_LIMIT),
-              'X-RateLimit-Remaining': '0',
-            },
-          }
-        )
+    // Bot-specific rate limiting
+    if (pathname.startsWith('/api/bot')) {
+      const botResult = await checkBotRateLimit(userId || ip)
+      if (!botResult.allowed) {
+        return rateLimitResponse(botResult)
       }
     }
   }
 
-  return NextResponse.next()
+  // ─── 4. CSRF protection for mutating requests ───
+  const isMutating = method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS'
+  const needsCsrf =
+    isMutating &&
+    env.CSRF_ENABLED &&
+    !CSRF_EXEMPT_PATHS.some(p => pathname.startsWith(p))
+
+  if (needsCsrf && userId) {
+    const csrfToken = request.headers.get(CSRF_HEADER)
+    if (!csrfToken || !(await validateCsrfToken(ip, csrfToken))) {
+      return new NextResponse(
+        JSON.stringify({ error: 'Forbidden', message: 'CSRF token không hợp lệ hoặc đã hết hạn' }),
+        {
+          status: 403,
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-Error': 'invalid',
+          },
+        }
+      )
+    }
+  }
+
+  // ─── 5. Idempotency check (POST/PUT/PATCH) ───
+  if (IDEMPOTENCY_METHODS.includes(method) && userId) {
+    const idemKey = extractIdempotencyKey(request)
+    if (idemKey) {
+      const cached = await getIdempotencyResult(idemKey)
+      if (cached) {
+        // Return cached response
+        return idempotencyResponse(cached)
+      }
+    }
+  }
+
+  // ─── 6. Build response with security headers ───
+  const response = NextResponse.next()
+
+  // Add security headers
+  const secHeaders = getSecurityHeaders()
+  for (const [key, value] of Object.entries(secHeaders)) {
+    response.headers.set(key, value)
+  }
+
+  // Set CSRF cookie for page loads (GET requests)
+  if (method === 'GET' && userId && env.CSRF_ENABLED) {
+    const csrfToken = await generateCsrfToken(ip)
+    response.headers.append('Set-Cookie', csrfCookieValue(csrfToken))
+  }
+
+  // Add rate limit info headers
+  if (RATE_LIMITED_API_PREFIXES.some(p => pathname.startsWith(p))) {
+    response.headers.set('X-RateLimit-Policy', 'ip+user+tenant')
+  }
+
+  return response
 }
 
 export const config = {
