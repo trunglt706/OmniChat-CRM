@@ -52,24 +52,57 @@ const STATUS_OPTIONS: { value: UserProfile['status']; labelKey: string; color: s
   { value: 'offline', labelKey: 'profile.status.offline', color: 'bg-gray-400' },
 ]
 
-interface ChannelDefinition {
+// Channel data shape returned from /api/channels
+interface ChannelData {
   key: string
-  nameKey: string
-  descKey: string
-  color: string
-  icon: React.ElementType
   enabled: boolean
   configured: boolean
-  config?: Record<string, string>
+  config: Record<string, string>
+  fields: { key: string; label: string; type: 'text' | 'password' | 'url'; placeholder: string }[]
+  lastTestAt: string | null
+  lastTestOk: boolean | null
+  lastTestMsg: string | null
 }
 
-const CHANNEL_DEFINITIONS: Omit<ChannelDefinition, 'enabled' | 'configured' | 'config'>[] = [
-  { key: 'facebook_messenger', nameKey: 'channels.fb.name', descKey: 'channels.fb.desc', color: '#1877f2', icon: MessageSquare },
-  { key: 'zalo', nameKey: 'channels.zalo.name', descKey: 'channels.zalo.desc', color: '#0068ff', icon: Phone },
-  { key: 'telegram', nameKey: 'channels.tg.name', descKey: 'channels.tg.desc', color: '#26a5e4', icon: Send },
-  { key: 'website', nameKey: 'channels.web.name', descKey: 'channels.web.desc', color: '#10b981', icon: Globe2 },
-  { key: 'email', nameKey: 'channels.email.name', descKey: 'channels.email.desc', color: '#ea4335', icon: Mail },
-]
+const CHANNEL_ICONS: Record<string, React.ElementType> = {
+  facebook_messenger: MessageSquare,
+  facebook_comment: MessageSquareOff,
+  zalo: Phone,
+  telegram: Send,
+  chatwork: Users,
+  website: Globe2,
+  email: Mail,
+}
+
+const CHANNEL_COLORS_MAP: Record<string, string> = {
+  facebook_messenger: '#1877f2',
+  facebook_comment: '#1877f2',
+  zalo: '#0068ff',
+  telegram: '#26a5e4',
+  chatwork: '#ee2224',
+  website: '#10b981',
+  email: '#ea4335',
+}
+
+const CHANNEL_NAME_KEYS: Record<string, string> = {
+  facebook_messenger: 'channels.fb.name',
+  facebook_comment: 'channels.fbc.name',
+  zalo: 'channels.zalo.name',
+  telegram: 'channels.tg.name',
+  chatwork: 'channels.cw.name',
+  website: 'channels.web.name',
+  email: 'channels.email.name',
+}
+
+const CHANNEL_DESC_KEYS: Record<string, string> = {
+  facebook_messenger: 'channels.fb.desc',
+  facebook_comment: 'channels.fbc.desc',
+  zalo: 'channels.zalo.desc',
+  telegram: 'channels.tg.desc',
+  chatwork: 'channels.cw.desc',
+  website: 'channels.web.desc',
+  email: 'channels.email.desc',
+}
 
 function SettingRow({ icon: Icon, label, description, children }: { icon: React.ElementType; label: string; description?: string; children: React.ReactNode }) {
   return (
@@ -290,127 +323,220 @@ function SystemTab() {
 }
 
 // ═══ CHANNELS TAB ═══
-interface ChannelSetting {
-  key: string
-  name: string
-  description: string
-  color: string
-  icon: React.ElementType
-  enabled: boolean
-  configured: boolean
-  config?: Record<string, string>
-}
-
 function ChannelsTab() {
   const { t } = useT()
-  const [channels, setChannels] = useState<ChannelSetting[]>([
-    { key: 'facebook_messenger', name: t('channels.fb.name'), description: t('channels.fb.desc'), color: '#1877f2', icon: MessageSquare, enabled: true, configured: true, config: { pageId: 'OmniChat Official', token: 'hidden' } },
-    { key: 'zalo', name: t('channels.zalo.name'), description: t('channels.zalo.desc'), color: '#0068ff', icon: Phone, enabled: true, configured: true, config: { phone: '0901 234 567' } },
-    { key: 'telegram', name: t('channels.tg.name'), description: t('channels.tg.desc'), color: '#26a5e4', icon: Send, enabled: false, configured: false, config: {} },
-    { key: 'website', name: t('channels.web.name'), description: t('channels.web.desc'), color: '#10b981', icon: Globe2, enabled: true, configured: true, config: { webhook: 'https://omnichat.vn/widget/abc123' } },
-    { key: 'email', name: t('channels.email.name'), description: t('channels.email.desc'), color: '#ea4335', icon: Mail, enabled: false, configured: false, config: {} },
-  ])
-
+  const [channels, setChannels] = useState<ChannelData[]>([])
+  const [loading, setLoading] = useState(true)
   const [editingChannel, setEditingChannel] = useState<string | null>(null)
   const [editForm, setEditForm] = useState<Record<string, string>>({})
+  const [saving, setSaving] = useState(false)
+  const [testingKey, setTestingKey] = useState<string | null>(null)
+  const [testResults, setTestResults] = useState<Record<string, { ok: boolean; msg: string } | null>>({})
 
-  const toggleChannel = (key: string) => setChannels(prev => prev.map(ch => ch.key === key ? { ...ch, enabled: !ch.enabled } : ch))
-  const startEdit = (ch: ChannelSetting) => { setEditingChannel(ch.key); setEditForm(ch.config || {}) }
-  const saveChannel = (key: string) => {
-    setChannels(prev => prev.map(ch => ch.key === key ? { ...ch, configured: Object.values(editForm).some(v => v.length > 0), config: { ...editForm } } : ch))
-    setEditingChannel(null)
+  // Load channels from API
+  useEffect(() => {
+    fetch('/api/channels')
+      .then(r => r.json())
+      .then(data => { if (Array.isArray(data)) setChannels(data) })
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [])
+
+  const toggleChannel = async (key: string) => {
+    const ch = channels.find(c => c.key === key)
+    if (!ch) return
+    setChannels(prev => prev.map(c => c.key === key ? { ...c, enabled: !c.enabled } : c))
+    await fetch('/api/channels', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ channel: key, enabled: !ch.enabled, config: ch.config }),
+    }).catch(() => {})
+  }
+
+  const startEdit = (ch: ChannelData) => {
+    setEditingChannel(ch.key)
+    setEditForm({ ...ch.config })
+    setTestResults(prev => ({ ...prev, [ch.key]: null }))
+  }
+
+  const saveChannel = async (key: string) => {
+    setSaving(true)
+    try {
+      const res = await fetch('/api/channels', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channel: key, config: editForm }),
+      })
+      const data = await res.json()
+      setChannels(prev => prev.map(c => c.key === key ? { ...c, configured: data.configured, config: data.config || c.config } : c))
+      setEditingChannel(null)
+    } catch {}
+    setSaving(false)
+  }
+
+  const testConnection = async (key: string) => {
+    setTestingKey(key)
+    setTestResults(prev => ({ ...prev, [key]: null }))
+    try {
+      const ch = channels.find(c => c.key === key)
+      const res = await fetch('/api/channels/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channel: key, config: { ...ch?.config, ...editForm } }),
+      })
+      const result = await res.json()
+      setTestResults(prev => ({ ...prev, [key]: result }))
+      // Update channel data to reflect new test result
+      setChannels(prev => prev.map(c => c.key === key ? {
+        ...c,
+        lastTestAt: new Date().toISOString(),
+        lastTestOk: result.ok,
+        lastTestMsg: result.msg,
+      } : c))
+    } catch {
+      setTestResults(prev => ({ ...prev, [key]: { ok: false, msg: 'Lỗi kết nối đến server' } }))
+    }
+    setTestingKey(null)
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground/40" />
+      </div>
+    )
   }
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-5 animate-fade-in">
       <div>
         <h3 className="text-sm font-bold">{t('channels.configTitle')}</h3>
         <p className="text-xs text-muted-foreground/60 mt-1">{t('channels.configDesc')}</p>
       </div>
       {channels.map((ch) => {
-        const Icon = ch.icon
+        const Icon = CHANNEL_ICONS[ch.key] || MessageSquare
+        const color = CHANNEL_COLORS_MAP[ch.key] || '#6b7280'
+        const nameKey = CHANNEL_NAME_KEYS[ch.key] || ch.key
+        const descKey = CHANNEL_DESC_KEYS[ch.key] || ch.key
         const isEditing = editingChannel === ch.key
+        const testResult = testResults[ch.key]
+        const isTesting = testingKey === ch.key
+
         return (
           <div key={ch.key} className="glass-card rounded-2xl overflow-hidden transition-all duration-200">
             <div className="p-5">
               <div className="flex items-start justify-between gap-4">
                 <div className="flex items-start gap-3.5 min-w-0">
-                  <div className="h-11 w-11 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm" style={{ backgroundColor: ch.color + '12' }}>
-                    <Icon className="h-5 w-5" style={{ color: ch.color }} />
+                  <div className="h-11 w-11 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm" style={{ backgroundColor: color + '12' }}>
+                    <Icon className="h-5 w-5" style={{ color }} />
                   </div>
                   <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <h4 className="text-[13px] font-semibold">{ch.name}</h4>
-                      {ch.configured && ch.enabled && <Badge className="text-[9px] px-1.5 py-0 h-[16px] bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 rounded-md font-medium"><Check className="h-2.5 w-2.5 mr-0.5" /> {t('channels.connected')}</Badge>}
-                      {!ch.configured && ch.enabled && <Badge className="text-[9px] px-1.5 py-0 h-[16px] bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 rounded-md font-medium">{t('channels.notConfigured')}</Badge>}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h4 className="text-[13px] font-semibold">{t(nameKey)}</h4>
+                      {ch.configured && ch.enabled && (
+                        <Badge className="text-[9px] px-1.5 py-0 h-[16px] bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 rounded-md font-medium">
+                          <Check className="h-2.5 w-2.5 mr-0.5" /> {t('channels.connected')}
+                        </Badge>
+                      )}
+                      {!ch.configured && ch.enabled && (
+                        <Badge className="text-[9px] px-1.5 py-0 h-[16px] bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 rounded-md font-medium">
+                          {t('channels.notConfigured')}
+                        </Badge>
+                      )}
+                      {ch.lastTestAt && (
+                        <span className={cn(
+                          'text-[9px] font-medium',
+                          ch.lastTestOk ? 'text-emerald-600' : 'text-red-500'
+                        )}>
+                          {ch.lastTestOk ? t('channels.lastTestOk') : t('channels.lastTestFail')}
+                          {' · '}{new Date(ch.lastTestAt).toLocaleTimeString('vi-VN')}
+                        </span>
+                      )}
                     </div>
-                    <p className="text-[11px] text-muted-foreground/50 mt-1 leading-relaxed">{ch.description}</p>
+                    <p className="text-[11px] text-muted-foreground/50 mt-1 leading-relaxed">{t(descKey)}</p>
                   </div>
                 </div>
                 <Switch checked={ch.enabled} onCheckedChange={() => toggleChannel(ch.key)} />
               </div>
             </div>
+
+            {/* Test result banner */}
+            {testResult != null && (
+              <div className={cn(
+                'mx-5 mb-0 px-3.5 py-2.5 rounded-xl text-[11px] font-medium animate-slide-down',
+                testResult.ok
+                  ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400'
+                  : 'bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-400'
+              )}>
+                {testResult.ok ? <Check className="h-3.5 w-3.5 mr-1.5 inline" /> : <AlertTriangle className="h-3.5 w-3.5 mr-1.5 inline" />}
+                {testResult.msg}
+              </div>
+            )}
+
+            {/* Edit form */}
             {isEditing && (
               <div className="px-5 pb-5 border-t border-border/30 pt-4 space-y-3 animate-slide-down">
-                {ch.key === 'facebook_messenger' && (
-                  <>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-medium text-muted-foreground/70">{t('channels.fb.pageName')}</Label>
-                      <Input value={editForm.pageId || ''} onChange={(e) => setEditForm(f => ({ ...f, pageId: e.target.value }))} placeholder={t('channels.fb.pageNamePlaceholder')} className="rounded-xl glass-input h-9 text-sm" />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-medium text-muted-foreground/70">{t('channels.fb.token')}</Label>
-                      <Input value={editForm.token || ''} onChange={(e) => setEditForm(f => ({ ...f, token: e.target.value }))} type="password" placeholder={t('channels.fb.tokenPlaceholder')} className="rounded-xl glass-input h-9 text-sm" />
-                    </div>
-                  </>
-                )}
-                {ch.key === 'zalo' && (
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-medium text-muted-foreground/70">{t('channels.zalo.phone')}</Label>
-                    <Input value={editForm.phone || ''} onChange={(e) => setEditForm(f => ({ ...f, phone: e.target.value }))} placeholder={t('channels.zalo.phonePlaceholder')} className="rounded-xl glass-input h-9 text-sm" />
+                {ch.fields.map(field => (
+                  <div key={field.key} className="space-y-1.5">
+                    <Label className="text-xs font-medium text-muted-foreground/70">{field.label}</Label>
+                    <Input
+                      value={editForm[field.key] || ''}
+                      onChange={(e) => setEditForm(f => ({ ...f, [field.key]: e.target.value }))}
+                      type={field.type === 'password' ? 'password' : 'text'}
+                      placeholder={field.placeholder}
+                      className="rounded-xl glass-input h-9 text-sm"
+                    />
                   </div>
-                )}
-                {ch.key === 'telegram' && (
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-medium text-muted-foreground/70">{t('channels.tg.token')}</Label>
-                    <Input value={editForm.token || ''} onChange={(e) => setEditForm(f => ({ ...f, token: e.target.value }))} type="password" placeholder={t('channels.tg.tokenPlaceholder')} className="rounded-xl glass-input h-9 text-sm" />
-                  </div>
-                )}
-                {ch.key === 'website' && (
+                ))}
+
+                {/* Website embed snippet */}
+                {ch.key === 'website' && editForm.widgetId && (
                   <>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-medium text-muted-foreground/70">{t('channels.web.webhook')}</Label>
-                      <Input value={editForm.webhook || ''} onChange={(e) => setEditForm(f => ({ ...f, webhook: e.target.value }))} placeholder={t('channels.web.webhookPlaceholder')} className="rounded-xl glass-input h-9 text-sm" />
-                    </div>
                     <p className="text-[10px] text-muted-foreground/40 mt-1">{t('channels.web.snippetHint')}</p>
                     <div className="bg-foreground/[0.03] rounded-xl p-3 font-mono text-[11px] text-muted-foreground/70 break-all select-all">
-                      {`<script src="https://omnichat.vn/widget.js" data-id="abc123"><` + `/script>`}
+                      {`<script src="https://omnichat.vn/widget.js" data-id="${editForm.widgetId}"><` + `/script>`}
                     </div>
                   </>
                 )}
-                {ch.key === 'email' && (
-                  <>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-medium text-muted-foreground/70">{t('channels.email.address')}</Label>
-                      <Input value={editForm.email || ''} onChange={(e) => setEditForm(f => ({ ...f, email: e.target.value }))} placeholder={t('channels.email.placeholder')} className="rounded-xl glass-input h-9 text-sm" />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-medium text-muted-foreground/70">{t('channels.email.imap')}</Label>
-                      <Input placeholder={t('channels.email.imapPlaceholder')} className="rounded-xl glass-input h-9 text-sm" />
-                    </div>
-                  </>
-                )}
+
                 <div className="flex gap-2 pt-1">
-                  <Button variant="outline" size="sm" onClick={() => setEditingChannel(null)} className="h-8 rounded-lg text-xs"><X className="h-3.5 w-3.5 mr-1" /> {t('profile.cancel')}</Button>
-                  <Button size="sm" onClick={() => saveChannel(ch.key)} className="h-8 rounded-lg text-xs bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600"><Check className="h-3.5 w-3.5 mr-1" /> {t('channels.saveConfig')}</Button>
+                  <Button variant="outline" size="sm" onClick={() => setEditingChannel(null)} className="h-8 rounded-lg text-xs">
+                    <X className="h-3.5 w-3.5 mr-1" /> {t('profile.cancel')}
+                  </Button>
+                  <Button
+                    variant="outline" size="sm"
+                    onClick={() => testConnection(ch.key)}
+                    disabled={isTesting}
+                    className="h-8 rounded-lg text-xs"
+                  >
+                    {isTesting ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Zap className="h-3.5 w-3.5 mr-1" />}
+                    {isTesting ? t('channels.testing') : t('channels.testConnection')}
+                  </Button>
+                  <Button size="sm" onClick={() => saveChannel(ch.key)} disabled={saving} className="h-8 rounded-lg text-xs bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600">
+                    {saving ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Check className="h-3.5 w-3.5 mr-1" />}
+                    {t('channels.saveConfig')}
+                  </Button>
                 </div>
               </div>
             )}
+
+            {/* Action buttons when not editing */}
             {!isEditing && (
-              <div className="px-5 pb-4">
+              <div className="px-5 pb-4 flex gap-2">
                 <Button variant="ghost" size="sm" className="h-8 rounded-lg text-xs text-muted-foreground/60 hover:text-foreground hover:bg-foreground/[0.03]" onClick={() => startEdit(ch)}>
                   <Pencil className="h-3.5 w-3.5 mr-1.5" />{ch.configured ? t('channels.editConfig') : t('channels.configure')}
                 </Button>
+                {ch.configured && (
+                  <Button
+                    variant="ghost" size="sm"
+                    className="h-8 rounded-lg text-xs text-muted-foreground/60 hover:text-foreground hover:bg-foreground/[0.03]"
+                    onClick={() => testConnection(ch.key)}
+                    disabled={isTesting}
+                  >
+                    {isTesting ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Zap className="h-3.5 w-3.5 mr-1.5" />}
+                    {isTesting ? t('channels.testing') : t('channels.testConnection')}
+                  </Button>
+                )}
               </div>
             )}
           </div>

@@ -21,6 +21,7 @@ import { useT } from '@/i18n/useT'
 
 const CHANNEL_COLORS: Record<string, string> = {
   facebook_messenger: '#1877f2',
+  facebook_comment: '#1877f2',
   zalo: '#0068ff',
   telegram: '#26a5e4',
   website: '#10b981',

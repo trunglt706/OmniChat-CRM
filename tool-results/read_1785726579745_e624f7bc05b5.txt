@@ -1,0 +1,1236 @@
+     1→'use client'
+     2→
+     3→import { useState, useEffect, useRef, useMemo } from 'react'
+     4→import { useRouter, useSearchParams } from 'next/navigation'
+     5→import { useCRMStore, type UserProfile } from '@/store/crm-store'
+     6→import { useTheme } from 'next-themes'
+     7→import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+     8→import { Button } from '@/components/ui/button'
+     9→import { Input } from '@/components/ui/input'
+    10→import { Textarea } from '@/components/ui/textarea'
+    11→import { Separator } from '@/components/ui/separator'
+    12→import { Switch } from '@/components/ui/switch'
+    13→import { Label } from '@/components/ui/label'
+    14→import { Badge } from '@/components/ui/badge'
+    15→import {
+    16→  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+    17→} from '@/components/ui/select'
+    18→import {
+    19→  Dialog, DialogContent, DialogDescription, DialogFooter,
+    20→  DialogHeader, DialogTitle,
+    21→} from '@/components/ui/dialog'
+    22→import { cn } from '@/lib/utils'
+    23→import { CHANNEL_CONFIG, type Agent } from '@/lib/types'
+    24→import { useT } from '@/i18n/useT'
+    25→import { LOCALE_LABELS, LOCALES, type Locale } from '@/i18n/translations'
+    26→import {
+    27→  ArrowLeft, User, Settings, MessageSquare, Users, Moon, Sun,
+    28→  Volume2, Monitor, Mail, Maximize2, Eye, Globe, UserCheck,
+    29→  Camera, Check, X, Shield, Clock, MessageSquareOff, Phone,
+    30→  Send, Trash2, RotateCcw, Pencil, MoreVertical, Plus, Bell,
+    31→  Globe2, ChevronDown, Star, ShieldAlert, Database, Download,
+    32→  Upload, RefreshCw, Ban, AlertTriangle, Loader2, Zap, HardDrive,
+    33→} from 'lucide-react'
+    34→
+    35→const SETTINGS_TABS = [
+    36→  { key: 'profile', labelKey: 'settingsTab.profile', icon: User },
+    37→  { key: 'system', labelKey: 'settingsTab.system', icon: Settings },
+    38→  { key: 'channels', labelKey: 'settingsTab.channels', icon: MessageSquare },
+    39→  { key: 'staff', labelKey: 'settingsTab.staff', icon: Users },
+    40→  { key: 'security', labelKey: 'settingsTab.security', icon: ShieldAlert },
+    41→  { key: 'backup', labelKey: 'settingsTab.backup', icon: Database },
+    42→] as const
+    43→
+    44→type SettingsTab = (typeof SETTINGS_TABS)[number]['key']
+    45→
+    46→const GRADIENT_CLASSES = ['avatar-gradient-1', 'avatar-gradient-2', 'avatar-gradient-3', 'avatar-gradient-4', 'avatar-gradient-5', 'avatar-gradient-6']
+    47→
+    48→const STATUS_OPTIONS: { value: UserProfile['status']; labelKey: string; color: string }[] = [
+    49→  { value: 'online', labelKey: 'profile.status.online', color: 'bg-emerald-500' },
+    50→  { value: 'busy', labelKey: 'profile.status.busy', color: 'bg-amber-500' },
+    51→  { value: 'away', labelKey: 'profile.status.away', color: 'bg-orange-400' },
+    52→  { value: 'offline', labelKey: 'profile.status.offline', color: 'bg-gray-400' },
+    53→]
+    54→
+    55→interface ChannelDefinition {
+    56→  key: string
+    57→  nameKey: string
+    58→  descKey: string
+    59→  color: string
+    60→  icon: React.ElementType
+    61→  enabled: boolean
+    62→  configured: boolean
+    63→  config?: Record<string, string>
+    64→}
+    65→
+    66→const CHANNEL_DEFINITIONS: Omit<ChannelDefinition, 'enabled' | 'configured' | 'config'>[] = [
+    67→  { key: 'facebook_messenger', nameKey: 'channels.fb.name', descKey: 'channels.fb.desc', color: '#1877f2', icon: MessageSquare },
+    68→  { key: 'zalo', nameKey: 'channels.zalo.name', descKey: 'channels.zalo.desc', color: '#0068ff', icon: Phone },
+    69→  { key: 'telegram', nameKey: 'channels.tg.name', descKey: 'channels.tg.desc', color: '#26a5e4', icon: Send },
+    70→  { key: 'website', nameKey: 'channels.web.name', descKey: 'channels.web.desc', color: '#10b981', icon: Globe2 },
+    71→  { key: 'email', nameKey: 'channels.email.name', descKey: 'channels.email.desc', color: '#ea4335', icon: Mail },
+    72→]
+    73→
+    74→function SettingRow({ icon: Icon, label, description, children }: { icon: React.ElementType; label: string; description?: string; children: React.ReactNode }) {
+    75→  return (
+    76→    <div className="flex items-center justify-between gap-4 py-3.5">
+    77→      <div className="flex items-start gap-3.5 min-w-0">
+    78→        <div className="h-9 w-9 rounded-xl bg-foreground/[0.03] flex items-center justify-center flex-shrink-0 mt-0.5">
+    79→          <Icon className="h-4 w-4 text-muted-foreground/50" />
+    80→        </div>
+    81→        <div className="min-w-0">
+    82→          <p className="text-[13px] font-medium">{label}</p>
+    83→          {description && <p className="text-[11px] text-muted-foreground/50 mt-0.5 leading-relaxed">{description}</p>}
+    84→        </div>
+    85→      </div>
+    86→      <div className="flex-shrink-0">{children}</div>
+    87→    </div>
+    88→  )
+    89→}
+    90→
+    91→function SectionHeader({ title }: { title: string }) {
+    92→  return <h4 className="text-[10px] font-bold text-muted-foreground/40 uppercase tracking-[0.15em] px-1 mb-2">{title}</h4>
+    93→}
+    94→
+    95→// ═══ PROFILE TAB ═══
+    96→interface AgentStats {
+    97→  conversationsToday: number
+    98→  avgResponse: string
+    99→  avgRating: string
+   100→  totalConversations: number
+   101→}
+   102→
+   103→function ProfileTab() {
+   104→  const { currentUser, setCurrentUser } = useCRMStore()
+   105→  const { t } = useT()
+   106→  const [editing, setEditing] = useState(false)
+   107→  const [form, setForm] = useState({ name: '', email: '', phone: '', bio: '' })
+   108→  const fileRef = useRef<HTMLInputElement>(null)
+   109→  const [stats, setStats] = useState<AgentStats | null>(null)
+   110→
+   111→  useEffect(() => {
+   112→    fetch('/api/agents/me/stats')
+   113→      .then(res => res.ok ? res.json() : null)
+   114→      .then(data => { if (data) setStats(data) })
+   115→      .catch(() => {})
+   116→  }, [])
+   117→
+   118→  useEffect(() => {
+   119→    if (currentUser) setForm({ name: currentUser.name, email: currentUser.email, phone: currentUser.phone, bio: currentUser.bio })
+   120→  }, [currentUser])
+   121→
+   122→  const handleSave = () => { if (currentUser) { setCurrentUser({ ...currentUser, ...form }); setEditing(false) } }
+   123→  const handleCancel = () => { if (currentUser) setForm({ name: currentUser.name, email: currentUser.email, phone: currentUser.phone, bio: currentUser.bio }); setEditing(false) }
+   124→  const handleStatusChange = (status: UserProfile['status']) => { if (currentUser) setCurrentUser({ ...currentUser, status }) }
+   125→
+   126→  if (!currentUser) return null
+   127→
+   128→  return (
+   129→    <div className="space-y-6 animate-fade-in">
+   130→      <div className="glass-card rounded-2xl p-6">
+   131→        <div className="flex flex-col items-center gap-4">
+   132→          <div className="relative group">
+   133→            <Avatar className={cn('h-24 w-24 ring-4 ring-background shadow-xl', GRADIENT_CLASSES[0])}>
+   134→              <AvatarFallback className="text-3xl text-white font-bold">{currentUser.name.split(' ').slice(-2).map(n => n[0]).join('')}</AvatarFallback>
+   135→            </Avatar>
+   136→            <button onClick={() => fileRef.current?.click()} className="absolute inset-0 rounded-full bg-black/0 group-hover:bg-black/30 transition-all duration-200 flex items-center justify-center opacity-0 group-hover:opacity-100">
+   137→              <Camera className="h-6 w-6 text-white" />
+   138→            </button>
+   139→            <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={() => {}} />
+   140→          </div>
+   141→          {!editing && (
+   142→            <div className="text-center">
+   143→              <h3 className="text-xl font-bold tracking-tight">{currentUser.name}</h3>
+   144→              <p className="text-sm text-muted-foreground/60 mt-1 font-medium">{currentUser.email}</p>
+   145→              <span className="inline-flex items-center gap-1.5 mt-2.5 text-xs font-medium px-3 py-1.5 rounded-full bg-foreground/[0.04] text-muted-foreground/70">
+   146→                <Shield className="h-3.5 w-3.5" />
+   147→                {currentUser.role === 'admin' ? t('user.role.admin') : currentUser.role === 'agent' ? t('user.role.agent') : currentUser.role === 'supervisor' ? t('user.role.supervisor') : currentUser.role}
+   148→              </span>
+   149→            </div>
+   150→          )}
+   151→          <div className="flex gap-2">
+   152→            {STATUS_OPTIONS.map((opt) => (
+   153→              <button key={opt.value} onClick={() => handleStatusChange(opt.value)} className={cn('flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-medium transition-all duration-200 border', currentUser.status === opt.value ? 'border-primary/30 bg-primary/5 text-primary' : 'border-transparent text-muted-foreground/50 hover:text-foreground hover:bg-foreground/[0.03]')}>
+   154→                <span className={cn('h-2 w-2 rounded-full', opt.color, currentUser.status === opt.value && 'shadow-sm')} />
+   155→                {t(opt.labelKey)}
+   156→              </button>
+   157→            ))}
+   158→          </div>
+   159→        </div>
+   160→      </div>
+   161→      <div className="space-y-4">
+   162→        <SectionHeader title={t('profile.personalInfo')} />
+   163→        <div className="glass-card rounded-2xl p-5 space-y-4">
+   164→          <div className="space-y-3">
+   165→            <div className="space-y-1.5">
+   166→              <Label className="text-xs font-medium text-muted-foreground/70">{t('profile.displayName')}</Label>
+   167→              <Input value={form.name} onChange={(e) => setForm(f => ({ ...f, name: e.target.value }))} disabled={!editing} className="rounded-xl glass-input h-10 text-sm" />
+   168→            </div>
+   169→            <div className="space-y-1.5">
+   170→              <Label className="text-xs font-medium text-muted-foreground/70">{t('profile.email')}</Label>
+   171→              <Input type="email" value={form.email} onChange={(e) => setForm(f => ({ ...f, email: e.target.value }))} disabled={!editing} className="rounded-xl glass-input h-10 text-sm" />
+   172→            </div>
+   173→            <div className="space-y-1.5">
+   174→              <Label className="text-xs font-medium text-muted-foreground/70">{t('profile.phoneNumber')}</Label>
+   175→              <Input value={form.phone} onChange={(e) => setForm(f => ({ ...f, phone: e.target.value }))} disabled={!editing} className="rounded-xl glass-input h-10 text-sm" />
+   176→            </div>
+   177→            <div className="space-y-1.5">
+   178→              <Label className="text-xs font-medium text-muted-foreground/70">{t('profile.bio')}</Label>
+   179→              <Textarea value={form.bio} onChange={(e) => setForm(f => ({ ...f, bio: e.target.value }))} disabled={!editing} className="rounded-xl glass-input min-h-[80px] resize-none text-sm" />
+   180→            </div>
+   181→          </div>
+   182→          {!editing ? (
+   183→            <Button onClick={() => setEditing(true)} className="w-full h-10 rounded-xl text-sm font-medium"><Pencil className="h-4 w-4 mr-1.5" /> {t('profile.editInfo')}</Button>
+   184→          ) : (
+   185→            <div className="flex gap-2">
+   186→              <Button variant="outline" onClick={handleCancel} className="flex-1 h-10 rounded-xl text-sm font-medium"><X className="h-4 w-4 mr-1.5" /> {t('profile.cancel')}</Button>
+   187→              <Button onClick={handleSave} className="flex-1 h-10 rounded-xl text-sm font-medium bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600"><Check className="h-4 w-4 mr-1.5" /> {t('profile.save')}</Button>
+   188→            </div>
+   189→          )}
+   190→        </div>
+   191→      </div>
+   192→      <div className="space-y-2">
+   193→        <SectionHeader title={t('profile.stats.title')} />
+   194→        <div className="grid grid-cols-2 gap-3">
+   195→          {[
+   196→            { label: t('profile.stat.conversationsToday'), value: stats ? String(stats.conversationsToday) : '--', icon: MessageSquare },
+   197→            { label: t('profile.stat.avgResponse'), value: stats?.avgResponse || '--', icon: Clock },
+   198→            { label: t('profile.stat.avgRating'), value: stats?.avgRating || '--', icon: Shield },
+   199→            { label: t('profile.stat.totalConversations'), value: stats ? String(stats.totalConversations) : '--', icon: User },
+   200→          ].map((stat) => (
+   201→            <div key={stat.label} className="glass-card rounded-xl p-4">
+   202→              <stat.icon className="h-4 w-4 text-muted-foreground/40 mb-2" />
+   203→              <p className="text-lg font-bold tabular-nums">{stat.value}</p>
+   204→              <p className="text-[11px] text-muted-foreground/50 mt-0.5 font-medium">{stat.label}</p>
+   205→            </div>
+   206→          ))}
+   207→        </div>
+   208→      </div>
+   209→    </div>
+   210→  )
+   211→}
+   212→
+   213→// ═══ SYSTEM TAB ═══
+   214→function SystemTab() {
+   215→  const { settings, updateSettings, notifications, clearAllNotifications } = useCRMStore()
+   216→  const { theme, setTheme } = useTheme()
+   217→  const { t } = useT()
+   218→  return (
+   219→    <div className="space-y-6 animate-fade-in">
+   220→      <div className="space-y-1">
+   221→        <SectionHeader title={t('settings.appearance')} />
+   222→        <div className="glass-card rounded-2xl p-5">
+   223→          <SettingRow icon={theme === 'dark' ? Moon : Sun} label={t('settings.theme')} description={t('settings.themeDesc')}>
+   224→            <Button variant="outline" size="sm" className="h-8 rounded-lg text-xs gap-1.5 border-border/40" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>
+   225→              {theme === 'dark' ? <Moon className="h-3.5 w-3.5" /> : <Sun className="h-3.5 w-3.5" />}
+   226→              {theme === 'dark' ? t('settings.dark') : t('settings.light')}
+   227→            </Button>
+   228→          </SettingRow>
+   229→          <Separator className="opacity-30 my-1" />
+   230→          <SettingRow icon={Maximize2} label={t('settings.compactMode')} description={t('settings.compactModeDesc')}>
+   231→            <Switch checked={settings.compactMode} onCheckedChange={(v) => updateSettings({ compactMode: v })} />
+   232→          </SettingRow>
+   233→          <Separator className="opacity-30 my-1" />
+   234→          <SettingRow icon={Eye} label={t('settings.showPreview')} description={t('settings.showPreviewDesc')}>
+   235→            <Switch checked={settings.showPreview} onCheckedChange={(v) => updateSettings({ showPreview: v })} />
+   236→          </SettingRow>
+   237→          <Separator className="opacity-30 my-1" />
+   238→          <SettingRow icon={Globe} label={t('settings.language')}>
+   239→            <Select value={settings.language} onValueChange={(v) => updateSettings({ language: v as Locale })}>
+   240→              <SelectTrigger className="w-32 h-8 rounded-lg text-xs"><SelectValue /></SelectTrigger>
+   241→              <SelectContent>{LOCALES.map((loc) => <SelectItem key={loc} value={loc}>{LOCALE_LABELS[loc]}</SelectItem>)}</SelectContent>
+   242→            </Select>
+   243→          </SettingRow>
+   244→        </div>
+   245→      </div>
+   246→      <div className="space-y-1">
+   247→        <SectionHeader title={t('settings.notifications')} />
+   248→        <div className="glass-card rounded-2xl p-5">
+   249→          <SettingRow icon={Volume2} label={t('settings.sound')} description={t('settings.soundDesc')}>
+   250→            <Switch checked={settings.soundEnabled} onCheckedChange={(v) => updateSettings({ soundEnabled: v })} />
+   251→          </SettingRow>
+   252→          <Separator className="opacity-30 my-1" />
+   253→          <SettingRow icon={Monitor} label={t('settings.desktopNotif')} description={t('settings.desktopNotifDesc')}>
+   254→            <Switch checked={settings.desktopNotifEnabled} onCheckedChange={(v) => updateSettings({ desktopNotifEnabled: v })} />
+   255→          </SettingRow>
+   256→          <Separator className="opacity-30 my-1" />
+   257→          <SettingRow icon={Mail} label={t('settings.emailNotif')} description={t('settings.emailNotifDesc')}>
+   258→            <Switch checked={settings.emailNotifEnabled} onCheckedChange={(v) => updateSettings({ emailNotifEnabled: v })} />
+   259→          </SettingRow>
+   260→          {notifications.length > 0 && (
+   261→            <><Separator className="opacity-30 my-1" />
+   262→            <Button variant="ghost" size="sm" className="w-full mt-1 h-9 rounded-xl text-xs text-muted-foreground/60 hover:text-foreground hover:bg-foreground/[0.03]" onClick={() => clearAllNotifications()}>
+   263→              <Trash2 className="h-3.5 w-3.5 mr-1.5" /> {t('settings.clearAllNotifs', { count: notifications.length })}
+   264→            </Button></>
+   265→          )}
+   266→        </div>
+   267→      </div>
+   268→      <div className="space-y-1">
+   269→        <SectionHeader title={t('settings.conversations')} />
+   270→        <div className="glass-card rounded-2xl p-5">
+   271→          <SettingRow icon={UserCheck} label={t('settings.autoAssign')} description={t('settings.autoAssignDesc')}>
+   272→            <Switch checked={settings.autoAssign} onCheckedChange={(v) => updateSettings({ autoAssign: v })} />
+   273→          </SettingRow>
+   274→        </div>
+   275→      </div>
+   276→      <div className="space-y-1">
+   277→        <SectionHeader title={t('settings.data')} />
+   278→        <div className="glass-card rounded-2xl p-5">
+   279→          <SettingRow icon={Trash2} label={t('settings.clearCache')} description={t('settings.clearCacheDesc')}>
+   280→            <Button variant="outline" size="sm" className="h-8 rounded-lg text-xs border-border/40 hover:border-red-300 hover:text-red-600">{t('settings.clearCache')}</Button>
+   281→          </SettingRow>
+   282→          <Separator className="opacity-30 my-1" />
+   283→          <Button variant="outline" size="sm" className="w-full h-9 rounded-xl text-xs border-border/40 hover:border-red-300 hover:text-red-600" onClick={() => { localStorage.removeItem('omnichat_settings'); updateSettings({ soundEnabled: true, desktopNotifEnabled: true, emailNotifEnabled: false, compactMode: false, showPreview: true, autoAssign: true, language: settings.language }) }}>
+   284→            <RotateCcw className="h-3.5 w-3.5 mr-1.5" /> {t('settings.resetDefaults')}
+   285→          </Button>
+   286→        </div>
+   287→      </div>
+   288→    </div>
+   289→  )
+   290→}
+   291→
+   292→// ═══ CHANNELS TAB ═══
+   293→interface ChannelSetting {
+   294→  key: string
+   295→  name: string
+   296→  description: string
+   297→  color: string
+   298→  icon: React.ElementType
+   299→  enabled: boolean
+   300→  configured: boolean
+   301→  config?: Record<string, string>
+   302→}
+   303→
+   304→function ChannelsTab() {
+   305→  const { t } = useT()
+   306→  const [channels, setChannels] = useState<ChannelSetting[]>([
+   307→    { key: 'facebook_messenger', name: t('channels.fb.name'), description: t('channels.fb.desc'), color: '#1877f2', icon: MessageSquare, enabled: true, configured: true, config: { pageId: 'OmniChat Official', token: 'hidden' } },
+   308→    { key: 'zalo', name: t('channels.zalo.name'), description: t('channels.zalo.desc'), color: '#0068ff', icon: Phone, enabled: true, configured: true, config: { phone: '0901 234 567' } },
+   309→    { key: 'telegram', name: t('channels.tg.name'), description: t('channels.tg.desc'), color: '#26a5e4', icon: Send, enabled: false, configured: false, config: {} },
+   310→    { key: 'website', name: t('channels.web.name'), description: t('channels.web.desc'), color: '#10b981', icon: Globe2, enabled: true, configured: true, config: { webhook: 'https://omnichat.vn/widget/abc123' } },
+   311→    { key: 'email', name: t('channels.email.name'), description: t('channels.email.desc'), color: '#ea4335', icon: Mail, enabled: false, configured: false, config: {} },
+   312→  ])
+   313→
+   314→  const [editingChannel, setEditingChannel] = useState<string | null>(null)
+   315→  const [editForm, setEditForm] = useState<Record<string, string>>({})
+   316→
+   317→  const toggleChannel = (key: string) => setChannels(prev => prev.map(ch => ch.key === key ? { ...ch, enabled: !ch.enabled } : ch))
+   318→  const startEdit = (ch: ChannelSetting) => { setEditingChannel(ch.key); setEditForm(ch.config || {}) }
+   319→  const saveChannel = (key: string) => {
+   320→    setChannels(prev => prev.map(ch => ch.key === key ? { ...ch, configured: Object.values(editForm).some(v => v.length > 0), config: { ...editForm } } : ch))
+   321→    setEditingChannel(null)
+   322→  }
+   323→
+   324→  return (
+   325→    <div className="space-y-6 animate-fade-in">
+   326→      <div>
+   327→        <h3 className="text-sm font-bold">{t('channels.configTitle')}</h3>
+   328→        <p className="text-xs text-muted-foreground/60 mt-1">{t('channels.configDesc')}</p>
+   329→      </div>
+   330→      {channels.map((ch) => {
+   331→        const Icon = ch.icon
+   332→        const isEditing = editingChannel === ch.key
+   333→        return (
+   334→          <div key={ch.key} className="glass-card rounded-2xl overflow-hidden transition-all duration-200">
+   335→            <div className="p-5">
+   336→              <div className="flex items-start justify-between gap-4">
+   337→                <div className="flex items-start gap-3.5 min-w-0">
+   338→                  <div className="h-11 w-11 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm" style={{ backgroundColor: ch.color + '12' }}>
+   339→                    <Icon className="h-5 w-5" style={{ color: ch.color }} />
+   340→                  </div>
+   341→                  <div className="min-w-0">
+   342→                    <div className="flex items-center gap-2">
+   343→                      <h4 className="text-[13px] font-semibold">{ch.name}</h4>
+   344→                      {ch.configured && ch.enabled && <Badge className="text-[9px] px-1.5 py-0 h-[16px] bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 rounded-md font-medium"><Check className="h-2.5 w-2.5 mr-0.5" /> {t('channels.connected')}</Badge>}
+   345→                      {!ch.configured && ch.enabled && <Badge className="text-[9px] px-1.5 py-0 h-[16px] bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 rounded-md font-medium">{t('channels.notConfigured')}</Badge>}
+   346→                    </div>
+   347→                    <p className="text-[11px] text-muted-foreground/50 mt-1 leading-relaxed">{ch.description}</p>
+   348→                  </div>
+   349→                </div>
+   350→                <Switch checked={ch.enabled} onCheckedChange={() => toggleChannel(ch.key)} />
+   351→              </div>
+   352→            </div>
+   353→            {isEditing && (
+   354→              <div className="px-5 pb-5 border-t border-border/30 pt-4 space-y-3 animate-slide-down">
+   355→                {ch.key === 'facebook_messenger' && (
+   356→                  <>
+   357→                    <div className="space-y-1.5">
+   358→                      <Label className="text-xs font-medium text-muted-foreground/70">{t('channels.fb.pageName')}</Label>
+   359→                      <Input value={editForm.pageId || ''} onChange={(e) => setEditForm(f => ({ ...f, pageId: e.target.value }))} placeholder={t('channels.fb.pageNamePlaceholder')} className="rounded-xl glass-input h-9 text-sm" />
+   360→                    </div>
+   361→                    <div className="space-y-1.5">
+   362→                      <Label className="text-xs font-medium text-muted-foreground/70">{t('channels.fb.token')}</Label>
+   363→                      <Input value={editForm.token || ''} onChange={(e) => setEditForm(f => ({ ...f, token: e.target.value }))} type="password" placeholder={t('channels.fb.tokenPlaceholder')} className="rounded-xl glass-input h-9 text-sm" />
+   364→                    </div>
+   365→                  </>
+   366→                )}
+   367→                {ch.key === 'zalo' && (
+   368→                  <div className="space-y-1.5">
+   369→                    <Label className="text-xs font-medium text-muted-foreground/70">{t('channels.zalo.phone')}</Label>
+   370→                    <Input value={editForm.phone || ''} onChange={(e) => setEditForm(f => ({ ...f, phone: e.target.value }))} placeholder={t('channels.zalo.phonePlaceholder')} className="rounded-xl glass-input h-9 text-sm" />
+   371→                  </div>
+   372→                )}
+   373→                {ch.key === 'telegram' && (
+   374→                  <div className="space-y-1.5">
+   375→                    <Label className="text-xs font-medium text-muted-foreground/70">{t('channels.tg.token')}</Label>
+   376→                    <Input value={editForm.token || ''} onChange={(e) => setEditForm(f => ({ ...f, token: e.target.value }))} type="password" placeholder={t('channels.tg.tokenPlaceholder')} className="rounded-xl glass-input h-9 text-sm" />
+   377→                  </div>
+   378→                )}
+   379→                {ch.key === 'website' && (
+   380→                  <>
+   381→                    <div className="space-y-1.5">
+   382→                      <Label className="text-xs font-medium text-muted-foreground/70">{t('channels.web.webhook')}</Label>
+   383→                      <Input value={editForm.webhook || ''} onChange={(e) => setEditForm(f => ({ ...f, webhook: e.target.value }))} placeholder={t('channels.web.webhookPlaceholder')} className="rounded-xl glass-input h-9 text-sm" />
+   384→                    </div>
+   385→                    <p className="text-[10px] text-muted-foreground/40 mt-1">{t('channels.web.snippetHint')}</p>
+   386→                    <div className="bg-foreground/[0.03] rounded-xl p-3 font-mono text-[11px] text-muted-foreground/70 break-all select-all">
+   387→                      {`<script src="https://omnichat.vn/widget.js" data-id="abc123"><` + `/script>`}
+   388→                    </div>
+   389→                  </>
+   390→                )}
+   391→                {ch.key === 'email' && (
+   392→                  <>
+   393→                    <div className="space-y-1.5">
+   394→                      <Label className="text-xs font-medium text-muted-foreground/70">{t('channels.email.address')}</Label>
+   395→                      <Input value={editForm.email || ''} onChange={(e) => setEditForm(f => ({ ...f, email: e.target.value }))} placeholder={t('channels.email.placeholder')} className="rounded-xl glass-input h-9 text-sm" />
+   396→                    </div>
+   397→                    <div className="space-y-1.5">
+   398→                      <Label className="text-xs font-medium text-muted-foreground/70">{t('channels.email.imap')}</Label>
+   399→                      <Input placeholder={t('channels.email.imapPlaceholder')} className="rounded-xl glass-input h-9 text-sm" />
+   400→                    </div>
+   401→                  </>
+   402→                )}
+   403→                <div className="flex gap-2 pt-1">
+   404→                  <Button variant="outline" size="sm" onClick={() => setEditingChannel(null)} className="h-8 rounded-lg text-xs"><X className="h-3.5 w-3.5 mr-1" /> {t('profile.cancel')}</Button>
+   405→                  <Button size="sm" onClick={() => saveChannel(ch.key)} className="h-8 rounded-lg text-xs bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600"><Check className="h-3.5 w-3.5 mr-1" /> {t('channels.saveConfig')}</Button>
+   406→                </div>
+   407→              </div>
+   408→            )}
+   409→            {!isEditing && (
+   410→              <div className="px-5 pb-4">
+   411→                <Button variant="ghost" size="sm" className="h-8 rounded-lg text-xs text-muted-foreground/60 hover:text-foreground hover:bg-foreground/[0.03]" onClick={() => startEdit(ch)}>
+   412→                  <Pencil className="h-3.5 w-3.5 mr-1.5" />{ch.configured ? t('channels.editConfig') : t('channels.configure')}
+   413→                </Button>
+   414→              </div>
+   415→            )}
+   416→          </div>
+   417→        )
+   418→      })}
+   419→    </div>
+   420→  )
+   421→}
+   422→
+   423→// ═══ STAFF TAB ═══
+   424→function StaffTab() {
+   425→  const { agents, setAgents } = useCRMStore()
+   426→  const { t } = useT()
+   427→  const [staffList, setStaffList] = useState<Agent[]>([])
+   428→  const [loading, setLoading] = useState(true)
+   429→  const [showInvite, setShowInvite] = useState(false)
+   430→  const [inviteEmail, setInviteEmail] = useState('')
+   431→  const [inviteRole, setInviteRole] = useState('agent')
+   432→  const [editingAgent, setEditingAgent] = useState<Agent | null>(null)
+   433→  const [expandedId, setExpandedId] = useState<string | null>(null)
+   434→  const [deleteConfirm, setDeleteConfirm] = useState(false)
+   435→  const [editForm, setEditForm] = useState({ name: '', email: '', role: 'agent', status: 'online' })
+   436→
+   437→  // Generate stable mock stats per agent
+   438→  const staffStats = useMemo(() => {
+   439→    const stats: Record<string, { conversations: number; avgResponse: number; satisfaction: number; lastActive: string }> = {}
+   440→    staffList.forEach((agent) => {
+   441→      // Simple deterministic hash from agent id
+   442→      const hash = agent.id.split('').reduce((a, c) => a + c.charCodeAt(0), 0)
+   443→      const conversations = 100 + (hash * 7) % 500
+   444→      const avgResponse = 60 + (hash * 13) % 120 // 1-3 min in seconds
+   445→      const satisfaction = 4.0 + ((hash * 3) % 10) / 10 // 4.0-5.0
+   446→      const daysAgo = (hash * 11) % 30
+   447→      const hoursAgo = (hash * 7) % 24
+   448→      const lastActive = daysAgo === 0
+   449→        ? `${hoursAgo}h ago`
+   450→        : `${daysAgo}d ago`
+   451→      stats[agent.id] = { conversations, avgResponse, satisfaction, lastActive }
+   452→    })
+   453→    return stats
+   454→  }, [staffList])
+   455→
+   456→  useEffect(() => {
+   457→    async function load() {
+   458→      try {
+   459→        const res = await fetch('/api/agents')
+   460→        const data = await res.json()
+   461→        if (Array.isArray(data)) { setStaffList(data); setAgents(data) }
+   462→      } catch (e) { console.error('Failed', e) }
+   463→      finally { setLoading(false) }
+   464→    }
+   465→    load()
+   466→  }, [setAgents])
+   467→
+   468→  const handleInvite = () => {
+   469→    if (!inviteEmail.trim()) return
+   470→    const newAgent: Agent = { id: `agent_${Date.now()}`, name: inviteEmail.split('@')[0], email: inviteEmail, avatar: null, role: inviteRole, status: 'offline' }
+   471→    setStaffList(prev => [...prev, newAgent])
+   472→    setAgents([...staffList, newAgent])
+   473→    setInviteEmail('')
+   474→    setShowInvite(false)
+   475→  }
+   476→
+   477→  const openEditDialog = (agent: Agent, e?: React.MouseEvent) => {
+   478→    if (e) e.stopPropagation()
+   479→    setEditForm({ name: agent.name, email: agent.email, role: agent.role, status: agent.status })
+   480→    setDeleteConfirm(false)
+   481→    setEditingAgent(agent)
+   482→  }
+   483→
+   484→  const handleSaveEdit = () => {
+   485→    if (!editingAgent) return
+   486→    const updated = { ...editingAgent, ...editForm }
+   487→    const newList = staffList.map(a => a.id === editingAgent.id ? updated : a)
+   488→    setStaffList(newList)
+   489→    setAgents(newList)
+   490→    setEditingAgent(null)
+   491→  }
+   492→
+   493→  const handleDelete = () => {
+   494→    if (!editingAgent) return
+   495→    const newList = staffList.filter(a => a.id !== editingAgent.id)
+   496→    setStaffList(newList)
+   497→    setAgents(newList)
+   498→    setEditingAgent(null)
+   499→    setDeleteConfirm(false)
+   500→  }
+   501→
+   502→  const toggleExpand = (id: string) => {
+   503→    setExpandedId(prev => prev === id ? null : id)
+   504→  }
+   505→
+   506→  const roleLabel = (role: string) => role === 'admin' ? t('user.role.admin') : role === 'supervisor' ? t('user.role.supervisor') : role === 'agent' ? t('user.role.agent') : role
+   507→  const roleBadge = (role: string) => role === 'admin' ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-400' : role === 'supervisor' ? 'bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-400' : 'bg-slate-100 text-slate-600 dark:bg-slate-800/40 dark:text-slate-400'
+   508→
+   509→  const formatResponseTime = (seconds: number) => {
+   510→    const min = Math.floor(seconds / 60)
+   511→    const sec = seconds % 60
+   512→    return min > 0 ? `~${min}m ${sec > 0 ? `${sec}s` : ''}` : `~${sec}s`
+   513→  }
+   514→
+   515→  return (
+   516→    <div className="space-y-6 animate-fade-in">
+   517→      <div className="flex items-center justify-between">
+   518→        <div>
+   519→          <h3 className="text-sm font-bold">{t('staff.title')}</h3>
+   520→          <p className="text-xs text-muted-foreground/60 mt-1">{t('staff.count', { count: staffList.length })}</p>
+   521→        </div>
+   522→        <Button size="sm" className="h-8 rounded-xl text-xs gap-1.5 bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600" onClick={() => setShowInvite(!showInvite)}>
+   523→          <Plus className="h-3.5 w-3.5" /> {t('staff.invite')}
+   524→        </Button>
+   525→      </div>
+   526→      {showInvite && (
+   527→        <div className="glass-card rounded-2xl p-5 animate-slide-down">
+   528→          <h4 className="text-[13px] font-semibold mb-3">{t('staff.inviteTitle')}</h4>
+   529→          <div className="flex gap-2">
+   530→            <Input value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} placeholder={t('staff.emailPlaceholder')} className="flex-1 rounded-xl glass-input h-9 text-sm" onKeyDown={(e) => e.key === 'Enter' && handleInvite()} />
+   531→            <Select value={inviteRole} onValueChange={setInviteRole}>
+   532→              <SelectTrigger className="w-28 h-9 rounded-xl text-xs"><SelectValue /></SelectTrigger>
+   533→              <SelectContent><SelectItem value="agent">{t('user.role.agent')}</SelectItem><SelectItem value="supervisor">{t('user.role.supervisor')}</SelectItem><SelectItem value="admin">{t('user.role.admin')}</SelectItem></SelectContent>
+   534→            </Select>
+   535→            <Button size="sm" onClick={handleInvite} className="h-9 rounded-xl text-xs"><Send className="h-3.5 w-3.5 mr-1" /> {t('staff.send')}</Button>
+   536→          </div>
+   537→        </div>
+   538→      )}
+   539→      <div className="space-y-2">
+   540→        {loading ? (
+   541→          <div className="space-y-3">{[1, 2, 3, 4].map((i) => (<div key={i} className="glass-card rounded-xl p-4 flex items-center gap-3"><div className="skeleton-line h-10 w-10 rounded-full flex-shrink-0" /><div className="flex-1 space-y-2"><div className="skeleton-line h-3.5 w-1/3" /><div className="skeleton-line h-3 w-1/4" /></div></div>))}</div>
+   542→        ) : (
+   543→          staffList.map((agent, idx) => {
+   544→            const stats = staffStats[agent.id]
+   545→            const isExpanded = expandedId === agent.id
+   546→            return (
+   547→              <div key={agent.id} className="glass-card rounded-xl overflow-hidden transition-all duration-200 hover:shadow-sm">
+   548→                {/* Main row - clickable to expand */}
+   549→                <div
+   550→                  className="p-4 flex items-center gap-3.5 cursor-pointer"
+   551→                  onClick={() => toggleExpand(agent.id)}
+   552→                >
+   553→                  <Avatar className={cn('h-10 w-10 flex-shrink-0', GRADIENT_CLASSES[idx % GRADIENT_CLASSES.length])}>
+   554→                    <AvatarFallback className="text-xs text-white font-semibold">{agent.name.split(' ').slice(-2).map(n => n[0]).join('')}</AvatarFallback>
+   555→                  </Avatar>
+   556→                  <div className="flex-1 min-w-0">
+   557→                    <div className="flex items-center gap-2">
+   558→                      <span className="text-[13px] font-semibold truncate">{agent.name}</span>
+   559→                      <div className={cn('h-2 w-2 rounded-full flex-shrink-0', agent.status === 'online' ? 'bg-emerald-500' : agent.status === 'busy' ? 'bg-amber-500' : 'bg-gray-400')} />
+   560→                    </div>
+   561→                    <p className="text-[11px] text-muted-foreground/50 truncate mt-0.5">{agent.email}</p>
+   562→                  </div>
+   563→                  <Badge className={cn('text-[10px] px-2 py-0.5 h-[20px] rounded-md font-medium', roleBadge(agent.role))}>{roleLabel(agent.role)}</Badge>
+   564→                  <ChevronDown className={cn('h-4 w-4 text-muted-foreground/30 flex-shrink-0 transition-transform duration-200', isExpanded && 'rotate-180')} />
+   565→                  <Button
+   566→                    variant="ghost"
+   567→                    size="icon"
+   568→                    className="h-8 w-8 rounded-lg text-muted-foreground/40 hover:text-foreground hover:bg-foreground/5"
+   569→                    onClick={(e) => openEditDialog(agent, e)}
+   570→                  >
+   571→                    <MoreVertical className="h-4 w-4" />
+   572→                  </Button>
+   573→                </div>
+   574→                {/* Expanded stats section */}
+   575→                {isExpanded && stats && (
+   576→                  <div className="px-4 pb-4 pt-0 animate-slide-down">
+   577→                    <div className="border-t border-border/20 pt-3 mt-1">
+   578→                      <div className="grid grid-cols-4 gap-3">
+   579→                        <div className="bg-foreground/[0.02] rounded-lg p-2.5 text-center">
+   580→                          <MessageSquare className="h-3.5 w-3.5 text-muted-foreground/40 mx-auto mb-1" />
+   581→                          <p className="text-sm font-bold tabular-nums">{stats.conversations}</p>
+   582→                          <p className="text-[10px] text-muted-foreground/50 font-medium">{t('staff.totalConversations')}</p>
+   583→                        </div>
+   584→                        <div className="bg-foreground/[0.02] rounded-lg p-2.5 text-center">
+   585→                          <Clock className="h-3.5 w-3.5 text-muted-foreground/40 mx-auto mb-1" />
+   586→                          <p className="text-sm font-bold tabular-nums">{formatResponseTime(stats.avgResponse)}</p>
+   587→                          <p className="text-[10px] text-muted-foreground/50 font-medium">{t('staff.avgResponse')}</p>
+   588→                        </div>
+   589→                        <div className="bg-foreground/[0.02] rounded-lg p-2.5 text-center">
+   590→                          <Star className="h-3.5 w-3.5 text-amber-400 mx-auto mb-1" />
+   591→                          <p className="text-sm font-bold tabular-nums">{stats.satisfaction.toFixed(1)}</p>
+   592→                          <p className="text-[10px] text-muted-foreground/50 font-medium">{t('staff.satisfaction')}</p>
+   593→                        </div>
+   594→                        <div className="bg-foreground/[0.02] rounded-lg p-2.5 text-center">
+   595→                          <Clock className="h-3.5 w-3.5 text-muted-foreground/40 mx-auto mb-1" />
+   596→                          <p className="text-sm font-bold">{stats.lastActive}</p>
+   597→                          <p className="text-[10px] text-muted-foreground/50 font-medium">{t('staff.lastActive')}</p>
+   598→                        </div>
+   599→                      </div>
+   600→                    </div>
+   601→                  </div>
+   602→                )}
+   603→              </div>
+   604→            )
+   605→          })
+   606→        )}
+   607→      </div>
+   608→
+   609→      {/* Edit Staff Dialog */}
+   610→      <Dialog open={!!editingAgent} onOpenChange={(open) => { if (!open) { setEditingAgent(null); setDeleteConfirm(false) } }}>
+   611→        <DialogContent className="sm:max-w-md rounded-2xl">
+   612→          <DialogHeader>
+   613→            <DialogTitle className="text-base">{t('staff.edit')}</DialogTitle>
+   614→            <DialogDescription className="text-xs text-muted-foreground/60">
+   615→              {editingAgent?.name}
+   616→            </DialogDescription>
+   617→          </DialogHeader>
+   618→          <div className="space-y-3.5 py-1">
+   619→            <div className="space-y-1.5">
+   620→              <Label className="text-xs font-medium text-muted-foreground/70">{t('staff.name')}</Label>
+   621→              <Input value={editForm.name} onChange={(e) => setEditForm(f => ({ ...f, name: e.target.value }))} className="rounded-xl glass-input h-10 text-sm" />
+   622→            </div>
+   623→            <div className="space-y-1.5">
+   624→              <Label className="text-xs font-medium text-muted-foreground/70">{t('staff.emailLabel')}</Label>
+   625→              <Input value={editForm.email} onChange={(e) => setEditForm(f => ({ ...f, email: e.target.value }))} type="email" className="rounded-xl glass-input h-10 text-sm" />
+   626→            </div>
+   627→            <div className="grid grid-cols-2 gap-3">
+   628→              <div className="space-y-1.5">
+   629→                <Label className="text-xs font-medium text-muted-foreground/70">{t('staff.role')}</Label>
+   630→                <Select value={editForm.role} onValueChange={(v) => setEditForm(f => ({ ...f, role: v }))}>
+   631→                  <SelectTrigger className="h-10 rounded-xl text-sm"><SelectValue /></SelectTrigger>
+   632→                  <SelectContent>
+   633→                    <SelectItem value="admin">{t('user.role.admin')}</SelectItem>
+   634→                    <SelectItem value="supervisor">{t('user.role.supervisor')}</SelectItem>
+   635→                    <SelectItem value="agent">{t('user.role.agent')}</SelectItem>
+   636→                  </SelectContent>
+   637→                </Select>
+   638→              </div>
+   639→              <div className="space-y-1.5">
+   640→                <Label className="text-xs font-medium text-muted-foreground/70">{t('staff.status')}</Label>
+   641→                <Select value={editForm.status} onValueChange={(v) => setEditForm(f => ({ ...f, status: v }))}>
+   642→                  <SelectTrigger className="h-10 rounded-xl text-sm"><SelectValue /></SelectTrigger>
+   643→                  <SelectContent>
+   644→                    <SelectItem value="online">{t('profile.status.online')}</SelectItem>
+   645→                    <SelectItem value="busy">{t('profile.status.busy')}</SelectItem>
+   646→                    <SelectItem value="away">{t('profile.status.away')}</SelectItem>
+   647→                    <SelectItem value="offline">{t('profile.status.offline')}</SelectItem>
+   648→                  </SelectContent>
+   649→                </Select>
+   650→              </div>
+   651→            </div>
+   652→          </div>
+   653→          <DialogFooter className="flex-col gap-2 sm:flex-row sm:justify-between">
+   654→            {!deleteConfirm ? (
+   655→              <Button
+   656→                variant="ghost"
+   657→                size="sm"
+   658→                className="text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 h-8 rounded-lg text-xs"
+   659→                onClick={() => setDeleteConfirm(true)}
+   660→              >
+   661→                <Trash2 className="h-3.5 w-3.5 mr-1.5" /> {t('staff.delete')}
+   662→              </Button>
+   663→            ) : (
+   664→              <div className="flex items-center gap-2">
+   665→                <span className="text-[11px] text-red-500 font-medium">{t('staff.deleteConfirm')}</span>
+   666→                <Button variant="ghost" size="sm" className="h-8 rounded-lg text-xs" onClick={() => setDeleteConfirm(false)}>
+   667→                  <X className="h-3 w-3 mr-1" /> {t('staff.cancelEdit')}
+   668→                </Button>
+   669→                <Button variant="destructive" size="sm" className="h-8 rounded-lg text-xs" onClick={handleDelete}>
+   670→                  <Trash2 className="h-3 w-3 mr-1" /> {t('staff.delete')}
+   671→                </Button>
+   672→              </div>
+   673→            )}
+   674→            <div className="flex gap-2">
+   675→              <Button variant="outline" size="sm" className="h-8 rounded-lg text-xs" onClick={() => { setEditingAgent(null); setDeleteConfirm(false) }}>
+   676→                {t('staff.cancelEdit')}
+   677→              </Button>
+   678→              <Button size="sm" className="h-8 rounded-lg text-xs bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600" onClick={handleSaveEdit}>
+   679→                <Check className="h-3.5 w-3.5 mr-1" /> {t('staff.save')}
+   680→              </Button>
+   681→            </div>
+   682→          </DialogFooter>
+   683→        </DialogContent>
+   684→      </Dialog>
+   685→    </div>
+   686→  )
+   687→}
+   688→
+   689→// ═══ SECURITY TAB ═══
+   690→interface BlacklistItem {
+   691→  type: 'ip' | 'email'
+   692→  value: string
+   693→  reason: string
+   694→  addedAt: string
+   695→  addedBy: string
+   696→}
+   697→
+   698→function SecurityTab() {
+   699→  const { t } = useT()
+   700→  const [config, setConfig] = useState({ rateLimitPerMinute: 60, rateLimitEnabled: true, blacklistEnabled: true })
+   701→  const [blacklist, setBlacklist] = useState<BlacklistItem[]>([])
+   702→  const [loading, setLoading] = useState(true)
+   703→  const [newType, setNewType] = useState<'ip' | 'email'>('ip')
+   704→  const [newValue, setNewValue] = useState('')
+   705→  const [newReason, setNewReason] = useState('')
+   706→  const [adding, setAdding] = useState(false)
+   707→  const [saving, setSaving] = useState(false)
+   708→  const [rateLimitInput, setRateLimitInput] = useState('60')
+   709→
+   710→  const loadData = async () => {
+   711→    setLoading(true)
+   712→    try {
+   713→      const [configRes, blacklistRes] = await Promise.all([
+   714→        fetch('/api/security/config'),
+   715→        fetch('/api/security/blacklist'),
+   716→      ])
+   717→      const configData = await configRes.json()
+   718→      const blacklistData = await blacklistRes.json()
+   719→      setConfig(configData)
+   720→      setRateLimitInput(String(configData.rateLimitPerMinute))
+   721→      setBlacklist(blacklistData.data || [])
+   722→    } catch (e) { console.error('Failed to load security config', e) }
+   723→    finally { setLoading(false) }
+   724→  }
+   725→
+   726→  useEffect(() => { loadData() }, [])
+   727→
+   728→  const saveConfig = async () => {
+   729→    setSaving(true)
+   730→    try {
+   731→      const res = await fetch('/api/security/config', {
+   732→        method: 'PUT',
+   733→        headers: { 'Content-Type': 'application/json' },
+   734→        body: JSON.stringify({
+   735→          ...config,
+   736→          rateLimitPerMinute: parseInt(rateLimitInput) || 60,
+   737→        }),
+   738→      })
+   739→      const data = await res.json()
+   740→      if (data.data) setConfig(data.data)
+   741→    } catch (e) { console.error(e) }
+   742→    finally { setSaving(false) }
+   743→  }
+   744→
+   745→  const addToBlacklist = async () => {
+   746→    if (!newValue.trim()) return
+   747→    setAdding(true)
+   748→    try {
+   749→      const res = await fetch('/api/security/blacklist', {
+   750→        method: 'POST',
+   751→        headers: { 'Content-Type': 'application/json' },
+   752→        body: JSON.stringify({ type: newType, value: newValue.trim(), reason: newReason.trim() }),
+   753→      })
+   754→      if (res.ok) {
+   755→        const data = await res.json()
+   756→        setBlacklist(prev => [data.data, ...prev])
+   757→        setNewValue('')
+   758→        setNewReason('')
+   759→      }
+   760→    } catch (e) { console.error(e) }
+   761→    finally { setAdding(false) }
+   762→  }
+   763→
+   764→  const removeFromBlacklist = async (type: string, value: string) => {
+   765→    try {
+   766→      await fetch(`/api/security/blacklist?type=${type}&value=${encodeURIComponent(value)}`, { method: 'DELETE' })
+   767→      setBlacklist(prev => prev.filter(e => !(e.type === type && e.value === value)))
+   768→    } catch (e) { console.error(e) }
+   769→  }
+   770→
+   771→  const formatSize = (bytes: number) => {
+   772→    if (bytes < 1024) return `${bytes} B`
+   773→    if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`
+   774→    return `${(bytes / 1048576).toFixed(1)} MB`
+   775→  }
+   776→
+   777→  if (loading) {
+   778→    return (
+   779→      <div className="flex items-center justify-center py-20">
+   780→        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground/40" />
+   781→      </div>
+   782→    )
+   783→  }
+   784→
+   785→  return (
+   786→    <div className="space-y-6 animate-fade-in">
+   787→      {/* Rate Limiting */}
+   788→      <div className="space-y-1">
+   789→        <SectionHeader title={t('security.rateLimit.title')} />
+   790→        <div className="glass-card rounded-2xl p-5 space-y-4">
+   791→          <SettingRow icon={Zap} label={t('security.rateLimit.enabled')} description={t('security.rateLimit.enabledDesc')}>
+   792→            <Switch
+   793→              checked={config.rateLimitEnabled}
+   794→              onCheckedChange={(v) => setConfig(c => ({ ...c, rateLimitEnabled: v }))}
+   795→            />
+   796→          </SettingRow>
+   797→          <Separator className="opacity-30 my-1" />
+   798→          <SettingRow icon={Clock} label={t('security.rateLimit.maxRequests')} description={t('security.rateLimit.maxRequestsDesc')}>
+   799→            <div className="flex items-center gap-2">
+   800→              <Input
+   801→                type="number"
+   802→                min={1}
+   803→                max={10000}
+   804→                value={rateLimitInput}
+   805→                onChange={(e) => setRateLimitInput(e.target.value)}
+   806→                className="w-24 h-8 rounded-lg text-sm text-center"
+   807→                disabled={!config.rateLimitEnabled}
+   808→              />
+   809→              <span className="text-xs text-muted-foreground/50">/ {t('security.rateLimit.perMinute')}</span>
+   810→            </div>
+   811→          </SettingRow>
+   812→          <Button
+   813→            onClick={saveConfig}
+   814→            disabled={saving}
+   815→            className="w-full h-9 rounded-xl text-xs font-medium bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600"
+   816→          >
+   817→            {saving ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Check className="h-3.5 w-3.5 mr-1.5" />}
+   818→            {t('security.saveConfig')}
+   819→          </Button>
+   820→        </div>
+   821→      </div>
+   822→
+   823→      {/* Blacklist */}
+   824→      <div className="space-y-1">
+   825→        <SectionHeader title={t('security.blacklist.title')} />
+   826→        <div className="glass-card rounded-2xl p-5 space-y-4">
+   827→          <SettingRow icon={Ban} label={t('security.blacklist.enabled')} description={t('security.blacklist.enabledDesc')}>
+   828→            <Switch
+   829→              checked={config.blacklistEnabled}
+   830→              onCheckedChange={(v) => setConfig(c => ({ ...c, blacklistEnabled: v }))}
+   831→            />
+   832→          </SettingRow>
+   833→          <Separator className="opacity-30 my-1" />
+   834→
+   835→          {/* Add form */}
+   836→          <div className="space-y-3 p-3 rounded-xl bg-foreground/[0.02]">
+   837→            <p className="text-xs font-medium text-muted-foreground/70">{t('security.blacklist.addNew')}</p>
+   838→            <div className="flex gap-2">
+   839→              <Select value={newType} onValueChange={(v) => setNewType(v as 'ip' | 'email')}>
+   840→                <SelectTrigger className="w-24 h-9 rounded-lg text-xs"><SelectValue /></SelectTrigger>
+   841→                <SelectContent>
+   842→                  <SelectItem value="ip">IP</SelectItem>
+   843→                  <SelectItem value="email">Email</SelectItem>
+   844→                </SelectContent>
+   845→              </Select>
+   846→              <Input
+   847→                value={newValue}
+   848→                onChange={(e) => setNewValue(e.target.value)}
+   849→                placeholder={newType === 'ip' ? '192.168.1.1' : 'spam@example.com'}
+   850→                className="flex-1 h-9 rounded-lg text-sm"
+   851→              />
+   852→            </div>
+   853→            <Input
+   854→              value={newReason}
+   855→              onChange={(e) => setNewReason(e.target.value)}
+   856→              placeholder={t('security.blacklist.reasonPlaceholder')}
+   857→              className="h-9 rounded-lg text-sm"
+   858→            />
+   859→            <Button
+   860→              onClick={addToBlacklist}
+   861→              disabled={adding || !newValue.trim()}
+   862→              size="sm"
+   863→              className="h-9 rounded-lg text-xs bg-gradient-to-r from-red-500 to-rose-500 hover:from-red-600 hover:to-rose-600"
+   864→            >
+   865→              {adding ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Ban className="h-3.5 w-3.5 mr-1.5" />}
+   866→              {t('security.blacklist.addBtn')}
+   867→            </Button>
+   868→          </div>
+   869→
+   870→          {/* Blacklist table */}
+   871→          {blacklist.length > 0 && (
+   872→            <div className="space-y-2">
+   873→              <p className="text-xs font-medium text-muted-foreground/50">
+   874→                {t('security.blacklist.count', { count: blacklist.length })}
+   875→              </p>
+   876→              <div className="space-y-1.5 max-h-[300px] overflow-y-auto">
+   877→                {blacklist.map((entry, idx) => (
+   878→                  <div
+   879→                    key={idx}
+   880→                    className="flex items-center justify-between gap-3 p-3 rounded-xl bg-foreground/[0.02] hover:bg-foreground/[0.04] transition-colors group"
+   881→                  >
+   882→                    <div className="min-w-0 flex-1">
+   883→                      <div className="flex items-center gap-2">
+   884→                        <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-4 rounded-md font-mono">
+   885→                          {entry.type === 'ip' ? 'IP' : 'EMAIL'}
+   886→                        </Badge>
+   887→                        <span className="text-xs font-mono font-medium truncate">{entry.value}</span>
+   888→                      </div>
+   889→                      {entry.reason && (
+   890→                        <p className="text-[10px] text-muted-foreground/40 mt-0.5 truncate">{entry.reason}</p>
+   891→                      )}
+   892→                      <p className="text-[9px] text-muted-foreground/30 mt-0.5">
+   893→                        {new Date(entry.addedAt).toLocaleString()}
+   894→                      </p>
+   895→                    </div>
+   896→                    <Button
+   897→                      variant="ghost"
+   898→                      size="icon"
+   899→                      className="h-7 w-7 rounded-lg opacity-0 group-hover:opacity-100 text-muted-foreground/40 hover:text-red-500 transition-all"
+   900→                      onClick={() => removeFromBlacklist(entry.type, entry.value)}
+   901→                    >
+   902→                      <X className="h-3.5 w-3.5" />
+   903→                    </Button>
+   904→                  </div>
+   905→                ))}
+   906→              </div>
+   907→            </div>
+   908→          )}
+   909→
+   910→          {blacklist.length === 0 && (
+   911→            <div className="text-center py-6">
+   912→              <ShieldAlert className="h-8 w-8 text-muted-foreground/20 mx-auto mb-2" />
+   913→              <p className="text-xs text-muted-foreground/40">{t('security.blacklist.empty')}</p>
+   914→            </div>
+   915→          )}
+   916→
+   917→          <Button
+   918→            onClick={saveConfig}
+   919→            disabled={saving}
+   920→            className="w-full h-9 rounded-xl text-xs font-medium bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600"
+   921→          >
+   922→            {saving ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Check className="h-3.5 w-3.5 mr-1.5" />}
+   923→            {t('security.saveConfig')}
+   924→          </Button>
+   925→        </div>
+   926→      </div>
+   927→    </div>
+   928→  )
+   929→}
+   930→
+   931→// ═══ BACKUP TAB ═══
+   932→interface BackupItem {
+   933→  id: string
+   934→  filename: string
+   935→  size: number
+   936→  createdAt: string
+   937→}
+   938→
+   939→function BackupTab() {
+   940→  const { t } = useT()
+   941→  const [backups, setBackups] = useState<BackupItem[]>([])
+   942→  const [loading, setLoading] = useState(true)
+   943→  const [creating, setCreating] = useState(false)
+   944→  const [restoring, setRestoring] = useState<string | null>(null)
+   945→  const [deleting, setDeleting] = useState<string | null>(null)
+   946→  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+   947→
+   948→  const loadBackups = async () => {
+   949→    setLoading(true)
+   950→    try {
+   951→      const res = await fetch('/api/backup')
+   952→      const data = await res.json()
+   953→      setBackups(data.data || [])
+   954→    } catch (e) { console.error(e) }
+   955→    finally { setLoading(false) }
+   956→  }
+   957→
+   958→  useEffect(() => { loadBackups() }, [])
+   959→
+   960→  const createBackup = async () => {
+   961→    setCreating(true)
+   962→    setMessage(null)
+   963→    try {
+   964→      const res = await fetch('/api/backup', { method: 'POST' })
+   965→      const data = await res.json()
+   966→      if (res.ok) {
+   967→        setMessage({ type: 'success', text: t('backup.created') })
+   968→        loadBackups()
+   969→      } else {
+   970→        setMessage({ type: 'error', text: data.error || t('backup.createFailed') })
+   971→      }
+   972→    } catch (e) {
+   973→      setMessage({ type: 'error', text: t('backup.createFailed') })
+   974→    }
+   975→    finally { setCreating(false) }
+   976→  }
+   977→
+   978→  const restoreBackup = async (id: string) => {
+   979→    setRestoring(id)
+   980→    setMessage(null)
+   981→    try {
+   982→      const res = await fetch('/api/backup/restore', {
+   983→        method: 'POST',
+   984→        headers: { 'Content-Type': 'application/json' },
+   985→        body: JSON.stringify({ backupId: id }),
+   986→      })
+   987→      const data = await res.json()
+   988→      if (res.ok) {
+   989→        setMessage({ type: 'success', text: t('backup.restored') })
+   990→      } else {
+   991→        setMessage({ type: 'error', text: data.error || t('backup.restoreFailed') })
+   992→      }
+   993→    } catch (e) {
+   994→      setMessage({ type: 'error', text: t('backup.restoreFailed') })
+   995→    }
+   996→    finally { setRestoring(null) }
+   997→  }
+   998→
+   999→  const deleteBackup = async (id: string) => {
+  1000→    setDeleting(id)
+  1001→    try {
+  1002→      await fetch(`/api/backup?id=${id}`, { method: 'DELETE' })
+  1003→      setBackups(prev => prev.filter(b => b.id !== id))
+  1004→    } catch (e) { console.error(e) }
+  1005→    finally { setDeleting(null) }
+  1006→  }
+  1007→
+  1008→  const formatSize = (bytes: number) => {
+  1009→    if (bytes < 1024) return `${bytes} B`
+  1010→    if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`
+  1011→    return `${(bytes / 1048576).toFixed(1)} MB`
+  1012→  }
+  1013→
+  1014→  if (loading) {
+  1015→    return (
+  1016→      <div className="flex items-center justify-center py-20">
+  1017→        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground/40" />
+  1018→      </div>
+  1019→    )
+  1020→  }
+  1021→
+  1022→  return (
+  1023→    <div className="space-y-6 animate-fade-in">
+  1024→      <div className="space-y-1">
+  1025→        <SectionHeader title={t('backup.manage')} />
+  1026→        <div className="glass-card rounded-2xl p-5 space-y-4">
+  1027→          {/* Info */}
+  1028→          <div className="flex items-start gap-3 p-3 rounded-xl bg-foreground/[0.02]">
+  1029→            <HardDrive className="h-5 w-5 text-muted-foreground/40 mt-0.5 flex-shrink-0" />
+  1030→            <div>
+  1031→              <p className="text-xs font-medium">{t('backup.info')}</p>
+  1032→              <p className="text-[10px] text-muted-foreground/40 mt-1 leading-relaxed">{t('backup.infoDesc')}</p>
+  1033→            </div>
+  1034→          </div>
+  1035→
+  1036→          {/* Create backup button */}
+  1037→          <Button
+  1038→            onClick={createBackup}
+  1039→            disabled={creating}
+  1040→            className="w-full h-10 rounded-xl text-sm font-medium bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600 shadow-lg shadow-indigo-500/15"
+  1041→          >
+  1042→            {creating ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Download className="h-4 w-4 mr-2" />}
+  1043→            {t('backup.createBtn')}
+  1044→          </Button>
+  1045→
+  1046→          {/* Message */}
+  1047→          {message && (
+  1048→            <div className={cn(
+  1049→              'p-3 rounded-xl text-xs font-medium flex items-center gap-2',
+  1050→              message.type === 'success' ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400' : 'bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-400'
+  1051→            )}>
+  1052→              {message.type === 'success' ? <Check className="h-3.5 w-3.5" /> : <AlertTriangle className="h-3.5 w-3.5" />}
+  1053→              {message.text}
+  1054→            </div>
+  1055→          )}
+  1056→
+  1057→          {/* Backup list */}
+  1058→          <div className="space-y-2">
+  1059→            <p className="text-xs font-medium text-muted-foreground/50">
+  1060→              {t('backup.list', { count: backups.length })}
+  1061→            </p>
+  1062→            {backups.length === 0 ? (
+  1063→              <div className="text-center py-8">
+  1064→                <Database className="h-8 w-8 text-muted-foreground/20 mx-auto mb-2" />
+  1065→                <p className="text-xs text-muted-foreground/40">{t('backup.empty')}</p>
+  1066→              </div>
+  1067→            ) : (
+  1068→              <div className="space-y-1.5 max-h-[400px] overflow-y-auto">
+  1069→                {backups.map((backup) => (
+  1070→                  <div
+  1071→                    key={backup.id}
+  1072→                    className="flex items-center justify-between gap-3 p-3 rounded-xl bg-foreground/[0.02] hover:bg-foreground/[0.04] transition-colors group"
+  1073→                  >
+  1074→                    <div className="min-w-0 flex-1">
+  1075→                      <div className="flex items-center gap-2">
+  1076→                        <Database className="h-4 w-4 text-muted-foreground/30" />
+  1077→                        <span className="text-xs font-medium truncate">{backup.id}</span>
+  1078→                      </div>
+  1079→                      <div className="flex items-center gap-3 mt-0.5">
+  1080→                        <span className="text-[10px] text-muted-foreground/40">{formatSize(backup.size)}</span>
+  1081→                        <span className="text-[10px] text-muted-foreground/30">
+  1082→                          {new Date(backup.createdAt).toLocaleString()}
+  1083→                        </span>
+  1084→                      </div>
+  1085→                    </div>
+  1086→                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+  1087→                      <Button
+  1088→                        variant="ghost"
+  1089→                        size="sm"
+  1090→                        className="h-7 px-2 rounded-lg text-[10px] text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/30"
+  1091→                        onClick={() => restoreBackup(backup.id)}
+  1092→                        disabled={restoring === backup.id}
+  1093→                      >
+  1094→                        {restoring === backup.id ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <RefreshCw className="h-3 w-3 mr-1" />}
+  1095→                        {t('backup.restore')}
+  1096→                      </Button>
+  1097→                      <Button
+  1098→                        variant="ghost"
+  1099→                        size="icon"
+  1100→                        className="h-7 w-7 rounded-lg text-muted-foreground/40 hover:text-red-500"
+  1101→                        onClick={() => deleteBackup(backup.id)}
+  1102→                        disabled={deleting === backup.id}
+  1103→                      >
+  1104→                        <Trash2 className="h-3.5 w-3.5" />
+  1105→                      </Button>
+  1106→                    </div>
+  1107→                  </div>
+  1108→                ))}
+  1109→              </div>
+  1110→            )}
+  1111→          </div>
+  1112→        </div>
+  1113→      </div>
+  1114→    </div>
+  1115→  )
+  1116→}
+  1117→
+  1118→// ═══ MAIN PAGE ═══
+  1119→export default function SettingsPage() {
+  1120→  const router = useRouter()
+  1121→  const searchParams = useSearchParams()
+  1122→  const { t } = useT()
+  1123→  const [activeTab, setActiveTab] = useState<SettingsTab>('profile')
+  1124→  const setCurrentUser = useCRMStore((s) => s.setCurrentUser)
+  1125→  const setAuthenticated = useCRMStore((s) => s.setAuthenticated)
+  1126→
+  1127→  // Restore tab from URL ?tab=xxx
+  1128→  useEffect(() => {
+  1129→    const tabParam = searchParams.get('tab')
+  1130→    if (tabParam && ['profile', 'system', 'channels', 'staff', 'security', 'backup'].includes(tabParam)) {
+  1131→      setActiveTab(tabParam as SettingsTab)
+  1132→    }
+  1133→  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  1134→
+  1135→  // Load current user from API on mount (separate route, need own fetch)
+  1136→  useEffect(() => {
+  1137→    fetch('/api/auth/me')
+  1138→      .then(res => {
+  1139→        if (!res.ok) throw new Error('Not authenticated')
+  1140→        return res.json()
+  1141→      })
+  1142→      .then(user => {
+  1143→        setAuthenticated(true)
+  1144→        setCurrentUser({
+  1145→          id: user.id,
+  1146→          name: user.name,
+  1147→          email: user.email,
+  1148→          phone: user.phone || '',
+  1149→          role: user.role,
+  1150→          avatar: user.avatar,
+  1151→          status: user.status || 'online',
+  1152→          bio: '',
+  1153→        })
+  1154→      })
+  1155→      .catch(() => {
+  1156→        window.location.href = '/login'
+  1157→      })
+  1158→  }, [])
+  1159→
+  1160→  useEffect(() => {
+  1161→    try {
+  1162→      const saved = localStorage.getItem('omnichat_settings')
+  1163→      if (saved) useCRMStore.getState().updateSettings(JSON.parse(saved))
+  1164→    } catch {}
+  1165→  }, [])
+  1166→
+  1167→  const renderContent = () => {
+  1168→    switch (activeTab) {
+  1169→      case 'profile': return <ProfileTab />
+  1170→      case 'system': return <SystemTab />
+  1171→      case 'channels': return <ChannelsTab />
+  1172→      case 'staff': return <StaffTab />
+  1173→      case 'security': return <SecurityTab />
+  1174→      case 'backup': return <BackupTab />
+  1175→      default: return null
+  1176→    }
+  1177→  }
+  1178→
+  1179→  return (
+  1180→    <div className="h-dvh h-screen flex flex-col bg-background overflow-hidden">
+  1181→      <header className="h-12 md:h-14 border-b border-border/30 glass flex items-center justify-between px-3 md:px-6 flex-shrink-0 z-50">
+  1182→        <div className="flex items-center gap-3">
+  1183→          <Button variant="ghost" size="icon" className="h-8 w-8 rounded-xl hover:bg-foreground/5" onClick={() => router.push('/')}>
+  1184→            <ArrowLeft className="h-4 w-4" />
+  1185→          </Button>
+  1186→          <div className="flex items-center gap-2.5">
+  1187→            <div className="h-8 w-8 rounded-xl bg-gradient-to-br from-indigo-500 via-violet-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+  1188→              <Settings className="h-4 w-4 text-white" />
+  1189→            </div>
+  1190→            <div>
+  1191→              <h1 className="text-sm font-bold tracking-tight">{t('settingsPage.title')}</h1>
+  1192→              <p className="text-[10px] text-muted-foreground/50 font-medium hidden sm:block">{t('settingsPage.subtitle')}</p>
+  1193→            </div>
+  1194→          </div>
+  1195→        </div>
+  1196→      </header>
+  1197→      <div className="flex-1 min-h-0 overflow-hidden">
+  1198→        <div className="hidden md:flex h-full">
+  1199→          <nav className="w-56 md:w-64 border-r border-border/20 flex-shrink-0 flex-col p-3 space-y-1 overflow-y-auto">
+  1200→            {SETTINGS_TABS.map((tab) => {
+  1201→              const Icon = tab.icon
+  1202→              const active = activeTab === tab.key
+  1203→              return (
+  1204→                <button key={tab.key} onClick={() => setActiveTab(tab.key)} className={cn('w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-[13px] font-medium transition-all duration-250', active ? 'bg-gradient-to-r from-indigo-500/10 to-violet-500/10 text-primary border border-primary/10' : 'text-muted-foreground/70 hover:text-foreground hover:bg-foreground/[0.03] border border-transparent')}>
+  1205→                  <Icon className={cn('h-4 w-4', active && 'text-primary')} />
+  1206→                  {t(tab.labelKey)}
+  1207→                </button>
+  1208→              )
+  1209→            })}
+  1210→          </nav>
+  1211→          <main className="flex-1 min-h-0 overflow-y-auto p-4 md:p-6 lg:p-8">
+  1212→            <div className="max-w-2xl mx-auto">{renderContent()}</div>
+  1213→          </main>
+  1214→        </div>
+  1215→        <div className="md:hidden flex flex-col h-full">
+  1216→          <div className="flex-shrink-0 border-b border-border/20 flex overflow-x-auto scrollbar-none">
+  1217→            {SETTINGS_TABS.map((tab) => {
+  1218→              const Icon = tab.icon
+  1219→              const active = activeTab === tab.key
+  1220→              return (
+  1221→                <button key={tab.key} onClick={() => setActiveTab(tab.key)} className={cn('flex items-center gap-1.5 px-4 py-3 text-xs font-medium whitespace-nowrap transition-all duration-250 border-b-2 flex-shrink-0', active ? 'text-primary border-primary' : 'text-muted-foreground/60 border-transparent hover:text-foreground')}>
+  1222→                  <Icon className="h-3.5 w-3.5" />
+  1223→                  {t(tab.labelKey)}
+  1224→                </button>
+  1225→              )
+  1226→            })}
+  1227→          </div>
+  1228→          <main className="flex-1 min-h-0 overflow-y-auto p-4">
+  1229→            <div className="max-w-2xl mx-auto">{renderContent()}</div>
+  1230→          </main>
+  1231→        </div>
+  1232→      </div>
+  1233→    </div>
+  1234→  )
+  1235→}
+  1236→

@@ -19,7 +19,7 @@ const PUBLIC_PATHS = ['/login', '/api/auth']
 const RATE_LIMITED_API_PREFIXES = [
   '/api/conversations', '/api/customers', '/api/dashboard',
   '/api/reports', '/api/bot', '/api/simulation', '/api/agents',
-  '/api/tags', '/api/automation',
+  '/api/tags', '/api/automation', '/api/channels',
 ]
 
 export async function proxy(request: NextRequest) {

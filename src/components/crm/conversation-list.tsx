@@ -24,8 +24,10 @@ const FILTER_TABS = [
 const CHANNEL_FILTERS = [
   { key: 'all', labelKey: 'convo.channel.all' as const },
   { key: 'facebook_messenger', labelKey: 'convo.channel.fb' as const, color: '#1877f2' },
+  { key: 'facebook_comment', labelKey: 'convo.channel.fbc' as const, color: '#1877f2' },
   { key: 'zalo', labelKey: 'convo.channel.zalo' as const, color: '#0068ff' },
   { key: 'telegram', labelKey: 'convo.channel.tg' as const, color: '#26a5e4' },
+  { key: 'chatwork', labelKey: 'convo.channel.cw' as const, color: '#ee2224' },
   { key: 'website', labelKey: 'convo.channel.web' as const, color: '#10b981' },
   { key: 'email', labelKey: 'convo.channel.mail' as const, color: '#ea4335' },
 ]
@@ -33,7 +35,7 @@ const CHANNEL_FILTERS = [
 const GRADIENT_CLASSES = ['avatar-gradient-1', 'avatar-gradient-2', 'avatar-gradient-3', 'avatar-gradient-4', 'avatar-gradient-5', 'avatar-gradient-6', 'avatar-gradient-7', 'avatar-gradient-8']
 
 function getChannelLetter(ch: string) {
-  const m: Record<string, string> = { facebook_messenger: 'M', facebook_comment: 'C', zalo: 'Z', telegram: 'T', website: 'W', email: 'E' }
+  const m: Record<string, string> = { facebook_messenger: 'M', facebook_comment: 'C', zalo: 'Z', telegram: 'T', chatwork: 'CW', website: 'W', email: 'E' }
   return m[ch] || '?'
 }
 

@@ -186,3 +186,15 @@ model AuditLog {
   userAgent     String?
   createdAt     DateTime @default(now())
 }
+
+model ChannelConfig {
+  id        String   @id @default(cuid())
+  channel   String   @unique // website, facebook_messenger, facebook_comment, zalo, telegram, chatwork, email
+  enabled   Boolean  @default(false)
+  config    String   @default("{}") // JSON: credentials & settings
+  lastTestAt  DateTime?
+  lastTestOk  Boolean?
+  lastTestMsg String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

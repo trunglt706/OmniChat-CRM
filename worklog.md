@@ -51,3 +51,30 @@ Stage Summary:
 - Verified: login → tạo user từ DB, /api/auth/me trả về user thật, stats tính từ DB
 - Conversations filter 'assigned=me' dùng đúng user ID từ session
 - Agent messages ghi đúng senderId từ session
+---
+Task ID: 2
+Agent: Main Agent
+Task: Kiểm tra cấu hình kênh chat, thêm ChatWork, thêm Test Connection
+
+Work Log:
+- Audit toàn bộ hệ thống kênh: phát hiện 7 kênh nhưng chỉ 5 có UI, không có persistence, không có test connection
+- Thêm model ChannelConfig vào Prisma schema (channel, enabled, config JSON, lastTestAt/Ok/Msg)
+- Chạy prisma db push thành công
+- Tạo API GET/PUT /api/channels với metadata fields cho từng kênh (7 kênh đầy đủ)
+- Tạo API POST /api/channels/test với test thật cho Telegram (gọi getMe API) và ChatWork (gọi /me API)
+- Validate config cho tất cả kênh: Facebook (graph API), Zalo (format check), Email (IMAP validation), Website (URL parse)
+- Rewrite hoàn toàn ChannelsTab component: load từ API, dynamic forms từ API fields, không còn hardcode
+- Thêm 2 kênh mới vào UI: Facebook Comment + Chatwork
+- Sửa bug email IMAP input chết (không có value/onChange)
+- Thêm i18n cho ChatWork, FB Comment, test connection (3 ngôn ngữ: vi, en, zh)
+- Bổ sung channel filters: thêm facebook_comment + chatwork vào conversation-list
+- Thêm facebook_comment vào dashboard CHANNEL_COLORS
+- Thêm mock messages cho chatwork + facebook_comment trong simulation
+- Sửa bug JSX comment thiếu `}` gây crash
+- Thêm /api/channels vào rate limit list trong proxy.ts
+
+Stage Summary:
+- 7 kênh đầy đủ: FB Messenger, FB Comment, Zalo, Telegram, ChatWork, Website, Email
+- Config persistence qua DB (ChannelConfig model)
+- Test Connection hoạt động thật cho Telegram + ChatWork, validate cho các kênh khác
+- UI ChannelsTab hoàn toàn dynamic, load từ API, không hardcode
