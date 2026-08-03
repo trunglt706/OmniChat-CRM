@@ -118,8 +118,20 @@ export interface ConversationDetail extends Conversation {
   messages: Message[]
 }
 
+// Re-exported from channel adapter system — single source of truth
+// Client-side code should import ChannelType from here.
+// Server-side code should import from '@/lib/channels'.
 export type ChannelType = 'website' | 'facebook_messenger' | 'facebook_comment' | 'zalo' | 'telegram' | 'chatwork' | 'email'
 
+/**
+ * Client-side channel config (label, color, icon name).
+ * This is a static mirror for frontend components that can't access the registry.
+ * Server-side code should use channelRegistry instead.
+ *
+ * NOTE: When adding a new channel, update BOTH:
+ *   1. Create adapter in src/lib/channels/adapters/ and register in registry.ts
+ *   2. Add entry here for client-side usage
+ */
 export const CHANNEL_CONFIG: Record<ChannelType, { label: string; color: string; icon: string }> = {
   website: { label: 'Website', color: '#10b981', icon: 'Globe' },
   facebook_messenger: { label: 'Messenger', color: '#1877f2', icon: 'MessageCircle' },

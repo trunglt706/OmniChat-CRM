@@ -140,3 +140,40 @@ Stage Summary:
 - proxy.ts rewritten with 6-layer security pipeline
 - All config via .env (Redis URL, rate limits, CSRF, upload, CSP, webhook secret)
 - Fallback to in-memory when Redis not available (dev mode)
+---
+Task ID: 4
+Agent: main
+Task: Database config từ env (SQLite/MySQL) + Channel Adapter Interface Pattern
+
+Work Log:
+- Tạo src/lib/db-env.ts: DatabaseConfig interface + getDbConfig() singleton, đọc DATABASE_PROVIDER, DATABASE_URL, DATABASE_POOL_* từ .env
+- Cập nhật .env: thêm DATABASE_PROVIDER=sqlite, DATABASE_POOL_MIN/MAX, DATABASE_CONNECTION_TIMEOUT với hướng dẫn MySQL
+- Tạo .env.example: file mẫu cấu hình đầy đủ
+- Cập nhật prisma/schema.prisma: thêm relationMode="prisma" (cho MySQL tương thích), thêm @@index cho Conversation (channel, status, ownerId, customerId, createdAt), Message (conversationId+createdAt, platformMessageId), AuditLog (userId, action, createdAt)
+- Rewrite src/lib/db.ts: singleton với hỗ trợ MySQL lazy-load qua Function constructor (tránh Turbopack static analysis),getDb() async cho MySQL adapter, db sync cho SQLite
+- Thiết kế Channel Adapter Interface system:
+  - src/lib/channels/types.ts: IChannelAdapter interface, BaseChannelAdapter abstract class, ChannelMeta, TestResult, WebhookVerifyResult, WebhookHandleResult, ParsedWebhookMessage types
+  - src/lib/channels/registry.ts: ChannelRegistry class (register/get/getAll/getAllMeta/testConnection/verifyWebhook/handleWebhook/preprocessConfig)
+  - src/lib/channels/index.ts: Public API barrel export
+- Tạo 7 channel adapters trong src/lib/channels/adapters/:
+  - facebook-messenger.ts: testConnection (graph API), verifyWebhook (HMAC-SHA256), handleWebhook (messaging payload)
+  - facebook-comment.ts: extends FacebookMessengerAdapter, override handleWebhook (changes payload)
+  - zalo.ts: testConnection (OA API), verifyWebhook (HMAC-SHA256), handleWebhook
+  - telegram.ts: testConnection (getMe API), verifyWebhook (secret_token), handleWebhook
+  - chatwork.ts: testConnection (/me + room check), verifyWebhook (HMAC-SHA256), handleWebhook
+  - website.ts: preprocessConfig (auto widgetId), testConnection (URL validate), verifyWebhook (timestamp+HMAC)
+  - email.ts: testConnection (IMAP/SMTP validate), verifyWebhook (pass-through), handleWebhook
+- Refactor 3 API routes dùng channelRegistry:
+  - src/app/api/channels/route.ts: GET dùng channelRegistry.getAllMeta(), PUT dùng channelRegistry.preprocessConfig()
+  - src/app/api/channels/test/route.ts: POST dùng channelRegistry.testConnection() (từ 252 dòng → 42 dòng)
+  - src/app/api/webhook/[channel]/route.ts: POST dùng channelRegistry.verifyWebhook() + handleWebhook() (từ 145 dòng → 58 dòng)
+- Cập nhật src/lib/types.ts: thêm comment hướng dẫn SINGLE SOURCE OF TRUTH cho ChannelType
+- Cập nhật .zscripts/database-runtime-build.sh: hỗ trợ cả SQLite và MySQL
+- Verified: 0 TypeScript errors, dev server chạy sạch (no warnings), 7 channels từ registry hoạt động đúng
+
+Stage Summary:
+- Database: chuyển đổi SQLite↔MySQL chỉ cần đổi DATABASE_PROVIDER + DATABASE_URL trong .env
+- Channel Architecture: Interface pattern (IChannelAdapter) + Registry Pattern + Inheritance (FB Comment extends FB Messenger)
+- Thêm kênh mới chỉ cần: tạo 1 file adapter + đăng ký vào registry.ts (thay vì sửa 7+ file)
+- Code giảm: test/route.ts 252→42 dòng, webhook route 145→58 dòng
+- webhook-verify.ts giữ nguyên (được adapter gọi trực tiếp)
