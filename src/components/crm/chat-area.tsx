@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState, useCallback, memo } from 'react'
+import { useEffect, useRef, useState, useCallback, useMemo, memo } from 'react'
 import { useCRMStore } from '@/store/crm-store'
 import { socket } from '@/lib/socket'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
@@ -23,10 +23,13 @@ import {
   ArrowLeft, Info, SmilePlus, ImagePlus, Mic, X, Upload, ChevronUp, Loader2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { apiFetch, apiPost, generateIdempotencyKey } from '@/lib/api-client'
 import {
   Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { useT } from '@/i18n/useT'
+
+const LOCALE_MAP: Record<string, string> = { vi: 'vi-VN', en: 'en-US', zh: 'zh-CN' }
 
 const EMOJI_LIST = [
   '😀','😂','🥰','😍','🤩','😎','🤔','😮','😢','😤',
@@ -38,14 +41,14 @@ const GRADIENT_CLASSES = ['avatar-gradient-1', 'avatar-gradient-2', 'avatar-grad
 
 const MESSAGES_PER_PAGE = 15
 
-function formatMessageTime(dateStr: string) {
+function formatMessageTime(dateStr: string, locale = 'vi') {
   const date = new Date(dateStr)
-  return date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+  return date.toLocaleTimeString(LOCALE_MAP[locale] || 'vi-VN', { hour: '2-digit', minute: '2-digit' })
 }
 
-function formatFullDate(dateStr: string) {
+function formatFullDate(dateStr: string, locale = 'vi') {
   const date = new Date(dateStr)
-  return date.toLocaleDateString('vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' })
+  return date.toLocaleDateString(LOCALE_MAP[locale] || 'vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' })
 }
 
 function shouldShowDate(messages: Message[], idx: number) {
@@ -81,9 +84,11 @@ interface BubbleProps {
   customerInit: string
   agentInit: string
   onImageClick?: (url: string) => void
+  t: (key: string) => string
+  locale: string
 }
 
-const MessageBubble = memo(function MessageBubble({ message, isLastInGroup, showAvatar, gradientIdx, customerInit, agentInit, onImageClick }: BubbleProps) {
+const MessageBubble = memo(function MessageBubble({ message, isLastInGroup, showAvatar, gradientIdx, customerInit, agentInit, onImageClick, t, locale }: BubbleProps) {
   const isCustomer = message.senderType === 'customer'
   const gradient = GRADIENT_CLASSES[gradientIdx % GRADIENT_CLASSES.length]
   const isImage = message.messageType === 'image'
@@ -119,7 +124,7 @@ const MessageBubble = memo(function MessageBubble({ message, isLastInGroup, show
           {message.senderType === 'bot' && (
             <div className="flex items-center gap-1.5 mb-1.5 opacity-80">
               <Sparkles className="h-3 w-3" />
-              <span className="text-[10px] font-semibold tracking-wide uppercase">AI Bot</span>
+              <span className="text-[10px] font-semibold tracking-wide uppercase">{t('common.aiBot')}</span>
             </div>
           )}
           {/* Image content */}
@@ -127,7 +132,7 @@ const MessageBubble = memo(function MessageBubble({ message, isLastInGroup, show
             <div className="mb-1">
               <img
                 src={message.attachmentUrl}
-                alt={message.attachmentName || 'Image'}
+                alt={message.attachmentName || t('common.image')}
                 className="rounded-xl max-w-full max-h-[300px] object-cover cursor-pointer hover:opacity-90 transition-opacity"
                 loading="lazy"
                 onClick={() => onImageClick?.(message.attachmentUrl!)}
@@ -142,8 +147,8 @@ const MessageBubble = memo(function MessageBubble({ message, isLastInGroup, show
             <div className="flex items-center gap-2 bg-black/10 dark:bg-white/10 rounded-lg px-3 py-2 mb-1">
               <Upload className="h-4 w-4 opacity-70 flex-shrink-0" />
               <div className="min-w-0">
-                <p className="text-xs font-medium truncate">{message.attachmentName || 'File'}</p>
-                <p className="text-[10px] opacity-60">{message.attachmentType || 'file'}</p>
+                <p className="text-xs font-medium truncate">{message.attachmentName || t('common.file')}</p>
+                <p className="text-[10px] opacity-60">{message.attachmentType || t('common.file').toLowerCase()}</p>
               </div>
             </div>
           )}
@@ -158,7 +163,7 @@ const MessageBubble = memo(function MessageBubble({ message, isLastInGroup, show
         </div>
         <div className={cn('flex items-center gap-1.5 mt-1 px-1', isCustomer ? '' : 'flex-row-reverse')}>
           <span className="text-[10px] text-muted-foreground/50 tabular-nums">
-            {formatMessageTime(message.createdAt)}
+            {formatMessageTime(message.createdAt, locale)}
           </span>
           {!isCustomer && isLastInGroup && (
             <svg className="h-3.5 w-3.5 text-blue-500/70" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -203,7 +208,7 @@ export default function ChatArea() {
   const setMobileView = useCRMStore((s) => s.setMobileView)
   const showRightPanel = useCRMStore((s) => s.showRightPanel)
 
-  const { t } = useT()
+  const { t, locale } = useT()
 
   const [replyText, setReplyText] = useState('')
   const [isFocused, setIsFocused] = useState(false)
@@ -245,19 +250,23 @@ export default function ChatArea() {
 
     const loadInitial = async () => {
       try {
-        const [detailRes, msgsRes, agentsRes] = await Promise.all([
+        const [detailRes, msgsRes] = await Promise.all([
           fetch(`/api/conversations/${selectedConversationId}`),
           fetch(`/api/conversations/${selectedConversationId}/messages?limit=${MESSAGES_PER_PAGE}`),
-          fetch('/api/agents'),
         ])
         const detail = await detailRes.json()
         const msgsJson = await msgsRes.json()
-        const agentsData = await agentsRes.json()
 
         setConversationDetail(detail)
         setMessages(msgsJson.data || [])
         setHasMoreMessages(msgsJson.hasMore || false)
-        if (agentsData.length) setAgents(agentsData)
+
+        // Load agents once into global store
+        if (useCRMStore.getState().agents.length === 0) {
+          fetch('/api/agents').then(r => r.json()).then(data => {
+            if (data.length) useCRMStore.getState().setAgents(data)
+          }).catch(() => {})
+        }
 
         // Scroll to bottom after render
         requestAnimationFrame(() => {
@@ -269,7 +278,7 @@ export default function ChatArea() {
       }
     }
     loadInitial()
-  }, [selectedConversationId, setConversationDetail, setMessages, setHasMoreMessages, setAgents, fetchMessages])
+  }, [selectedConversationId, setConversationDetail, setMessages, setHasMoreMessages, fetchMessages])
 
   // Auto scroll to bottom on NEW messages (not on initial load or prepend)
   useEffect(() => {
@@ -343,19 +352,9 @@ export default function ChatArea() {
 
     const handleNewMessage = (data: { message: any }) => {
       if (data.message?.conversationId === selectedConversationId) {
-        // Only refetch if message isn't already in our list (avoid duplicates)
         const exists = useCRMStore.getState().messages.some(m => m.id === data.message.id)
         if (!exists) {
-          fetch(`/api/conversations/${selectedConversationId}/messages?limit=1&before=${new Date(Date.now() + 60000).toISOString()}`)
-            .then(r => r.json())
-            .then(json => {
-              if (json.data?.length > 0) {
-                const latest = json.data[0]
-                const exists = useCRMStore.getState().messages.some(m => m.id === latest.id)
-                if (!exists) addMessage(latest)
-              }
-            })
-            .catch(() => {})
+          addMessage(data.message) // Use socket data directly, no re-fetch
         }
       }
     }
@@ -384,12 +383,7 @@ export default function ChatArea() {
       // Send text message if there's text
       if (hasText) {
         const content = replyText.trim()
-        const res = await fetch(`/api/conversations/${selectedConversationId}/messages`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ content }),
-        })
-        const data = await res.json()
+        const data = await apiPost(`/api/conversations/${selectedConversationId}/messages`, { content }, { idempotencyKey: generateIdempotencyKey() })
         const newMsg = data.message || data
         addMessage(newMsg)
 
@@ -407,32 +401,22 @@ export default function ChatArea() {
       // Send image messages
       for (const file of attachedFiles) {
         if (file.type === 'image' && file.dataUrl) {
-          const res = await fetch(`/api/conversations/${selectedConversationId}/messages`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
+          const data = await apiPost(`/api/conversations/${selectedConversationId}/messages`, {
               messageType: 'image',
               content: null,
               attachmentUrl: file.dataUrl,
               attachmentName: file.name,
               attachmentType: file.file?.type || 'image/*',
-            }),
-          })
-          const data = await res.json()
+            }, { idempotencyKey: generateIdempotencyKey() })
           addMessage(data.message || data)
         } else {
           // File attachment as text reference
-          const res = await fetch(`/api/conversations/${selectedConversationId}/messages`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
+          const data = await apiPost(`/api/conversations/${selectedConversationId}/messages`, {
               content: `\u{1F4CE} ${file.name}`,
               messageType: 'file',
               attachmentName: file.name,
               attachmentType: file.file?.type || 'application/octet-stream',
-            }),
-          })
-          const data = await res.json()
+            }, { idempotencyKey: generateIdempotencyKey() })
           addMessage(data.message || data)
         }
       }
@@ -495,11 +479,7 @@ export default function ChatArea() {
   const handleStatusChange = async (status: string) => {
     if (!selectedConversationId) return
     try {
-      await fetch(`/api/conversations/${selectedConversationId}/status`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status }),
-      })
+      await apiPost(`/api/conversations/${selectedConversationId}/status`, { status })
       // Re-fetch detail
       const detailRes = await fetch(`/api/conversations/${selectedConversationId}`)
       const detail = await detailRes.json()
@@ -514,11 +494,7 @@ export default function ChatArea() {
     if (!selectedConversationId) return
     setAssignLoading(true)
     try {
-      await fetch(`/api/conversations/${selectedConversationId}/assign`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ownerId: agentId || null }),
-      })
+      await apiPost(`/api/conversations/${selectedConversationId}/assign`, { ownerId: agentId || null })
       const detailRes = await fetch(`/api/conversations/${selectedConversationId}`)
       const detail = await detailRes.json()
       setConversationDetail(detail)
@@ -545,7 +521,41 @@ export default function ChatArea() {
 
   const handleImageClick = useCallback((url: string) => setImagePreviewUrl(url), [])
 
-  // ─── Empty state ───
+  // ─── All hooks MUST be called before any conditional return (Rules of Hooks) ───
+  const convo = conversationDetail
+  const channelCfg = convo ? CHANNEL_CONFIG[convo.channel as keyof typeof CHANNEL_CONFIG] : undefined
+  const statusCfg = convo ? STATUS_CONFIG[convo.status] : undefined
+  const priorityCfg = convo ? PRIORITY_CONFIG[convo.priority] : undefined
+  const slaBreached = useMemo(() => {
+    if (!convo?.slaFirstResponse || convo?.status !== 'open') return false
+    return new Date(convo.slaFirstResponse) < new Date()
+  }, [convo?.slaFirstResponse, convo?.status])
+
+  // Pre-compute message grouping metadata (O(n) instead of O(n²) per render)
+  const messageGroups = useMemo(() => {
+    const groups: { showDate: boolean; isLastInGroup: boolean; showAvatar: boolean; gradientIdx: number }[] = []
+    let customerCount = 0
+    for (let i = 0; i < messages.length; i++) {
+      const msg = messages[i]
+      const prev = i > 0 ? messages[i - 1] : null
+      const next = messages[i + 1]
+      const showDate = shouldShowDate(messages, i)
+      const isLastInGroup = !next ||
+        next.senderType !== msg.senderType ||
+        new Date(next.createdAt).getTime() - new Date(msg.createdAt).getTime() > 60000
+      const showAvatar = !prev ||
+        prev.senderType !== msg.senderType ||
+        new Date(msg.createdAt).getTime() - new Date(prev.createdAt).getTime() > 60000
+      if (msg.senderType === 'customer') customerCount++
+      groups.push({ showDate, isLastInGroup, showAvatar, gradientIdx: msg.senderType === 'customer' ? customerCount : 0 })
+    }
+    return groups
+  }, [messages])
+
+  const customerInit = t('chat.customerInit')
+  const agentInit = t('chat.agentInit')
+
+  // ─── Empty state (AFTER all hooks) ───
   if (!selectedConversationId || !conversationDetail) {
     return (
       <div className="flex-1 h-full flex items-center justify-center bg-muted/20">
@@ -559,13 +569,6 @@ export default function ChatArea() {
       </div>
     )
   }
-
-  const convo = conversationDetail
-  const channelCfg = CHANNEL_CONFIG[convo.channel as keyof typeof CHANNEL_CONFIG]
-  const statusCfg = STATUS_CONFIG[convo.status]
-  const priorityCfg = PRIORITY_CONFIG[convo.priority]
-  const now = new Date()
-  const slaBreached = convo.slaFirstResponse && new Date(convo.slaFirstResponse) < now && convo.status === 'open'
 
   return (
     <div className="flex flex-col h-full min-h-0">
@@ -601,7 +604,7 @@ export default function ChatArea() {
               </Badge>
               {slaBreached && (
                 <Badge className="bg-red-100 text-red-700 text-[10px] px-1.5 py-0 h-[18px] gap-1 animate-glow-pulse rounded-lg dark:bg-red-950/50 dark:text-red-400">
-                  <AlertTriangle className="h-3 w-3" /> SLA!
+                  <AlertTriangle className="h-3 w-3" /> {t('common.slaBreached')}
                 </Badge>
               )}
             </div>
@@ -710,7 +713,7 @@ export default function ChatArea() {
                 : 'hover:bg-foreground/5'
             )}
             onClick={() => setBotEnabled(!botEnabled)}
-            title={botEnabled ? 'AI ON' : 'AI OFF'}
+            title={botEnabled ? t('common.aiOn') : t('common.aiOff')}
           >
             <Sparkles className="h-3 w-3" />
             <span className="hidden sm:inline">AI</span>
@@ -758,33 +761,19 @@ export default function ChatArea() {
             </button>
           )}
           {messages.map((msg, idx) => {
-            const showDate = shouldShowDate(messages, idx)
-            const prevMsg = idx > 0 ? messages[idx - 1] : null
-            const nextMsg = messages[idx + 1]
-            const isLastInGroup = !nextMsg ||
-              nextMsg.senderType !== msg.senderType ||
-              new Date(nextMsg.createdAt).getTime() - new Date(msg.createdAt).getTime() > 60000
-            const showAvatar = !prevMsg ||
-              prevMsg.senderType !== msg.senderType ||
-              new Date(msg.createdAt).getTime() - new Date(prevMsg.createdAt).getTime() > 60000
-
-            // Count customer messages for gradient index
-            let customerIdx = 0
-            for (let i = 0; i <= idx; i++) {
-              if (messages[i].senderType === 'customer') customerIdx++
-            }
-            const gradientIdx = msg.senderType === 'customer' ? customerIdx : 0
+            const group = messageGroups[idx]
+            if (!group) return null
 
             return (
               <div key={msg.id}>
-                {showDate && (
+                {group.showDate && (
                   <div className="flex justify-center my-4">
                     <span className="date-separator text-[11px] text-muted-foreground/70 px-4 py-1.5 rounded-full font-medium">
-                      {formatFullDate(msg.createdAt)}
+                      {formatFullDate(msg.createdAt, locale)}
                     </span>
                   </div>
                 )}
-                <MessageBubble message={msg} isLastInGroup={isLastInGroup} showAvatar={showAvatar} gradientIdx={gradientIdx} customerInit={t('chat.customerInit')} agentInit={t('chat.agentInit')} onImageClick={handleImageClick} />
+                <MessageBubble message={msg} isLastInGroup={group.isLastInGroup} showAvatar={group.showAvatar} gradientIdx={group.gradientIdx} customerInit={customerInit} agentInit={agentInit} onImageClick={handleImageClick} t={t} locale={locale} />
               </div>
             )
           })}

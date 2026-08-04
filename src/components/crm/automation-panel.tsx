@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef, useMemo } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -22,6 +22,8 @@ import {
   MessageCircle, TagIcon, Wand2, Users, XCircle, CheckCircle2, MoreVertical,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useCRMStore } from '@/store/crm-store'
+import { apiFetch, apiPost, apiPut, generateIdempotencyKey } from '@/lib/api-client'
 import type { Agent, Tag as TagType } from '@/lib/types'
 import { useT } from '@/i18n/useT'
 
@@ -52,14 +54,24 @@ function getActionTypeInfo(type: string) {
 
 export default function AutomationPanel() {
   const { t } = useT()
+  const storeAgents = useCRMStore((s) => s.agents)
+  const setAgents = useCRMStore((s) => s.setAgents)
   const [rules, setRules] = useState<AutomationRule[]>([])
-  const [agents, setAgents] = useState<Agent[]>([])
   const [tags, setTags] = useState<TagType[]>([])
   const [showCreate, setShowCreate] = useState(false)
   const [editing, setEditing] = useState<AutomationRule | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
+
+  // Debounce automation search: filter uses debouncedSearch, not searchQuery
+  useEffect(() => {
+    clearTimeout(searchTimerRef.current)
+    searchTimerRef.current = setTimeout(() => setDebouncedSearch(searchQuery), 300)
+    return () => clearTimeout(searchTimerRef.current)
+  }, [searchQuery])
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
 
@@ -73,14 +85,18 @@ export default function AutomationPanel() {
 
   const fetchData = async () => {
     try {
-      const [rulesRes, agentsRes, tagsRes] = await Promise.all([
+      const [rulesRes, tagsRes] = await Promise.all([
         fetch('/api/automation/rules'),
-        fetch('/api/agents'),
         fetch('/api/tags'),
       ])
       setRules(await rulesRes.json())
-      setAgents(await agentsRes.json())
       setTags(await tagsRes.json())
+      // Load agents from store if empty
+      if (storeAgents.length === 0) {
+        const agentsRes = await fetch('/api/agents')
+        const agentsData = await agentsRes.json()
+        if (Array.isArray(agentsData)) setAgents(agentsData)
+      }
     } catch (e) {
       console.error(e)
     } finally {
@@ -141,11 +157,11 @@ export default function AutomationPanel() {
         payload.enabled = editing.enabled
       }
 
-      await fetch('/api/automation/rules', {
-        method: editing ? 'PUT' : 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
+      if (editing) {
+        await apiPut('/api/automation/rules', payload)
+      } else {
+        await apiPost('/api/automation/rules', payload, { idempotencyKey: generateIdempotencyKey() })
+      }
       resetForm()
       fetchData()
     } catch (e) {
@@ -157,29 +173,26 @@ export default function AutomationPanel() {
 
   const handleDelete = async (id: string) => {
     setDeleting(true)
-    await fetch(`/api/automation/rules?id=${id}`, { method: 'DELETE' })
+    await apiFetch(`/api/automation/rules?id=${id}`, { method: 'DELETE' })
     setDeleteConfirmId(null)
     fetchData()
     setDeleting(false)
   }
 
   const handleToggle = async (rule: AutomationRule) => {
-    await fetch('/api/automation/rules', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: rule.id, enabled: !rule.enabled, name: rule.name, keyword: rule.keyword }),
-    })
+    await apiPut('/api/automation/rules', { id: rule.id, enabled: !rule.enabled, name: rule.name, keyword: rule.keyword })
     fetchData()
   }
 
-  const filteredRules = rules.filter(r => {
-    if (!searchQuery) return true
-    const q = searchQuery.toLowerCase()
-    return r.name.toLowerCase().includes(q) || r.keyword.toLowerCase().includes(q)
-  })
-
-  const enabledCount = rules.filter(r => r.enabled).length
-  const disabledCount = rules.length - enabledCount
+  const { filteredRules, enabledCount, disabledCount } = useMemo(() => {
+    const filtered = rules.filter(r => {
+      if (!debouncedSearch) return true
+      const q = debouncedSearch.toLowerCase()
+      return r.name.toLowerCase().includes(q) || r.keyword.toLowerCase().includes(q)
+    })
+    const enabled = rules.filter(r => r.enabled).length
+    return { filteredRules: filtered, enabledCount: enabled, disabledCount: rules.length - enabled }
+  }, [rules, debouncedSearch])
 
   return (
     <div className="h-full min-h-0 overflow-y-auto">
@@ -204,7 +217,7 @@ export default function AutomationPanel() {
                   { name: 'Hỗ trợ kỹ thuật', keyword: 'lỗi', replyMessage: null, assignToId: null, tagId: null, enabled: true },
                 ]
                 for (const r of defaults) {
-                  await fetch('/api/automation/rules', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(r) })
+                  await apiPost('/api/automation/rules', r, { idempotencyKey: generateIdempotencyKey() })
                 }
                 fetchData()
               }} className="text-xs rounded-xl">
@@ -423,7 +436,7 @@ export default function AutomationPanel() {
                 <Select value={formAgent} onValueChange={setFormAgent}>
                   <SelectTrigger className="h-9 text-sm rounded-xl"><SelectValue placeholder={t('auto.selectAgent')} /></SelectTrigger>
                   <SelectContent>
-                    {agents.map((a) => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
+                    {storeAgents.map((a) => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>

@@ -1,5 +1,6 @@
 'use client'
 
+import { useState, useEffect } from 'react'
 import { useCRMStore } from '@/store/crm-store'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
@@ -13,6 +14,8 @@ import { useTheme } from 'next-themes'
 import {
   Volume2, Monitor, Mail, Palette, Maximize2, Eye,
   UserCheck, Globe, Moon, Sun, Trash2, RotateCcw,
+  Wifi, WifiOff, Loader2, CheckCircle, XCircle, AlertTriangle,
+  Radio,
 } from 'lucide-react'
 import { useT } from '@/i18n/useT'
 import { LOCALE_LABELS, LOCALES, type Locale } from '@/i18n/translations'
@@ -38,10 +41,158 @@ function SettingRow({
   )
 }
 
+interface TestResult {
+  passed: boolean
+  config?: Record<string, unknown>
+  transport?: Record<string, unknown>
+  errors?: string[]
+  warnings?: string[]
+  checks?: Record<string, { status: string; latency?: number; detail?: string }>
+}
+
 export default function SettingsPanel() {
-  const { settings, updateSettings, notifications, clearAllNotifications } = useCRMStore()
+  const settings = useCRMStore((s) => s.settings)
+  const updateSettings = useCRMStore((s) => s.updateSettings)
+  const notifications = useCRMStore((s) => s.notifications)
+  const clearAllNotifications = useCRMStore((s) => s.clearAllNotifications)
   const { theme, setTheme } = useTheme()
+  const [mounted, setMounted] = useState(false)
   const { t } = useT()
+  useEffect(() => { setMounted(true) }, [])
+
+  // ── Test states ──
+  const [wsTesting, setWsTesting] = useState(false)
+  const [wsResult, setWsResult] = useState<TestResult | null>(null)
+  const [rtTesting, setRtTesting] = useState(false)
+  const [rtResult, setRtResult] = useState<TestResult | null>(null)
+
+  const runWsTest = async () => {
+    setWsTesting(true)
+    setWsResult(null)
+    try {
+      const res = await fetch('/api/ws/test')
+      setWsResult(await res.json())
+    } catch (e) {
+      setWsResult({ passed: false, errors: [String(e)] })
+    } finally { setWsTesting(false) }
+  }
+
+  const runRtTest = async () => {
+    setRtTesting(true)
+    setRtResult(null)
+    try {
+      const res = await fetch('/api/realtime/test')
+      setRtResult(await res.json())
+    } catch (e) {
+      setRtResult({ passed: false, errors: [String(e)] })
+    } finally { setRtTesting(false) }
+  }
+
+  const renderTestResult = (result: TestResult) => (
+    <div className={cn(
+      'rounded-xl p-3 text-xs space-y-2 animate-slide-up',
+      result.passed
+        ? 'bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200/50 dark:border-emerald-800/30'
+        : 'bg-rose-50 dark:bg-rose-950/30 border border-rose-200/50 dark:border-rose-800/30'
+    )}>
+      <div className="flex items-center gap-1.5 font-semibold">
+        {result.passed
+          ? <><CheckCircle className="h-3.5 w-3.5 text-emerald-600" /> {t('settings.ws.testPassed')}</>
+          : <><XCircle className="h-3.5 w-3.5 text-rose-600" /> {t('settings.ws.testFailed')}</>
+        }
+      </div>
+      {/* Config summary */}
+      {result.config && (
+        <div className="space-y-0.5">
+          {Object.entries(result.config).map(([k, v]) => (
+            <div key={k} className="flex justify-between gap-4">
+              <span className="text-muted-foreground/60">{k}</span>
+              <span className="font-medium">{String(v)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {/* Transport details */}
+      {result.transport?.sse && (result.transport.sse as Record<string, unknown>).alive && (
+        <div className="flex items-center gap-1.5 text-emerald-600">
+          <Wifi className="h-3 w-3" />
+          SSE: {t('settings.ws.connected')} ({(result.transport.sse as Record<string, unknown>).latency}ms)
+        </div>
+      )}
+      {result.transport?.websocket && (result.transport.websocket as Record<string, unknown>).alive && (
+        <div className="flex items-center gap-1.5 text-emerald-600">
+          <Wifi className="h-3 w-3" />
+          WebSocket: {t('settings.ws.connected')} ({(result.transport.websocket as Record<string, unknown>).latency}ms)
+        </div>
+      )}
+      {/* Errors */}
+      {result.errors && result.errors.length > 0 && (
+        <div className="space-y-0.5">
+          {result.errors.map((err, i) => (
+            <div key={i} className="text-rose-600 flex items-start gap-1.5">
+              <XCircle className="h-3 w-3 mt-0.5 flex-shrink-0" />
+              <span>{err}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {/* Warnings */}
+      {result.warnings && result.warnings.length > 0 && (
+        <div className="space-y-0.5">
+          {result.warnings.map((w, i) => (
+            <div key={i} className="text-amber-600 flex items-start gap-1.5">
+              <AlertTriangle className="h-3 w-3 mt-0.5 flex-shrink-0" />
+              <span>{w}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+
+  const renderRtTestResult = (result: TestResult) => (
+    <div className={cn(
+      'rounded-xl p-3 text-xs space-y-2 animate-slide-up',
+      result.passed
+        ? 'bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200/50 dark:border-emerald-800/30'
+        : 'bg-rose-50 dark:bg-rose-950/30 border border-rose-200/50 dark:border-rose-800/30'
+    )}>
+      <div className="flex items-center gap-1.5 font-semibold">
+        {result.passed
+          ? <><CheckCircle className="h-3.5 w-3.5 text-emerald-600" /> {t('settings.ws.testPassed')}</>
+          : <><XCircle className="h-3.5 w-3.5 text-rose-600" /> {t('settings.ws.testFailed')}</>
+        }
+      </div>
+      {/* Checks */}
+      {result.checks && (
+        <div className="space-y-1.5">
+          {Object.entries(result.checks).map(([key, check]) => (
+            <div key={key} className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5">
+                {check.status === 'ok' && <CheckCircle className="h-3 w-3 text-emerald-500" />}
+                {check.status === 'fail' && <XCircle className="h-3 w-3 text-rose-500" />}
+                {check.status === 'skip' && <AlertTriangle className="h-3 w-3 text-amber-500" />}
+                <span className="font-medium capitalize">{key.replace(/([A-Z])/g, ' $1')}</span>
+              </div>
+              <span className="text-muted-foreground/60 text-[10px]">
+                {check.latency ? `${check.latency}ms` : check.detail?.slice(0, 40)}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+      {result.errors && result.errors.length > 0 && (
+        <div className="space-y-0.5">
+          {result.errors.map((err, i) => (
+            <div key={i} className="text-rose-600 flex items-start gap-1.5">
+              <XCircle className="h-3 w-3 mt-0.5 flex-shrink-0" />
+              <span>{err}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
 
   return (
     <div className="flex flex-col h-full min-h-0 animate-slide-up">
@@ -57,7 +208,7 @@ export default function SettingsPanel() {
             {t('settings.appearance')}
           </h4>
           <SettingRow
-            icon={theme === 'dark' ? Moon : Sun}
+            icon={mounted && theme === 'dark' ? Moon : Sun}
             label={t('settings.theme')}
             description={t('settings.themeDesc')}
           >
@@ -67,8 +218,8 @@ export default function SettingsPanel() {
               className="h-8 rounded-lg text-xs gap-1.5 border-border/40"
               onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
             >
-              {theme === 'dark' ? <Moon className="h-3.5 w-3.5" /> : <Sun className="h-3.5 w-3.5" />}
-              {theme === 'dark' ? t('settings.dark') : t('settings.light')}
+              {mounted && (theme === 'dark' ? <Moon className="h-3.5 w-3.5" /> : <Sun className="h-3.5 w-3.5" />)}
+              {mounted ? (theme === 'dark' ? t('settings.dark') : t('settings.light')) : ''}
             </Button>
           </SettingRow>
 
@@ -187,6 +338,53 @@ export default function SettingsPanel() {
 
         <Separator className="opacity-30" />
 
+        {/* WebSocket & Realtime */}
+        <div className="space-y-1">
+          <h4 className="text-[10px] font-bold text-muted-foreground/40 uppercase tracking-[0.15em] px-1 mb-2">
+            {t('settings.ws.title')}
+          </h4>
+
+          <SettingRow
+            icon={Radio}
+            label={t('settings.ws.connectionTest')}
+            description={t('settings.ws.connectionTestDesc')}
+          >
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 rounded-lg text-xs gap-1.5 border-border/40"
+              onClick={runWsTest}
+              disabled={wsTesting}
+            >
+              {wsTesting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wifi className="h-3.5 w-3.5" />}
+              {wsTesting ? t('channels.testing') : t('channels.testConnection')}
+            </Button>
+          </SettingRow>
+
+          {wsResult && renderTestResult(wsResult)}
+
+          <SettingRow
+            icon={Radio}
+            label={t('settings.ws.realtimeTest')}
+            description={t('settings.ws.realtimeTestDesc')}
+          >
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 rounded-lg text-xs gap-1.5 border-border/40"
+              onClick={runRtTest}
+              disabled={rtTesting}
+            >
+              {rtTesting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wifi className="h-3.5 w-3.5" />}
+              {rtTesting ? t('channels.testing') : t('settings.ws.runRealtimeTest')}
+            </Button>
+          </SettingRow>
+
+          {rtResult && renderRtTestResult(rtResult)}
+        </div>
+
+        <Separator className="opacity-30" />
+
         {/* Danger zone */}
         <div className="space-y-1">
           <h4 className="text-[10px] font-bold text-muted-foreground/40 uppercase tracking-[0.15em] px-1 mb-2">
@@ -196,12 +394,13 @@ export default function SettingsPanel() {
             variant="outline"
             size="sm"
             className="w-full h-9 rounded-xl text-xs border-border/40 hover:border-red-300 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20"
-            onClick={() => {
-              localStorage.removeItem('omnichat_settings')
-              updateSettings({
+            onClick={async () => {
+              const defaults = {
                 soundEnabled: true, desktopNotifEnabled: true, emailNotifEnabled: false,
                 compactMode: false, showPreview: true, autoAssign: true, language: settings.language,
-              })
+              }
+              updateSettings(defaults)
+              try { await fetch('/api/auth/me/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(defaults) }) } catch {}
             }}
           >
             <RotateCcw className="h-3.5 w-3.5 mr-1.5" />

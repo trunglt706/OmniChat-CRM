@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useCallback, useRef, memo } from 'react'
+import { useEffect, useCallback, useRef, useState, memo } from 'react'
 import { useCRMStore } from '@/store/crm-store'
 import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
@@ -12,6 +12,8 @@ import {
 import { cn } from '@/lib/utils'
 import { socket } from '@/lib/socket'
 import { useT } from '@/i18n/useT'
+
+const LOCALE_MAP: Record<string, string> = { vi: 'vi-VN', en: 'en-US', zh: 'zh-CN' }
 
 const FILTER_TABS = [
   { key: 'open', labelKey: 'convo.filter.open' as const, icon: Inbox },
@@ -39,14 +41,14 @@ function getChannelLetter(ch: string) {
   return m[ch] || '?'
 }
 
-function formatTime(d: string, t: (key: string, params?: Record<string, string | number>) => string) {
+function formatTime(d: string, t: (key: string, params?: Record<string, string | number>) => string, locale = 'vi') {
   const date = new Date(d), now = new Date(), diff = now.getTime() - date.getTime()
   const m = Math.floor(diff / 60000), h = Math.floor(diff / 3600000), days = Math.floor(diff / 86400000)
   if (m < 1) return t('convo.time.justNow')
   if (m < 60) return t('convo.time.minutes', { count: m })
   if (h < 24) return t('convo.time.hours', { count: h })
   if (days < 7) return t('convo.time.days', { count: days })
-  return date.toLocaleDateString('vi-VN')
+  return date.toLocaleDateString(LOCALE_MAP[locale] || 'vi-VN')
 }
 
 function getSLA(convo: Conversation) {
@@ -62,15 +64,14 @@ interface ConvoItemProps {
 }
 
 const ConversationItem = memo(function ConversationItem({ convo, index }: ConvoItemProps) {
-  const { t } = useT()
+  const { t, locale } = useT()
   const selectedId = useCRMStore((s) => s.selectedConversationId)
   const setSelected = useCRMStore((s) => s.setSelectedConversationId)
   const setMobileView = useCRMStore((s) => s.setMobileView)
-  const unreadCounts = useCRMStore((s) => s.unreadCounts)
+  const unread = useCRMStore((s) => s.unreadCounts[convo.id] || 0)
   const isSelected = selectedId === convo.id
   const sla = getSLA(convo)
   const chCfg = CHANNEL_CONFIG[convo.channel as keyof typeof CHANNEL_CONFIG]
-  const unread = unreadCounts[convo.id] || 0
   const gradient = GRADIENT_CLASSES[index % GRADIENT_CLASSES.length]
 
   const priorityLabel = convo.priority === 'urgent'
@@ -120,7 +121,7 @@ const ConversationItem = memo(function ConversationItem({ convo, index }: ConvoI
           <span className={cn(
             'text-[11px] flex-shrink-0 tabular-nums transition-colors duration-200',
             unread > 0 ? 'text-primary font-semibold' : 'text-muted-foreground/60'
-          )}>{formatTime(convo.updatedAt, t)}</span>
+          )}>{formatTime(convo.updatedAt, t, locale)}</span>
         </div>
         {convo.subject && (
           <p className="text-[12px] text-foreground/50 truncate mt-0.5 leading-tight group-hover:text-foreground/65 transition-colors duration-200">{convo.subject}</p>
@@ -179,7 +180,43 @@ export default function ConversationList() {
   const setSearchQuery = useCRMStore((s) => s.setSearchQuery)
   const setIsLoadingConversations = useCRMStore((s) => s.setIsLoadingConversations)
   const incrementUnread = useCRMStore((s) => s.incrementUnread)
-  const addNotification = useCRMStore((s) => s.addNotification)
+
+  // ── Scroll fade indicator refs ──
+  const statusTabsRef = useRef<HTMLDivElement>(null)
+  const channelTabsRef = useRef<HTMLDivElement>(null)
+
+  // Toggle .is-overflowing class when content overflows
+  useEffect(() => {
+    const update = (el: HTMLDivElement | null) => {
+      if (!el) return
+      if (el.scrollWidth > el.clientWidth + 1) {
+        el.classList.add('is-overflowing')
+      } else {
+        el.classList.remove('is-overflowing')
+      }
+    }
+    update(statusTabsRef.current)
+    update(channelTabsRef.current)
+    const observer = new ResizeObserver(() => {
+      update(statusTabsRef.current)
+      update(channelTabsRef.current)
+    })
+    if (statusTabsRef.current) observer.observe(statusTabsRef.current)
+    if (channelTabsRef.current) observer.observe(channelTabsRef.current)
+    return () => observer.disconnect()
+  }, [])
+
+  // ── Debounced search state ──
+  // searchQuery from store = current input value (updates immediately)
+  // debouncedSearch = local state that lags behind by DEBOUNCE_MS
+  // fetchConversations uses debouncedSearch to avoid firing on every keystroke
+  const DEBOUNCE_MS = 300
+  const [debouncedSearch, setDebouncedSearch] = useState(searchQuery)
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(searchQuery), DEBOUNCE_MS)
+    return () => clearTimeout(timer)
+  }, [searchQuery])
 
   const fetchConversations = useCallback(async () => {
     setIsLoadingConversations(true)
@@ -188,30 +225,31 @@ export default function ConversationList() {
       if (activeFilter === 'unassigned') p.set('assigned', 'unassigned')
       else if (activeFilter !== 'all') p.set('status', activeFilter)
       if (activeChannel !== 'all') p.set('channel', activeChannel)
-      if (searchQuery) p.set('search', searchQuery)
+      if (debouncedSearch) p.set('search', debouncedSearch)
       const res = await fetch(`/api/conversations?${p}`)
       const json = await res.json()
       setConversations(json.data || [])
       setTotalConversations(json.total || 0)
     } catch (e) { console.error(e) }
     finally { setIsLoadingConversations(false) }
-  }, [activeFilter, activeChannel, searchQuery, setConversations, setTotalConversations, setIsLoadingConversations])
+  }, [activeFilter, activeChannel, debouncedSearch, setConversations, setTotalConversations, setIsLoadingConversations])
 
   useEffect(() => { fetchConversations() }, [fetchConversations])
 
-  // Socket: listen for conversation updates
+  // Socket: listen for conversation updates (debounced to avoid flooding)
   useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>
     const unsub = socket.on('conversation_update', () => {
- fetchConversations()
+      clearTimeout(timer)
+      timer = setTimeout(fetchConversations, 500)
     })
-    return unsub
+    return () => { clearTimeout(timer); unsub() }
   }, [fetchConversations])
 
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined)
+  // Search input updates store immediately (for responsive typing),
+  // but fetch is debounced via debouncedSearch state above.
   const handleSearch = (v: string) => {
     setSearchQuery(v)
-    clearTimeout(debounceRef.current)
-    debounceRef.current = setTimeout(() => fetchConversations(), 250)
   }
 
   return (
@@ -243,8 +281,8 @@ export default function ConversationList() {
             onChange={(e) => handleSearch(e.target.value)}
           />
         </div>
-        {/* Status tabs */}
-        <div className="flex gap-1 overflow-x-auto scrollbar-none">
+        {/* Status tabs — scroll X */}
+        <div ref={statusTabsRef} className="flex gap-1 overflow-x-auto scrollbar-none scroll-fade-x min-w-0 max-w-full" role="tablist">
           {FILTER_TABS.map((tab, idx) => {
             const Icon = tab.icon
             const active = activeFilter === tab.key
@@ -263,8 +301,8 @@ export default function ConversationList() {
           })}
         </div>
       </div>
-      {/* Channels */}
-      <div className="px-3 md:px-4 py-2 border-b border-border/30 flex gap-1 overflow-x-auto scrollbar-none flex-shrink-0">
+      {/* Channels — scroll X */}
+      <div ref={channelTabsRef} className="px-3 md:px-4 py-2 border-b border-border/30 flex gap-1 overflow-x-auto scrollbar-none scroll-fade-x flex-shrink-0 min-w-0 max-w-full" role="tablist">
         {CHANNEL_FILTERS.map((ch) => {
           const active = activeChannel === ch.key
           return (

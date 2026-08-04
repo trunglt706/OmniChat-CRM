@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useCRMStore, type UserProfile } from '@/store/crm-store'
+import { apiPut, apiPost } from '@/lib/api-client'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -10,7 +11,7 @@ import { Separator } from '@/components/ui/separator'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
 import {
-  User, Mail, Phone, Briefcase, MessageSquare, Camera, Check, X, Shield, Clock,
+  User, Mail, Phone, Briefcase, MessageSquare, Camera, Check, X, Shield, Clock, Loader2,
 } from 'lucide-react'
 import { useT } from '@/i18n/useT'
 
@@ -31,9 +32,13 @@ interface AgentStats {
 }
 
 export default function ProfilePanel() {
-  const { currentUser, setCurrentUser, settings, setOpenSheet } = useCRMStore()
+  const currentUser = useCRMStore((s) => s.currentUser)
+  const setCurrentUser = useCRMStore((s) => s.setCurrentUser)
+  const settings = useCRMStore((s) => s.settings)
+  const setOpenSheet = useCRMStore((s) => s.setOpenSheet)
   const { t } = useT()
   const [editing, setEditing] = useState(false)
+  const [saving, setSaving] = useState(false)
   const [form, setForm] = useState({ name: '', email: '', phone: '', bio: '' })
   const fileRef = useRef<HTMLInputElement>(null)
   const [stats, setStats] = useState<AgentStats | null>(null)
@@ -52,10 +57,30 @@ export default function ProfilePanel() {
     }
   }, [currentUser])
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!currentUser) return
-    setCurrentUser({ ...currentUser, ...form })
-    setEditing(false)
+    setSaving(true)
+    try {
+      const updated = await apiPut('/api/auth/me', {
+        name: form.name,
+        email: form.email,
+        phone: form.phone || null,
+        bio: form.bio || null,
+      })
+      setCurrentUser({
+        ...currentUser,
+        name: updated.name,
+        email: updated.email,
+        phone: updated.phone || '',
+        bio: updated.bio || '',
+        status: updated.status,
+      })
+      setEditing(false)
+    } catch (e) {
+      console.error('Failed to save profile', e)
+    } finally {
+      setSaving(false)
+    }
   }
 
   const handleCancel = () => {
@@ -65,9 +90,14 @@ export default function ProfilePanel() {
     setEditing(false)
   }
 
-  const handleStatusChange = (status: UserProfile['status']) => {
+  const handleStatusChange = async (status: UserProfile['status']) => {
     if (!currentUser) return
-    setCurrentUser({ ...currentUser, status })
+    try {
+      await apiPut('/api/auth/me', { status })
+      setCurrentUser({ ...currentUser, status })
+    } catch (e) {
+      console.error('Failed to update status', e)
+    }
   }
 
   if (!currentUser) return null
@@ -195,9 +225,11 @@ export default function ProfilePanel() {
               </Button>
               <Button
                 onClick={handleSave}
+                disabled={saving}
                 className="flex-1 h-10 rounded-xl text-sm font-medium bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600"
               >
-                <Check className="h-4 w-4 mr-1.5" /> {t('profile.save')}
+                {saving ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Check className="h-4 w-4 mr-1.5" />}
+                {t('profile.save')}
               </Button>
             </div>
           )}

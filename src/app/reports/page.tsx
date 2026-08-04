@@ -260,10 +260,17 @@ export default function ReportsPage() {
     { key: 'resolutionTrends', label: t('reports.tab.resolutionTrends'), icon: CheckCircle },
   ]
 
-  const CHANNEL_NAMES_MAP: Record<string, string> = {
-    facebook_messenger: 'Facebook Messenger', zalo: 'Zalo',
-    telegram: 'Telegram', website: 'Website', email: 'Email',
-  }
+  const getChannelNames = useCallback(() => {
+    return {
+      facebook_messenger: t('channels.fb.name'),
+      facebook_comment: t('channels.fbc.name'),
+      zalo: t('channels.zalo.name'),
+      telegram: t('channels.tg.name'),
+      chatwork: t('channels.cw.name'),
+      website: t('channels.web.name'),
+      email: t('channels.email.name'),
+    }
+  }, [t])
 
   // ═══════════════════════════════════════════
   // ─── Export helpers ───
@@ -700,7 +707,7 @@ export default function ReportsPage() {
                 <TableCell className="text-right tabular-nums">{row.messages}</TableCell>
                 <TableCell className="text-right tabular-nums text-muted-foreground">{row.lastActive}</TableCell>
                 <TableCell className="text-center">
-                  <Badge variant="outline" className="text-[10px] h-5 px-1.5">{CHANNEL_NAMES_MAP[row.primaryChannel] || row.primaryChannel}</Badge>
+                  <Badge variant="outline" className="text-[10px] h-5 px-1.5">{getChannelNames()[row.primaryChannel] || row.primaryChannel}</Badge>
                 </TableCell>
                 <TableCell className="text-right tabular-nums font-semibold text-emerald-600 dark:text-emerald-400">{row.value}</TableCell>
               </TableRow>
@@ -1069,7 +1076,7 @@ export default function ReportsPage() {
             <Table>
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
-                  <TableHead className="text-xs font-semibold">ID</TableHead>
+                  <TableHead className="text-xs font-semibold">{t('reports.conversationDetail.col.id')}</TableHead>
                   <TableHead className="text-xs font-semibold">{t('reports.conversationDetail.col.customer')}</TableHead>
                   <TableHead className="text-xs font-semibold text-center">{t('reports.conversationDetail.col.channel')}</TableHead>
                   <TableHead className="text-xs font-semibold text-center">{t('reports.conversationDetail.col.status')}</TableHead>
@@ -1164,7 +1171,7 @@ export default function ReportsPage() {
             <Table>
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
-                  <TableHead className="text-xs font-semibold">ID</TableHead>
+                  <TableHead className="text-xs font-semibold">{t('reports.conversationDetail.col.id')}</TableHead>
                   <TableHead className="text-xs font-semibold">{t('reports.conversations.col.date')}</TableHead>
                   <TableHead className="text-xs font-semibold text-center">{t('reports.conversationDetail.col.channel')}</TableHead>
                   <TableHead className="text-xs font-semibold text-center">{t('reports.conversationDetail.col.status')}</TableHead>
@@ -1209,7 +1216,7 @@ export default function ReportsPage() {
           <Table>
             <TableHeader>
               <TableRow className="hover:bg-transparent">
-                <TableHead className="text-xs font-semibold">ID</TableHead>
+                <TableHead className="text-xs font-semibold">{t('reports.conversationDetail.col.id')}</TableHead>
                 <TableHead className="text-xs font-semibold">{t('reports.conversationDetail.col.customer')}</TableHead>
                 <TableHead className="text-xs font-semibold text-center">{t('reports.conversationDetail.col.channel')}</TableHead>
                 <TableHead className="text-xs font-semibold text-center">{t('reports.conversationDetail.col.status')}</TableHead>
@@ -1346,7 +1353,7 @@ export default function ReportsPage() {
               <Button variant="outline" size="sm" className="h-8 rounded-xl text-xs gap-1.5 border-border/40"
                 onClick={handleExportChartImage}>
                 <ImageIcon className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">{t('reports.exportChart') || 'PNG'}</span>
+                <span className="hidden sm:inline">{t('reports.export') || 'PNG'}</span>
               </Button>
             )}
           </div>

@@ -10,8 +10,10 @@ interface SessionUser {
   email: string
   role: string
   avatar: string | null
-  phone: string
+  phone: string | null
+  bio: string | null
   status: string
+  settings: string | null
 }
 
 /**
@@ -29,7 +31,7 @@ export async function getAuthUser(req: NextRequest): Promise<SessionUser | null>
 
   const user = await db.user.findUnique({
     where: { id: token.sub as string },
-    select: { id: true, name: true, email: true, role: true, avatar: true, status: true },
+    select: { id: true, name: true, email: true, role: true, avatar: true, phone: true, bio: true, status: true, settings: true },
   })
 
   if (!user) return null
@@ -40,7 +42,9 @@ export async function getAuthUser(req: NextRequest): Promise<SessionUser | null>
     email: user.email,
     role: user.role,
     avatar: user.avatar,
-    phone: '', // Phone not in User model, kept for compat
+    phone: user.phone,
+    bio: user.bio,
     status: user.status,
+    settings: user.settings,
   }
 }

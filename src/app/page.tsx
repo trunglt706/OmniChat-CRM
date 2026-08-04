@@ -1,9 +1,10 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { Suspense, useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useCRMStore } from '@/store/crm-store'
 import { socket } from '@/lib/socket'
+import { apiPost } from '@/lib/api-client'
 import ConversationList from '@/components/crm/conversation-list'
 import ChatArea from '@/components/crm/chat-area'
 import CustomerPanel from '@/components/crm/customer-panel'
@@ -48,7 +49,13 @@ import { LOCALE_LABELS, LOCALES, type Locale } from '@/i18n/translations'
 
 function Header() {
   const { theme, setTheme } = useTheme()
-  const totalOpen = useCRMStore((s) => s.conversations.filter(c => c.status === 'open').length)
+  const totalOpen = useCRMStore((s) => {
+    let count = 0
+    for (let i = 0; i < s.conversations.length; i++) {
+      if (s.conversations[i].status === 'open') count++
+    }
+    return count
+  })
   const activeView = useCRMStore((s) => s.activeView)
   const setActiveViewRaw = useCRMStore((s) => s.setActiveView)
   const router = useRouter()
@@ -71,33 +78,41 @@ function Header() {
   const currentUser = useCRMStore((s) => s.currentUser)
   const simulationRunning = useCRMStore((s) => s.simulationRunning)
   const setSimulationRunning = useCRMStore((s) => s.setSimulationRunning)
-  const notifications = useCRMStore((s) => s.notifications)
+  const unreadNotifCount = useCRMStore((s) => {
+    let c = 0
+    for (let i = 0; i < s.notifications.length; i++) {
+      if (!s.notifications[i].read) c++
+    }
+    return c
+  })
   const openSheet = useCRMStore((s) => s.openSheet)
   const setOpenSheet = useCRMStore((s) => s.setOpenSheet)
   const settings = useCRMStore((s) => s.settings)
   const updateSettings = useCRMStore((s) => s.updateSettings)
+  const [mounted, setMounted] = useState(false)
   const [simLoading, setSimLoading] = useState(false)
   const [showLogoutDialog, setShowLogoutDialog] = useState(false)
   const [loggingOut, setLoggingOut] = useState(false)
   const { t } = useT()
+  useEffect(() => { setMounted(true) }, [])
 
-  const unreadNotifCount = notifications.filter(n => !n.read).length
+  // unreadNotifCount is now derived directly from store selector above
 
-  const navItems: { key: 'inbox' | 'dashboard' | 'automation' | 'reports'; label: string; icon: React.ElementType }[] = [
-    { key: 'inbox', label: t('nav.inbox'), icon: Inbox },
-    { key: 'dashboard', label: t('nav.dashboard'), icon: LayoutDashboard },
-    { key: 'automation', label: t('nav.automation'), icon: Zap },
-    { key: 'reports', label: t('nav.reports'), icon: BarChart3 },
-  ]
+  const navItems = useMemo(() => [
+    { key: 'inbox' as const, label: t('nav.inbox'), icon: Inbox },
+    { key: 'dashboard' as const, label: t('nav.dashboard'), icon: LayoutDashboard },
+    { key: 'automation' as const, label: t('nav.automation'), icon: Zap },
+    { key: 'reports' as const, label: t('nav.reports'), icon: BarChart3 },
+  ], [t])
 
   const toggleSimulation = async () => {
     setSimLoading(true)
     try {
       if (simulationRunning) {
-        await fetch('/api/simulation', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'stop_auto' }) })
+        await apiPost('/api/simulation', { action: 'stop_auto' })
         setSimulationRunning(false)
       } else {
-        await fetch('/api/simulation', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'start_auto' }) })
+        await apiPost('/api/simulation', { action: 'start_auto' })
         setSimulationRunning(true)
       }
     } catch (e) { console.error('Simulation error', e) }
@@ -112,7 +127,7 @@ function Header() {
     window.location.href = '/login'
   }
 
-  const roleLabel = currentUser?.role === 'admin' ? t('user.role.admin') : currentUser?.role === 'supervisor' ? t('user.role.supervisor') : currentUser?.role === 'agent' ? t('user.role.agent') : currentUser?.role || 'Agent'
+  const roleLabel = currentUser?.role === 'admin' ? t('user.role.admin') : currentUser?.role === 'supervisor' ? t('user.role.supervisor') : currentUser?.role === 'agent' ? t('user.role.agent') : currentUser?.role || t('common.agent')
 
   return (
     <header className="h-12 md:h-14 border-b border-border/30 glass flex items-center justify-between px-2 md:px-4 flex-shrink-0 z-50">
@@ -226,10 +241,10 @@ function Header() {
           <Tooltip>
             <TooltipTrigger asChild>
               <Button variant="ghost" size="icon" className="h-8 w-8 rounded-xl text-muted-foreground/60 hover:text-foreground hover:bg-foreground/5 transition-all duration-200" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>
-                {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+                {mounted && (theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />)}
               </Button>
             </TooltipTrigger>
-            <TooltipContent>{theme === 'dark' ? t('tooltip.lightMode') : t('tooltip.darkMode')}</TooltipContent>
+            <TooltipContent>{mounted ? (theme === 'dark' ? t('tooltip.lightMode') : t('tooltip.darkMode')) : ''}</TooltipContent>
           </Tooltip>
         </TooltipProvider>
 
@@ -265,7 +280,7 @@ function Header() {
                 )} />
               </div>
               <div className="hidden sm:flex flex-col items-start">
-                <span className="text-xs font-semibold leading-tight">{currentUser?.name || 'User'}</span>
+                <span className="text-xs font-semibold leading-tight">{currentUser?.name || t('common.user')}</span>
                 <span className="text-[10px] text-muted-foreground/50 leading-tight font-medium">{roleLabel}</span>
               </div>
               <ChevronDown className="h-3 w-3 text-muted-foreground/40" />
@@ -319,7 +334,7 @@ function Header() {
 }
 
 function MobileCustomerPanel() {
-  const { setMobileView } = useCRMStore()
+  const setMobileView = useCRMStore((s) => s.setMobileView)
   const { t } = useT()
   return (
     <div className="md:hidden flex flex-col h-full min-h-0">
@@ -334,7 +349,15 @@ function MobileCustomerPanel() {
   )
 }
 
-export default function CRMPage() {
+export default function CRMPageWrapper() {
+  return (
+    <Suspense>
+      <CRMPage />
+    </Suspense>
+  )
+}
+
+function CRMPage() {
   const selectedConversationId = useCRMStore((s) => s.selectedConversationId)
   const activeView = useCRMStore((s) => s.activeView)
   const setActiveViewRaw = useCRMStore((s) => s.setActiveView)
@@ -351,6 +374,9 @@ export default function CRMPage() {
   const simulationRunning = useCRMStore((s) => s.simulationRunning)
   const { t } = useT()
 
+  // Memoized handler for Sheet close — stable reference avoids re-rendering Sheets
+  const handleSheetClose = useCallback((open: boolean) => { if (!open) setOpenSheet(null) }, [setOpenSheet])
+
   // Restore activeView from URL on mount (so reload keeps current view)
   useEffect(() => {
     const viewParam = searchParams.get('view')
@@ -362,8 +388,10 @@ export default function CRMPage() {
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Load current user from API on mount
+  // Load current user from API on mount (skip if already loaded)
+  const welcomeSentRef = useRef(false)
   useEffect(() => {
+    if (useCRMStore.getState().currentUser) return
     fetch('/api/auth/me')
       .then(res => {
         if (!res.ok) throw new Error('Not authenticated')
@@ -379,8 +407,12 @@ export default function CRMPage() {
           role: user.role,
           avatar: user.avatar,
           status: user.status || 'online',
-          bio: '',
+          bio: user.bio || '',
         })
+        // Load settings from DB
+        useCRMStore.getState().initSettingsFromDB(user.settings)
+        // Load notifications from DB
+        useCRMStore.getState().loadNotifications()
       })
       .catch(() => {
         // Not authenticated, redirect to login
@@ -388,29 +420,22 @@ export default function CRMPage() {
       })
   }, [])
 
-  // Load settings from localStorage on mount
+  // Request desktop notification permission & welcome notification (once per session)
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem('omnichat_settings')
-      if (saved) {
-        const parsed = JSON.parse(saved)
-        useCRMStore.getState().updateSettings(parsed)
-      }
-    } catch {}
-
-    // Request desktop notification permission
     if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
       Notification.requestPermission().catch(() => {})
     }
 
-    // Welcome notification
-    setTimeout(() => {
-      addNotification({
-        type: 'system',
-        title: t('welcome.title'),
-        body: t('welcome.body'),
-      })
-    }, 1500)
+    if (!welcomeSentRef.current) {
+      welcomeSentRef.current = true
+      setTimeout(() => {
+        addNotification({
+          type: 'system',
+          title: t('welcome.title'),
+          body: t('welcome.body'),
+        })
+      }, 1500)
+    }
   }, [])
 
   // Socket: connect/disconnect based on simulation state
@@ -481,21 +506,21 @@ export default function CRMPage() {
       </div>
 
       {/* Notification Sheet */}
-      <Sheet open={openSheet === 'notifications'} onOpenChange={(open) => { if (!open) setOpenSheet(null) }}>
+      <Sheet open={openSheet === 'notifications'} onOpenChange={handleSheetClose}>
         <SheetContent side="right" className="w-full sm:max-w-[400px] p-0 rounded-l-2xl">
           <NotificationPanel />
         </SheetContent>
       </Sheet>
 
       {/* Profile Sheet */}
-      <Sheet open={openSheet === 'profile'} onOpenChange={(open) => { if (!open) setOpenSheet(null) }}>
+      <Sheet open={openSheet === 'profile'} onOpenChange={handleSheetClose}>
         <SheetContent side="right" className="w-full sm:max-w-[440px] p-0 rounded-l-2xl">
           <ProfilePanel />
         </SheetContent>
       </Sheet>
 
       {/* Settings Sheet */}
-      <Sheet open={openSheet === 'settings'} onOpenChange={(open) => { if (!open) setOpenSheet(null) }}>
+      <Sheet open={openSheet === 'settings'} onOpenChange={handleSheetClose}>
         <SheetContent side="right" className="w-full sm:max-w-[440px] p-0 rounded-l-2xl">
           <SettingsPanel />
         </SheetContent>

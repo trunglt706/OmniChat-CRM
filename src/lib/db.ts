@@ -21,8 +21,16 @@ const globalForPrisma = globalThis as unknown as {
  * Create the default PrismaClient.
  */
 function createPrismaClient(): PrismaClient {
+  const SLOW_QUERY_MS = parseInt(process.env.SLOW_QUERY_MS || '1000', 10)
   return new PrismaClient({
-    log: process.env.NODE_ENV === 'development' ? ['query'] : [],
+    log: [
+      { emit: 'event', level: 'query' },
+    ],
+  }).$on('query', (e: any) => {
+    const duration = e.duration
+    if (duration > SLOW_QUERY_MS) {
+      console.warn(`[SLOW QUERY] ${duration}ms > ${SLOW_QUERY_MS}ms\n${e.query}`)
+    }
   })
 }
 

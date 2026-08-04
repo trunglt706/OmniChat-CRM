@@ -27,10 +27,10 @@ export function buildCsp(options: CspOptions = {}): string {
     `default-src 'self'`,
 
     // Scripts: self + inline with nonce (for Next.js hydration)
-    `script-src 'self'${n} 'unsafe-eval' https://cdn.jsdelivr.net`,
+    `script-src 'self'${n} 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net`,
 
-    // Styles: self + inline (for Tailwind, shadcn)
-    `style-src 'self' 'unsafe-inline'`,
+    // Styles: self + inline (for Tailwind, shadcn) + Google Fonts stylesheet
+    `style-src 'self' 'unsafe-inline' https://fonts.googleapis.com`,
 
     // Images: self + data: (for avatars, inline images) + any external
     `img-src 'self' data: blob: https: http:`,

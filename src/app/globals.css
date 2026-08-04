@@ -640,6 +640,26 @@
   display: none;
 }
 
+/* Horizontal scroll fade indicators */
+.scroll-fade-x {
+  position: relative;
+}
+.scroll-fade-x::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 24px;
+  background: linear-gradient(to left, var(--background), transparent);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.scroll-fade-x.is-overflowing::after {
+  opacity: 1;
+}
+
 /* Ensure touch scroll works on mobile flex children */
 [data-slot="scroll-area-viewport"] {
   overscroll-behavior: contain;

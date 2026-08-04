@@ -91,3 +91,16 @@ export function isBlacklisted(ip: string, email?: string): boolean {
     return false
   })
 }
+
+/**
+ * Add an entry to the blacklist (used by auto-blacklist & manual admin actions).
+ */
+export function addToBlacklist(entry: BlacklistEntry): void {
+  const list = loadBlacklist()
+  // Prevent duplicates
+  if (!list.some(e => e.type === entry.type && e.value === entry.value)) {
+    list.push(entry)
+    saveBlacklist(list)
+    invalidateBlacklistCache()
+  }
+}

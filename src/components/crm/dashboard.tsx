@@ -19,6 +19,8 @@ import { CHANNEL_CONFIG } from '@/lib/types'
 import { useT } from '@/i18n/useT'
 // Native scroll
 
+const LOCALE_MAP: Record<string, string> = { vi: 'vi-VN', en: 'en-US', zh: 'zh-CN' }
+
 const CHANNEL_COLORS: Record<string, string> = {
   facebook_messenger: '#1877f2',
   facebook_comment: '#1877f2',
@@ -81,7 +83,7 @@ function StatCard({ title, value, icon: Icon, subtitle, color }: {
 }
 
 export default function Dashboard() {
-  const { t } = useT()
+  const { t, locale } = useT()
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -145,7 +147,7 @@ export default function Dashboard() {
   }))
 
   const trendData = dailyTrend.map((d) => ({
-    name: new Date(d.date).toLocaleDateString('vi-VN', { weekday: 'short', day: '2-digit', month: '2-digit' }),
+    name: new Date(d.date).toLocaleDateString(LOCALE_MAP[locale] || 'vi-VN', { weekday: 'short', day: '2-digit', month: '2-digit' }),
     new: d.total - d.resolved,
     resolved: d.resolved,
   }))
@@ -288,7 +290,7 @@ export default function Dashboard() {
                               'h-2 w-2 rounded-full',
                               agent.status === 'online' ? 'bg-emerald-500' : agent.status === 'busy' ? 'bg-amber-500' : 'bg-gray-400'
                             )} />
-                            <span className="text-[11px] capitalize">{agent.status}</span>
+                            <span className="text-[11px] capitalize">{t('common.' + agent.status) || agent.status}</span>
                           </div>
                         </TableCell>
                       </TableRow>

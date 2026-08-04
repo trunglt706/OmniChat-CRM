@@ -2,7 +2,7 @@
 
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Headphones, Mail, Loader2, Eye, EyeOff, Shield } from 'lucide-react'
-import { useState, useCallback, Suspense } from 'react'
+import { useState, useCallback, useEffect, Suspense } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -16,6 +16,8 @@ function LoginForm() {
   const searchParams = useSearchParams()
   const [loading, setLoading] = useState(false)
   const { theme, setTheme } = useTheme()
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => { setMounted(true) }, [])
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -178,7 +180,7 @@ function LoginForm() {
             className="h-9 w-9 rounded-xl text-muted-foreground/40 hover:text-foreground hover:bg-foreground/5 transition-all duration-200"
             onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
           >
-            {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            {mounted && (theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />)}
           </Button>
         </div>
 

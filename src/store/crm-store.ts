@@ -134,16 +134,19 @@ interface CRMState {
 
   // ─── Notifications ───
   notifications: AppNotification[]
+  setNotifications: (n: AppNotification[]) => void
   addNotification: (n: Omit<AppNotification, 'id' | 'read' | 'createdAt'>) => void
   markNotificationRead: (id: string) => void
   markAllNotificationsRead: () => void
   clearNotification: (id: string) => void
   clearAllNotifications: () => void
   unreadNotificationCount: () => number
+  loadNotifications: () => Promise<void>
 
   // ─── Settings ───
   settings: AppSettings
   updateSettings: (patch: Partial<AppSettings>) => void
+  initSettingsFromDB: (settingsJson: string | null) => void
 
   // ─── UI Sheets ───
   openSheet: OpenSheet
@@ -165,6 +168,47 @@ const DEFAULT_SETTINGS: AppSettings = {
 }
 
 let _notifCounter = 0
+let _settingsPersistTimer: ReturnType<typeof setTimeout> | null = null
+let _notifPersistQueue: { action: 'create'; data: Omit<AppNotification, 'id' | 'read' | 'createdAt'>; id: string }
+  | { action: 'read'; id: string }
+  | { action: 'readAll' }
+  | { action: 'delete'; id: string }
+  | { action: 'deleteAll' }[] = []
+let _notifFlushTimer: ReturnType<typeof setTimeout> | null = null
+
+/**
+ * Background-flush notification changes to the DB.
+ * Batches rapid actions (e.g. markAllRead) into fewer API calls.
+ */
+function flushNotifToDB() {
+  if (_notifFlushTimer) clearTimeout(_notifFlushTimer)
+  _notifFlushTimer = setTimeout(async () => {
+    const queue = _notifPersistQueue.splice(0, _notifPersistQueue.length)
+    if (queue.length === 0) return
+    try {
+      const { apiPost, apiFetch } = await import('@/lib/api-client')
+      for (const item of queue) {
+        switch (item.action) {
+          case 'create':
+            await apiPost('/api/notifications', item.data).catch(() => {})
+            break
+          case 'read':
+            await apiFetch(`/api/notifications/${item.id}/read`, { method: 'PATCH' }).catch(() => {})
+            break
+          case 'readAll':
+            await apiFetch('/api/notifications/read-all', { method: 'PATCH' }).catch(() => {})
+            break
+          case 'delete':
+            await apiFetch(`/api/notifications?id=${item.id}`, { method: 'DELETE' }).catch(() => {})
+            break
+          case 'deleteAll':
+            await apiFetch('/api/notifications', { method: 'DELETE' }).catch(() => {})
+            break
+        }
+      }
+    } catch {}
+  }, 300)
+}
 
 export const useCRMStore = create<CRMState>((set, get) => ({
   conversations: [],
@@ -268,6 +312,7 @@ export const useCRMStore = create<CRMState>((set, get) => ({
 
   // ─── Notifications ───
   notifications: [],
+  setNotifications: (n) => set({ notifications: n }),
   addNotification: (n) => {
     _notifCounter++
     const notif: AppNotification = {
@@ -276,7 +321,12 @@ export const useCRMStore = create<CRMState>((set, get) => ({
       read: false,
       createdAt: new Date().toISOString(),
     }
+    // Optimistic: update UI immediately
     set((s) => ({ notifications: [notif, ...s.notifications] }))
+    // Background: persist to DB (only for non-client-generated IDs on next load)
+    _notifPersistQueue.push({ action: 'create', data: n, id: notif.id })
+    flushNotifToDB()
+    // Sound & desktop notification
     if (get().settings.soundEnabled) {
       try {
         const audio = new Audio('/notification.mp3')
@@ -296,26 +346,88 @@ export const useCRMStore = create<CRMState>((set, get) => ({
       } catch {}
     }
   },
-  markNotificationRead: (id) => set((s) => ({
-    notifications: s.notifications.map(n => n.id === id ? { ...n, read: true } : n)
-  })),
-  markAllNotificationsRead: () => set((s) => ({
-    notifications: s.notifications.map(n => ({ ...n, read: true }))
-  })),
-  clearNotification: (id) => set((s) => ({
-    notifications: s.notifications.filter(n => n.id !== id)
-  })),
-  clearAllNotifications: () => set({ notifications: [] }),
+  markNotificationRead: (id) => {
+    set((s) => ({
+      notifications: s.notifications.map(n => n.id === id ? { ...n, read: true } : n)
+    }))
+    // Background persist (skip client-generated IDs that start with notif_)
+    if (!id.startsWith('notif_')) {
+      _notifPersistQueue.push({ action: 'read', id })
+      flushNotifToDB()
+    }
+  },
+  markAllNotificationsRead: () => {
+    set((s) => ({
+      notifications: s.notifications.map(n => ({ ...n, read: true }))
+    }))
+    _notifPersistQueue.push({ action: 'readAll' })
+    flushNotifToDB()
+  },
+  clearNotification: (id) => {
+    set((s) => ({
+      notifications: s.notifications.filter(n => n.id !== id)
+    }))
+    if (!id.startsWith('notif_')) {
+      _notifPersistQueue.push({ action: 'delete', id })
+      flushNotifToDB()
+    }
+  },
+  clearAllNotifications: () => {
+    set({ notifications: [] })
+    _notifPersistQueue.push({ action: 'deleteAll' })
+    flushNotifToDB()
+  },
   unreadNotificationCount: () => get().notifications.filter(n => !n.read).length,
+  /**
+   * Load notifications from DB (call after login).
+   * Merges with any client-side notifications that were created
+   * before the DB load completed.
+   */
+  loadNotifications: async () => {
+    try {
+      const { apiFetch } = await import('@/lib/api-client')
+      const res: any = await apiFetch('/api/notifications?limit=50')
+      const dbNotifs: AppNotification[] = (res.data || []).map((n: any) => ({
+        id: n.id,
+        type: n.type,
+        title: n.title,
+        body: n.body,
+        conversationId: n.conversationId,
+        read: n.read,
+        createdAt: n.createdAt,
+      }))
+      // Merge: keep any client-generated notifs that aren't in DB yet
+      const existing = get().notifications
+      const dbIds = new Set(dbNotifs.map(n => n.id))
+      const localOnly = existing.filter(n => n.id.startsWith('notif_') && !dbIds.has(n.id))
+      set({ notifications: [...localOnly, ...dbNotifs] })
+    } catch {}
+  },
 
   // ─── Settings ───
   settings: DEFAULT_SETTINGS,
   updateSettings: (patch) => {
     set((s) => ({ settings: { ...s.settings, ...patch } }))
+    // Debounce DB persistence (500ms) to avoid rapid writes
+    if (typeof window !== 'undefined') {
+      if (_settingsPersistTimer) clearTimeout(_settingsPersistTimer)
+      const currentSettings = get().settings
+      _settingsPersistTimer = setTimeout(() => {
+        import('@/lib/api-client').then(({ apiPut }) => {
+          apiPut('/api/auth/me/settings', currentSettings).catch(() => {})
+        }).catch(() => {})
+      }, 500)
+    }
+  },
+  /**
+   * Initialize settings from DB user data.
+   * Call this after login with the user's settings JSON string.
+   */
+  initSettingsFromDB: (settingsJson: string | null) => {
     try {
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('omnichat_settings', JSON.stringify({ ...get().settings, ...patch }))
-      }
+      const parsed = settingsJson ? JSON.parse(settingsJson) : {}
+      const merged = { ...DEFAULT_SETTINGS, ...parsed }
+      set({ settings: merged })
     } catch {}
   },
 

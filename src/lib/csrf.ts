@@ -1,24 +1,7 @@
 import { createHash, randomBytes } from 'crypto'
 import { getRedis, type RedisClient } from './redis'
 import { getSecurityEnv } from './redis'
-
-/**
- * Double-submit cookie CSRF protection.
- *
- * Flow:
- * 1. Server sets csrf-token in a non-HttpOnly cookie on every response.
- * 2. Client reads this cookie and sends it back in:
- *    - header: x-csrf-token
- *    - or body field: _csrf
- * 3. Server compares cookie value == header/body value.
- *
- * This works because an attacker cannot read non-HttpOnly cookies
- * from another origin due to SameSite policy.
- */
-
-const CSRF_COOKIE_NAME = 'omnichat.csrf'
-const CSRF_HEADER = 'x-csrf-token'
-const CSRF_BODY_FIELD = '_csrf'
+import { CSRF_COOKIE_NAME, CSRF_HEADER, CSRF_BODY_FIELD } from './csrf-constants'
 
 /**
  * Generate a new CSRF token and store it in Redis (or memory).

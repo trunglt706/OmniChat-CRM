@@ -11,6 +11,8 @@ import {
 } from 'lucide-react'
 import { useT } from '@/i18n/useT'
 
+const LOCALE_MAP: Record<string, string> = { vi: 'vi-VN', en: 'en-US', zh: 'zh-CN' }
+
 const NOTIF_CONFIG: Record<NotificationType, { icon: React.ElementType; color: string; bg: string }> = {
   new_message: { icon: MessageSquare, color: 'text-blue-500', bg: 'bg-blue-500/10' },
   assignment: { icon: UserCheck, color: 'text-violet-500', bg: 'bg-violet-500/10' },
@@ -20,16 +22,16 @@ const NOTIF_CONFIG: Record<NotificationType, { icon: React.ElementType; color: s
   automation: { icon: Sparkles, color: 'text-violet-500', bg: 'bg-violet-500/10' },
 }
 
-function formatNotifTime(d: string, t: (key: string, params?: Record<string, string | number>) => string) {
+function formatNotifTime(d: string, t: (key: string, params?: Record<string, string | number>) => string, locale = 'vi') {
   const date = new Date(d), now = new Date(), diff = now.getTime() - date.getTime()
   const m = Math.floor(diff / 60000), h = Math.floor(diff / 3600000)
   if (m < 1) return t('notif.time.justNow')
   if (m < 60) return t('notif.time.minutesAgo', { m })
   if (h < 24) return t('notif.time.hoursAgo', { h })
-  return date.toLocaleDateString('vi-VN')
+  return date.toLocaleDateString(LOCALE_MAP[locale] || 'vi-VN')
 }
 
-function NotifItem({ notif, onGoto, t }: { notif: AppNotification; onGoto: () => void; t: (key: string, params?: Record<string, string | number>) => string }) {
+function NotifItem({ notif, onGoto, t, locale }: { notif: AppNotification; onGoto: () => void; t: (key: string, params?: Record<string, string | number>) => string; locale: string }) {
   const cfg = NOTIF_CONFIG[notif.type]
   const Icon = cfg.icon
 
@@ -57,26 +59,24 @@ function NotifItem({ notif, onGoto, t }: { notif: AppNotification; onGoto: () =>
           {!notif.read && <span className="h-2 w-2 rounded-full bg-primary flex-shrink-0" />}
         </div>
         <p className="text-[12px] text-muted-foreground/60 truncate mt-0.5 leading-relaxed">{notif.body}</p>
-        <p className="text-[10px] text-muted-foreground/40 mt-1 font-medium tabular-nums">{formatNotifTime(notif.createdAt, t)}</p>
+        <p className="text-[10px] text-muted-foreground/40 mt-1 font-medium tabular-nums">{formatNotifTime(notif.createdAt, t, locale)}</p>
       </div>
     </button>
   )
 }
 
 export default function NotificationPanel() {
-  const {
-    notifications,
-    markNotificationRead,
-    markAllNotificationsRead,
-    clearNotification,
-    clearAllNotifications,
-    setOpenSheet,
-    setSelectedConversationId,
-    setActiveView,
-    setMobileView,
-  } = useCRMStore()
+  const notifications = useCRMStore((s) => s.notifications)
+  const markNotificationRead = useCRMStore((s) => s.markNotificationRead)
+  const markAllNotificationsRead = useCRMStore((s) => s.markAllNotificationsRead)
+  const clearNotification = useCRMStore((s) => s.clearNotification)
+  const clearAllNotifications = useCRMStore((s) => s.clearAllNotifications)
+  const setOpenSheet = useCRMStore((s) => s.setOpenSheet)
+  const setSelectedConversationId = useCRMStore((s) => s.setSelectedConversationId)
+  const setActiveView = useCRMStore((s) => s.setActiveView)
+  const setMobileView = useCRMStore((s) => s.setMobileView)
 
-  const { t } = useT()
+  const { t, locale } = useT()
 
   const unreadCount = notifications.filter(n => !n.read).length
 
@@ -143,7 +143,7 @@ export default function NotificationPanel() {
         ) : (
           <div className="p-3 space-y-1">
             {notifications.map((notif) => (
-              <NotifItem key={notif.id} notif={notif} onGoto={() => handleGoto(notif)} t={t} />
+              <NotifItem key={notif.id} notif={notif} onGoto={() => handleGoto(notif)} t={t} locale={locale} />
             ))}
           </div>
         )}

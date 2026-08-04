@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef, useMemo } from 'react'
+import { Suspense, useState, useEffect, useRef, useMemo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useCRMStore, type UserProfile } from '@/store/crm-store'
 import { useTheme } from 'next-themes'
@@ -19,6 +19,10 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter,
   DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import { apiPut, apiPost, apiFetch } from '@/lib/api-client'
 import { cn } from '@/lib/utils'
 import { CHANNEL_CONFIG, type Agent } from '@/lib/types'
 import { useT } from '@/i18n/useT'
@@ -44,6 +48,20 @@ const SETTINGS_TABS = [
 type SettingsTab = (typeof SETTINGS_TABS)[number]['key']
 
 const GRADIENT_CLASSES = ['avatar-gradient-1', 'avatar-gradient-2', 'avatar-gradient-3', 'avatar-gradient-4', 'avatar-gradient-5', 'avatar-gradient-6']
+
+// ═══ Shared fetch cache (prevents duplicate API calls across mounts) ═══
+const fetchCache = new Map<string, { promise: Promise<any>; ts: number }>()
+const CACHE_TTL = 5000
+function cachedFetch(url: string, opts?: { forceFresh?: boolean }): Promise<any> {
+  const now = Date.now()
+  if (!opts?.forceFresh) {
+    const cached = fetchCache.get(url)
+    if (cached && now - cached.ts < CACHE_TTL) return cached.promise
+  }
+  const promise = fetch(url).then(r => r.ok ? r.json() : null)
+  fetchCache.set(url, { promise, ts: now })
+  return promise
+}
 
 const STATUS_OPTIONS: { value: UserProfile['status']; labelKey: string; color: string }[] = [
   { value: 'online', labelKey: 'profile.status.online', color: 'bg-emerald-500' },
@@ -134,16 +152,19 @@ interface AgentStats {
 }
 
 function ProfileTab() {
-  const { currentUser, setCurrentUser } = useCRMStore()
+  const currentUser = useCRMStore((s) => s.currentUser)
+  const setCurrentUser = useCRMStore((s) => s.setCurrentUser)
   const { t } = useT()
   const [editing, setEditing] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const savingRef = useRef(false)
   const [form, setForm] = useState({ name: '', email: '', phone: '', bio: '' })
   const fileRef = useRef<HTMLInputElement>(null)
   const [stats, setStats] = useState<AgentStats | null>(null)
+  const [statusModal, setStatusModal] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
   useEffect(() => {
-    fetch('/api/agents/me/stats')
-      .then(res => res.ok ? res.json() : null)
+    cachedFetch('/api/agents/me/stats')
       .then(data => { if (data) setStats(data) })
       .catch(() => {})
   }, [])
@@ -152,14 +173,49 @@ function ProfileTab() {
     if (currentUser) setForm({ name: currentUser.name, email: currentUser.email, phone: currentUser.phone, bio: currentUser.bio })
   }, [currentUser])
 
-  const handleSave = () => { if (currentUser) { setCurrentUser({ ...currentUser, ...form }); setEditing(false) } }
+  const handleSave = async () => {
+    if (!currentUser || savingRef.current) return
+    savingRef.current = true
+    setSaving(true)
+    try {
+      const updated = await apiPut('/api/auth/me', { name: form.name, email: form.email, phone: form.phone, bio: form.bio })
+      setCurrentUser({ ...currentUser, ...updated })
+      setEditing(false)
+      setStatusModal({ type: 'success', text: t('profile.saveSuccess') })
+    } catch {
+      setStatusModal({ type: 'error', text: t('profile.saveFailed') })
+    }
+    setSaving(false)
+    savingRef.current = false
+  }
   const handleCancel = () => { if (currentUser) setForm({ name: currentUser.name, email: currentUser.email, phone: currentUser.phone, bio: currentUser.bio }); setEditing(false) }
-  const handleStatusChange = (status: UserProfile['status']) => { if (currentUser) setCurrentUser({ ...currentUser, status }) }
+  const handleStatusChange = async (status: UserProfile['status']) => {
+    if (!currentUser) return
+    setCurrentUser({ ...currentUser, status })
+    try { await apiPut('/api/auth/me', { status }) } catch { /* optimistic update already applied */ }
+  }
 
   if (!currentUser) return null
 
   return (
     <div className="space-y-6 animate-fade-in">
+      {/* Status Modal */}
+      <Dialog open={!!statusModal} onOpenChange={(open) => { if (!open) setStatusModal(null) }}>
+        <DialogContent className="sm:max-w-sm rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className={cn('text-base flex items-center gap-2', statusModal?.type === 'success' ? 'text-emerald-600' : 'text-red-600')}>
+              {statusModal?.type === 'success' ? <Check className="h-5 w-5" /> : <X className="h-5 w-5" />}
+              {statusModal?.type === 'success' ? t('common.success') : t('common.failed')}
+            </DialogTitle>
+            <DialogDescription className="text-sm text-muted-foreground/70">
+              {statusModal?.text}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button onClick={() => setStatusModal(null)} className="rounded-xl h-9 text-xs">{t('common.close')}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <div className="glass-card rounded-2xl p-6">
         <div className="flex flex-col items-center gap-4">
           <div className="relative group">
@@ -217,7 +273,7 @@ function ProfileTab() {
           ) : (
             <div className="flex gap-2">
               <Button variant="outline" onClick={handleCancel} className="flex-1 h-10 rounded-xl text-sm font-medium"><X className="h-4 w-4 mr-1.5" /> {t('profile.cancel')}</Button>
-              <Button onClick={handleSave} className="flex-1 h-10 rounded-xl text-sm font-medium bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600"><Check className="h-4 w-4 mr-1.5" /> {t('profile.save')}</Button>
+              <Button onClick={handleSave} disabled={saving} className="flex-1 h-10 rounded-xl text-sm font-medium bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600">{saving ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Check className="h-4 w-4 mr-1.5" />} {t('profile.save')}</Button>
             </div>
           )}
         </div>
@@ -245,31 +301,64 @@ function ProfileTab() {
 
 // ═══ SYSTEM TAB ═══
 function SystemTab() {
-  const { settings, updateSettings, notifications, clearAllNotifications } = useCRMStore()
+  const settings = useCRMStore((s) => s.settings)
+  const updateSettings = useCRMStore((s) => s.updateSettings)
+  const notifCount = useCRMStore((s) => s.notifications.length)
+  const clearAllNotifications = useCRMStore((s) => s.clearAllNotifications)
   const { theme, setTheme } = useTheme()
+  const [mounted, setMounted] = useState(false)
+  const [statusModal, setStatusModal] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const { t } = useT()
+  useEffect(() => { setMounted(true) }, [])
+
+  const handleUpdateSetting = async (patch: Record<string, unknown>) => {
+    updateSettings(patch)
+    try {
+      const newSettings = { ...useCRMStore.getState().settings, ...patch }
+      await apiPut('/api/auth/me/settings', newSettings)
+      setStatusModal({ type: 'success', text: t('settings.saveSuccess') })
+    } catch {
+      setStatusModal({ type: 'error', text: t('settings.saveFailed') })
+    }
+  }
+
   return (
     <div className="space-y-6 animate-fade-in">
+      {/* Status Modal */}
+      <Dialog open={!!statusModal} onOpenChange={(open) => { if (!open) setStatusModal(null) }}>
+        <DialogContent className="sm:max-w-sm rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className={cn('text-base flex items-center gap-2', statusModal?.type === 'success' ? 'text-emerald-600' : 'text-red-600')}>
+              {statusModal?.type === 'success' ? <Check className="h-5 w-5" /> : <X className="h-5 w-5" />}
+              {statusModal?.type === 'success' ? t('common.success') : t('common.failed')}
+            </DialogTitle>
+            <DialogDescription className="text-sm text-muted-foreground/70">{statusModal?.text}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button onClick={() => setStatusModal(null)} className="rounded-xl h-9 text-xs">{t('common.close')}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <div className="space-y-1">
         <SectionHeader title={t('settings.appearance')} />
         <div className="glass-card rounded-2xl p-5">
-          <SettingRow icon={theme === 'dark' ? Moon : Sun} label={t('settings.theme')} description={t('settings.themeDesc')}>
+          <SettingRow icon={mounted && theme === 'dark' ? Moon : Sun} label={t('settings.theme')} description={t('settings.themeDesc')}>
             <Button variant="outline" size="sm" className="h-8 rounded-lg text-xs gap-1.5 border-border/40" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>
-              {theme === 'dark' ? <Moon className="h-3.5 w-3.5" /> : <Sun className="h-3.5 w-3.5" />}
-              {theme === 'dark' ? t('settings.dark') : t('settings.light')}
+              {mounted && (theme === 'dark' ? <Moon className="h-3.5 w-3.5" /> : <Sun className="h-3.5 w-3.5" />)}
+              {mounted ? (theme === 'dark' ? t('settings.dark') : t('settings.light')) : ''}
             </Button>
           </SettingRow>
           <Separator className="opacity-30 my-1" />
           <SettingRow icon={Maximize2} label={t('settings.compactMode')} description={t('settings.compactModeDesc')}>
-            <Switch checked={settings.compactMode} onCheckedChange={(v) => updateSettings({ compactMode: v })} />
+            <Switch checked={settings.compactMode} onCheckedChange={(v) => handleUpdateSetting({ compactMode: v })} />
           </SettingRow>
           <Separator className="opacity-30 my-1" />
           <SettingRow icon={Eye} label={t('settings.showPreview')} description={t('settings.showPreviewDesc')}>
-            <Switch checked={settings.showPreview} onCheckedChange={(v) => updateSettings({ showPreview: v })} />
+            <Switch checked={settings.showPreview} onCheckedChange={(v) => handleUpdateSetting({ showPreview: v })} />
           </SettingRow>
           <Separator className="opacity-30 my-1" />
           <SettingRow icon={Globe} label={t('settings.language')}>
-            <Select value={settings.language} onValueChange={(v) => updateSettings({ language: v as Locale })}>
+            <Select value={settings.language} onValueChange={(v) => handleUpdateSetting({ language: v as Locale })}>
               <SelectTrigger className="w-32 h-8 rounded-lg text-xs"><SelectValue /></SelectTrigger>
               <SelectContent>{LOCALES.map((loc) => <SelectItem key={loc} value={loc}>{LOCALE_LABELS[loc]}</SelectItem>)}</SelectContent>
             </Select>
@@ -280,20 +369,20 @@ function SystemTab() {
         <SectionHeader title={t('settings.notifications')} />
         <div className="glass-card rounded-2xl p-5">
           <SettingRow icon={Volume2} label={t('settings.sound')} description={t('settings.soundDesc')}>
-            <Switch checked={settings.soundEnabled} onCheckedChange={(v) => updateSettings({ soundEnabled: v })} />
+            <Switch checked={settings.soundEnabled} onCheckedChange={(v) => handleUpdateSetting({ soundEnabled: v })} />
           </SettingRow>
           <Separator className="opacity-30 my-1" />
           <SettingRow icon={Monitor} label={t('settings.desktopNotif')} description={t('settings.desktopNotifDesc')}>
-            <Switch checked={settings.desktopNotifEnabled} onCheckedChange={(v) => updateSettings({ desktopNotifEnabled: v })} />
+            <Switch checked={settings.desktopNotifEnabled} onCheckedChange={(v) => handleUpdateSetting({ desktopNotifEnabled: v })} />
           </SettingRow>
           <Separator className="opacity-30 my-1" />
           <SettingRow icon={Mail} label={t('settings.emailNotif')} description={t('settings.emailNotifDesc')}>
-            <Switch checked={settings.emailNotifEnabled} onCheckedChange={(v) => updateSettings({ emailNotifEnabled: v })} />
+            <Switch checked={settings.emailNotifEnabled} onCheckedChange={(v) => handleUpdateSetting({ emailNotifEnabled: v })} />
           </SettingRow>
-          {notifications.length > 0 && (
+          {notifCount > 0 && (
             <><Separator className="opacity-30 my-1" />
-            <Button variant="ghost" size="sm" className="w-full mt-1 h-9 rounded-xl text-xs text-muted-foreground/60 hover:text-foreground hover:bg-foreground/[0.03]" onClick={() => clearAllNotifications()}>
-              <Trash2 className="h-3.5 w-3.5 mr-1.5" /> {t('settings.clearAllNotifs', { count: notifications.length })}
+            <Button variant="ghost" size="sm" className="w-full mt-1 h-9 rounded-xl text-xs text-muted-foreground/60 hover:text-foreground hover:bg-foreground/[0.03]" onClick={clearAllNotifications}>
+              <Trash2 className="h-3.5 w-3.5 mr-1.5" /> {t('settings.clearAllNotifs', { count: notifCount })}
             </Button></>
           )}
         </div>
@@ -302,7 +391,7 @@ function SystemTab() {
         <SectionHeader title={t('settings.conversations')} />
         <div className="glass-card rounded-2xl p-5">
           <SettingRow icon={UserCheck} label={t('settings.autoAssign')} description={t('settings.autoAssignDesc')}>
-            <Switch checked={settings.autoAssign} onCheckedChange={(v) => updateSettings({ autoAssign: v })} />
+            <Switch checked={settings.autoAssign} onCheckedChange={(v) => handleUpdateSetting({ autoAssign: v })} />
           </SettingRow>
         </div>
       </div>
@@ -335,8 +424,7 @@ function ChannelsTab() {
 
   // Load channels from API
   useEffect(() => {
-    fetch('/api/channels')
-      .then(r => r.json())
+    cachedFetch('/api/channels')
       .then(data => { if (Array.isArray(data)) setChannels(data) })
       .catch(() => {})
       .finally(() => setLoading(false))
@@ -346,11 +434,7 @@ function ChannelsTab() {
     const ch = channels.find(c => c.key === key)
     if (!ch) return
     setChannels(prev => prev.map(c => c.key === key ? { ...c, enabled: !c.enabled } : c))
-    await fetch('/api/channels', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ channel: key, enabled: !ch.enabled, config: ch.config }),
-    }).catch(() => {})
+    apiPut('/api/channels', { channel: key, enabled: !ch.enabled, config: ch.config }).catch(() => {})
   }
 
   const startEdit = (ch: ChannelData) => {
@@ -362,12 +446,7 @@ function ChannelsTab() {
   const saveChannel = async (key: string) => {
     setSaving(true)
     try {
-      const res = await fetch('/api/channels', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ channel: key, config: editForm }),
-      })
-      const data = await res.json()
+      const data = await apiPut('/api/channels', { channel: key, config: editForm })
       setChannels(prev => prev.map(c => c.key === key ? { ...c, configured: data.configured, config: data.config || c.config } : c))
       setEditingChannel(null)
     } catch {}
@@ -379,12 +458,7 @@ function ChannelsTab() {
     setTestResults(prev => ({ ...prev, [key]: null }))
     try {
       const ch = channels.find(c => c.key === key)
-      const res = await fetch('/api/channels/test', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ channel: key, config: { ...ch?.config, ...editForm } }),
-      })
-      const result = await res.json()
+      const result = await apiPost('/api/channels/test', { channel: key, config: { ...ch?.config, ...editForm } })
       setTestResults(prev => ({ ...prev, [key]: result }))
       // Update channel data to reflect new test result
       setChannels(prev => prev.map(c => c.key === key ? {
@@ -394,7 +468,7 @@ function ChannelsTab() {
         lastTestMsg: result.msg,
       } : c))
     } catch {
-      setTestResults(prev => ({ ...prev, [key]: { ok: false, msg: 'Lỗi kết nối đến server' } }))
+      setTestResults(prev => ({ ...prev, [key]: { ok: false, msg: t('common.error.serverConnection') } }))
     }
     setTestingKey(null)
   }
@@ -548,9 +622,9 @@ function ChannelsTab() {
 
 // ═══ STAFF TAB ═══
 function StaffTab() {
-  const { agents, setAgents } = useCRMStore()
+  const agents = useCRMStore((s) => s.agents)
+  const setAgents = useCRMStore((s) => s.setAgents)
   const { t } = useT()
-  const [staffList, setStaffList] = useState<Agent[]>([])
   const [loading, setLoading] = useState(true)
   const [showInvite, setShowInvite] = useState(false)
   const [inviteEmail, setInviteEmail] = useState('')
@@ -563,7 +637,7 @@ function StaffTab() {
   // Generate stable mock stats per agent
   const staffStats = useMemo(() => {
     const stats: Record<string, { conversations: number; avgResponse: number; satisfaction: number; lastActive: string }> = {}
-    staffList.forEach((agent) => {
+    agents.forEach((agent) => {
       // Simple deterministic hash from agent id
       const hash = agent.id.split('').reduce((a, c) => a + c.charCodeAt(0), 0)
       const conversations = 100 + (hash * 7) % 500
@@ -572,30 +646,29 @@ function StaffTab() {
       const daysAgo = (hash * 11) % 30
       const hoursAgo = (hash * 7) % 24
       const lastActive = daysAgo === 0
-        ? `${hoursAgo}h ago`
-        : `${daysAgo}d ago`
+        ? t('common.time.hoursAgo', { h: hoursAgo })
+        : t('common.time.daysAgo', { d: daysAgo })
       stats[agent.id] = { conversations, avgResponse, satisfaction, lastActive }
     })
     return stats
-  }, [staffList])
+  }, [agents])
 
   useEffect(() => {
+    if (agents.length > 0) { setLoading(false); return }
     async function load() {
       try {
-        const res = await fetch('/api/agents')
-        const data = await res.json()
-        if (Array.isArray(data)) { setStaffList(data); setAgents(data) }
+        const data = await cachedFetch('/api/agents')
+        if (Array.isArray(data)) { setAgents(data) }
       } catch (e) { console.error('Failed', e) }
       finally { setLoading(false) }
     }
     load()
-  }, [setAgents])
+  }, [agents.length, setAgents])
 
   const handleInvite = () => {
     if (!inviteEmail.trim()) return
     const newAgent: Agent = { id: `agent_${Date.now()}`, name: inviteEmail.split('@')[0], email: inviteEmail, avatar: null, role: inviteRole, status: 'offline' }
-    setStaffList(prev => [...prev, newAgent])
-    setAgents([...staffList, newAgent])
+    setAgents([...agents, newAgent])
     setInviteEmail('')
     setShowInvite(false)
   }
@@ -610,16 +683,14 @@ function StaffTab() {
   const handleSaveEdit = () => {
     if (!editingAgent) return
     const updated = { ...editingAgent, ...editForm }
-    const newList = staffList.map(a => a.id === editingAgent.id ? updated : a)
-    setStaffList(newList)
+    const newList = agents.map(a => a.id === editingAgent.id ? updated : a)
     setAgents(newList)
     setEditingAgent(null)
   }
 
   const handleDelete = () => {
     if (!editingAgent) return
-    const newList = staffList.filter(a => a.id !== editingAgent.id)
-    setStaffList(newList)
+    const newList = agents.filter(a => a.id !== editingAgent.id)
     setAgents(newList)
     setEditingAgent(null)
     setDeleteConfirm(false)
@@ -643,7 +714,7 @@ function StaffTab() {
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-sm font-bold">{t('staff.title')}</h3>
-          <p className="text-xs text-muted-foreground/60 mt-1">{t('staff.count', { count: staffList.length })}</p>
+          <p className="text-xs text-muted-foreground/60 mt-1">{t('staff.count', { count: agents.length })}</p>
         </div>
         <Button size="sm" className="h-8 rounded-xl text-xs gap-1.5 bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600" onClick={() => setShowInvite(!showInvite)}>
           <Plus className="h-3.5 w-3.5" /> {t('staff.invite')}
@@ -666,7 +737,7 @@ function StaffTab() {
         {loading ? (
           <div className="space-y-3">{[1, 2, 3, 4].map((i) => (<div key={i} className="glass-card rounded-xl p-4 flex items-center gap-3"><div className="skeleton-line h-10 w-10 rounded-full flex-shrink-0" /><div className="flex-1 space-y-2"><div className="skeleton-line h-3.5 w-1/3" /><div className="skeleton-line h-3 w-1/4" /></div></div>))}</div>
         ) : (
-          staffList.map((agent, idx) => {
+          agents.map((agent, idx) => {
             const stats = staffStats[agent.id]
             const isExpanded = expandedId === agent.id
             return (
@@ -832,16 +903,17 @@ function SecurityTab() {
   const [adding, setAdding] = useState(false)
   const [saving, setSaving] = useState(false)
   const [rateLimitInput, setRateLimitInput] = useState('60')
+  const [confirmRemove, setConfirmRemove] = useState<{ type: string; value: string } | null>(null)
+  const [statusModal, setStatusModal] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [removing, setRemoving] = useState(false)
 
   const loadData = async () => {
     setLoading(true)
     try {
-      const [configRes, blacklistRes] = await Promise.all([
-        fetch('/api/security/config'),
-        fetch('/api/security/blacklist'),
+      const [configData, blacklistData] = await Promise.all([
+        cachedFetch('/api/security/config'),
+        cachedFetch('/api/security/blacklist'),
       ])
-      const configData = await configRes.json()
-      const blacklistData = await blacklistRes.json()
       setConfig(configData)
       setRateLimitInput(String(configData.rateLimitPerMinute))
       setBlacklist(blacklistData.data || [])
@@ -854,17 +926,15 @@ function SecurityTab() {
   const saveConfig = async () => {
     setSaving(true)
     try {
-      const res = await fetch('/api/security/config', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...config,
-          rateLimitPerMinute: parseInt(rateLimitInput) || 60,
-        }),
+      const data: any = await apiPut('/api/security/config', {
+        ...config,
+        rateLimitPerMinute: parseInt(rateLimitInput) || 60,
       })
-      const data = await res.json()
-      if (data.data) setConfig(data.data)
-    } catch (e) { console.error(e) }
+      if (data?.data) setConfig(data.data)
+      setStatusModal({ type: 'success', text: t('security.saveSuccess') })
+    } catch {
+      setStatusModal({ type: 'error', text: t('security.saveFailed') })
+    }
     finally { setSaving(false) }
   }
 
@@ -872,26 +942,28 @@ function SecurityTab() {
     if (!newValue.trim()) return
     setAdding(true)
     try {
-      const res = await fetch('/api/security/blacklist', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: newType, value: newValue.trim(), reason: newReason.trim() }),
+      const data: any = await apiPost('/api/security/blacklist', {
+        type: newType, value: newValue.trim(), reason: newReason.trim(),
       })
-      if (res.ok) {
-        const data = await res.json()
-        setBlacklist(prev => [data.data, ...prev])
-        setNewValue('')
-        setNewReason('')
-      }
+      setBlacklist(prev => [data.data, ...prev])
+      setNewValue('')
+      setNewReason('')
     } catch (e) { console.error(e) }
     finally { setAdding(false) }
   }
 
-  const removeFromBlacklist = async (type: string, value: string) => {
+  const confirmRemoveFromBlacklist = async () => {
+    if (!confirmRemove) return
+    setRemoving(true)
     try {
-      await fetch(`/api/security/blacklist?type=${type}&value=${encodeURIComponent(value)}`, { method: 'DELETE' })
-      setBlacklist(prev => prev.filter(e => !(e.type === type && e.value === value)))
-    } catch (e) { console.error(e) }
+      await apiFetch(`/api/security/blacklist?type=${confirmRemove.type}&value=${encodeURIComponent(confirmRemove.value)}`, { method: 'DELETE' })
+      setBlacklist(prev => prev.filter(e => !(e.type === confirmRemove.type && e.value === confirmRemove.value)))
+      setStatusModal({ type: 'success', text: t('security.blacklist.removeSuccess') })
+    } catch {
+      setStatusModal({ type: 'error', text: t('security.blacklist.removeFailed') })
+    }
+    setRemoving(false)
+    setConfirmRemove(null)
   }
 
   const formatSize = (bytes: number) => {
@@ -965,8 +1037,8 @@ function SecurityTab() {
               <Select value={newType} onValueChange={(v) => setNewType(v as 'ip' | 'email')}>
                 <SelectTrigger className="w-24 h-9 rounded-lg text-xs"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="ip">IP</SelectItem>
-                  <SelectItem value="email">Email</SelectItem>
+                  <SelectItem value="ip">{t('common.type.ip')}</SelectItem>
+                  <SelectItem value="email">{t('common.type.email')}</SelectItem>
                 </SelectContent>
               </Select>
               <Input
@@ -1008,7 +1080,7 @@ function SecurityTab() {
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
                         <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-4 rounded-md font-mono">
-                          {entry.type === 'ip' ? 'IP' : 'EMAIL'}
+                          {entry.type === 'ip' ? t('common.type.ip') : t('common.type.email')}
                         </Badge>
                         <span className="text-xs font-mono font-medium truncate">{entry.value}</span>
                       </div>
@@ -1023,7 +1095,7 @@ function SecurityTab() {
                       variant="ghost"
                       size="icon"
                       className="h-7 w-7 rounded-lg opacity-0 group-hover:opacity-100 text-muted-foreground/40 hover:text-red-500 transition-all"
-                      onClick={() => removeFromBlacklist(entry.type, entry.value)}
+                      onClick={() => setConfirmRemove({ type: entry.type, value: entry.value })}
                     >
                       <X className="h-3.5 w-3.5" />
                     </Button>
@@ -1050,6 +1122,42 @@ function SecurityTab() {
           </Button>
         </div>
       </div>
+
+      {/* Confirm Remove Dialog */}
+      <AlertDialog open={!!confirmRemove} onOpenChange={(open) => { if (!open) setConfirmRemove(null) }}>
+        <AlertDialogContent className="sm:max-w-sm rounded-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-base">{t('security.blacklist.removeConfirm')}</AlertDialogTitle>
+            <AlertDialogDescription className="text-sm text-muted-foreground/70">
+              {confirmRemove?.value}{confirmRemove?.reason ? ` — ${confirmRemove.reason}` : ''}
+              <br />{t('security.blacklist.removeConfirmDesc')}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2">
+            <AlertDialogCancel className="rounded-xl h-9 text-xs" disabled={removing}>{t('common.cancel')}</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmRemoveFromBlacklist} disabled={removing} className="rounded-xl h-9 text-xs bg-destructive hover:bg-destructive/90">
+              {removing ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5 mr-1.5" />}
+              {t('security.blacklist.removeConfirm')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Status Modal */}
+      <Dialog open={!!statusModal} onOpenChange={(open) => { if (!open) setStatusModal(null) }}>
+        <DialogContent className="sm:max-w-sm rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className={cn('text-base flex items-center gap-2', statusModal?.type === 'success' ? 'text-emerald-600' : 'text-red-600')}>
+              {statusModal?.type === 'success' ? <Check className="h-5 w-5" /> : <X className="h-5 w-5" />}
+              {statusModal?.type === 'success' ? t('common.success') : t('common.failed')}
+            </DialogTitle>
+            <DialogDescription className="text-sm text-muted-foreground/70">{statusModal?.text}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button onClick={() => setStatusModal(null)} className="rounded-xl h-9 text-xs">{t('common.close')}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
@@ -1070,12 +1178,12 @@ function BackupTab() {
   const [restoring, setRestoring] = useState<string | null>(null)
   const [deleting, setDeleting] = useState<string | null>(null)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [confirmAction, setConfirmAction] = useState<{ type: 'delete' | 'restore'; id: string } | null>(null)
 
-  const loadBackups = async () => {
+  const loadBackups = async (forceFresh = false) => {
     setLoading(true)
     try {
-      const res = await fetch('/api/backup')
-      const data = await res.json()
+      const data = await cachedFetch('/api/backup', { forceFresh })
       setBackups(data.data || [])
     } catch (e) { console.error(e) }
     finally { setLoading(false) }
@@ -1087,16 +1195,11 @@ function BackupTab() {
     setCreating(true)
     setMessage(null)
     try {
-      const res = await fetch('/api/backup', { method: 'POST' })
-      const data = await res.json()
-      if (res.ok) {
-        setMessage({ type: 'success', text: t('backup.created') })
-        loadBackups()
-      } else {
-        setMessage({ type: 'error', text: data.error || t('backup.createFailed') })
-      }
-    } catch (e) {
-      setMessage({ type: 'error', text: t('backup.createFailed') })
+      const data: any = await apiPost('/api/backup', {})
+      setMessage({ type: 'success', text: t('backup.created') })
+      loadBackups(true)
+    } catch (e: any) {
+      setMessage({ type: 'error', text: e?.data?.error || t('backup.createFailed') })
     }
     finally { setCreating(false) }
   }
@@ -1105,19 +1208,10 @@ function BackupTab() {
     setRestoring(id)
     setMessage(null)
     try {
-      const res = await fetch('/api/backup/restore', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ backupId: id }),
-      })
-      const data = await res.json()
-      if (res.ok) {
-        setMessage({ type: 'success', text: t('backup.restored') })
-      } else {
-        setMessage({ type: 'error', text: data.error || t('backup.restoreFailed') })
-      }
-    } catch (e) {
-      setMessage({ type: 'error', text: t('backup.restoreFailed') })
+      await apiPost('/api/backup/restore', { backupId: id })
+      setMessage({ type: 'success', text: t('backup.restored') })
+    } catch (e: any) {
+      setMessage({ type: 'error', text: e?.data?.error || t('backup.restoreFailed') })
     }
     finally { setRestoring(null) }
   }
@@ -1125,10 +1219,24 @@ function BackupTab() {
   const deleteBackup = async (id: string) => {
     setDeleting(id)
     try {
-      await fetch(`/api/backup?id=${id}`, { method: 'DELETE' })
+      await apiFetch(`/api/backup?id=${id}`, { method: 'DELETE' })
       setBackups(prev => prev.filter(b => b.id !== id))
-    } catch (e) { console.error(e) }
+      setMessage({ type: 'success', text: t('backup.deleteSuccess') })
+    } catch {
+      setMessage({ type: 'error', text: t('backup.deleteFailed') })
+    }
     finally { setDeleting(null) }
+  }
+
+  const executeConfirmedAction = async () => {
+    if (!confirmAction) return
+    if (confirmAction.type === 'restore') {
+      setConfirmAction(null)
+      await restoreBackup(confirmAction.id)
+    } else {
+      setConfirmAction(null)
+      await deleteBackup(confirmAction.id)
+    }
   }
 
   const formatSize = (bytes: number) => {
@@ -1214,7 +1322,7 @@ function BackupTab() {
                         variant="ghost"
                         size="sm"
                         className="h-7 px-2 rounded-lg text-[10px] text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/30"
-                        onClick={() => restoreBackup(backup.id)}
+                        onClick={() => setConfirmAction({ type: 'restore', id: backup.id })}
                         disabled={restoring === backup.id}
                       >
                         {restoring === backup.id ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <RefreshCw className="h-3 w-3 mr-1" />}
@@ -1224,7 +1332,7 @@ function BackupTab() {
                         variant="ghost"
                         size="icon"
                         className="h-7 w-7 rounded-lg text-muted-foreground/40 hover:text-red-500"
-                        onClick={() => deleteBackup(backup.id)}
+                        onClick={() => setConfirmAction({ type: 'delete', id: backup.id })}
                         disabled={deleting === backup.id}
                       >
                         <Trash2 className="h-3.5 w-3.5" />
@@ -1237,29 +1345,65 @@ function BackupTab() {
           </div>
         </div>
       </div>
+
+      {/* Confirm Action Dialog */}
+      <AlertDialog open={!!confirmAction} onOpenChange={(open) => { if (!open) setConfirmAction(null) }}>
+        <AlertDialogContent className="sm:max-w-sm rounded-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-base">
+              {confirmAction?.type === 'delete' ? t('backup.deleteConfirm') : t('backup.restoreConfirm')}
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-sm text-muted-foreground/70">
+              {confirmAction?.type === 'delete' ? t('backup.deleteConfirmDesc') : t('backup.restoreConfirmDesc')}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2">
+            <AlertDialogCancel className="rounded-xl h-9 text-xs">{t('common.cancel')}</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={executeConfirmedAction}
+              disabled={restoring !== null || deleting !== null}
+              className={cn('rounded-xl h-9 text-xs', confirmAction?.type === 'delete' ? 'bg-destructive hover:bg-destructive/90' : '')}
+            >
+              {(restoring !== null || deleting !== null) && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
+              {confirmAction?.type === 'delete' ? <Trash2 className="h-3.5 w-3.5 mr-1.5" /> : <RefreshCw className="h-3.5 w-3.5 mr-1.5" />}
+              {confirmAction?.type === 'delete' ? t('backup.deleteConfirm') : t('backup.restore')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
 
 // ═══ MAIN PAGE ═══
-export default function SettingsPage() {
+export default function SettingsPageWrapper() {
+  return (
+    <Suspense>
+      <SettingsPage />
+    </Suspense>
+  )
+}
+
+function SettingsPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { t } = useT()
-  const [activeTab, setActiveTab] = useState<SettingsTab>('profile')
+  const [activeTab, setActiveTab] = useState<SettingsTab>(() => {
+    const tabParam = searchParams.get('tab')
+    if (tabParam && ['profile', 'system', 'channels', 'staff', 'security', 'backup'].includes(tabParam)) {
+      return tabParam as SettingsTab
+    }
+    return 'profile'
+  })
   const setCurrentUser = useCRMStore((s) => s.setCurrentUser)
   const setAuthenticated = useCRMStore((s) => s.setAuthenticated)
 
-  // Restore tab from URL ?tab=xxx
+  // Load current user from API on mount (skip if already loaded in main page)
   useEffect(() => {
-    const tabParam = searchParams.get('tab')
-    if (tabParam && ['profile', 'system', 'channels', 'staff', 'security', 'backup'].includes(tabParam)) {
-      setActiveTab(tabParam as SettingsTab)
+    if (useCRMStore.getState().currentUser) {
+      setAuthenticated(true)
+      return
     }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Load current user from API on mount (separate route, need own fetch)
-  useEffect(() => {
     fetch('/api/auth/me')
       .then(res => {
         if (!res.ok) throw new Error('Not authenticated')
@@ -1275,19 +1419,17 @@ export default function SettingsPage() {
           role: user.role,
           avatar: user.avatar,
           status: user.status || 'online',
-          bio: '',
+          bio: user.bio || '',
         })
+        // Initialize settings from DB (user.settings JSON field)
+        if (user.settings) {
+          const { initSettingsFromDB } = useCRMStore.getState()
+          initSettingsFromDB(typeof user.settings === 'string' ? user.settings : JSON.stringify(user.settings))
+        }
       })
       .catch(() => {
         window.location.href = '/login'
       })
-  }, [])
-
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem('omnichat_settings')
-      if (saved) useCRMStore.getState().updateSettings(JSON.parse(saved))
-    } catch {}
   }, [])
 
   const renderContent = () => {
@@ -1320,41 +1462,37 @@ export default function SettingsPage() {
           </div>
         </div>
       </header>
-      <div className="flex-1 min-h-0 overflow-hidden">
-        <div className="hidden md:flex h-full">
-          <nav className="w-56 md:w-64 border-r border-border/20 flex-shrink-0 flex-col p-3 space-y-1 overflow-y-auto">
-            {SETTINGS_TABS.map((tab) => {
-              const Icon = tab.icon
-              const active = activeTab === tab.key
-              return (
-                <button key={tab.key} onClick={() => setActiveTab(tab.key)} className={cn('w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-[13px] font-medium transition-all duration-250', active ? 'bg-gradient-to-r from-indigo-500/10 to-violet-500/10 text-primary border border-primary/10' : 'text-muted-foreground/70 hover:text-foreground hover:bg-foreground/[0.03] border border-transparent')}>
-                  <Icon className={cn('h-4 w-4', active && 'text-primary')} />
-                  {t(tab.labelKey)}
-                </button>
-              )
-            })}
-          </nav>
-          <main className="flex-1 min-h-0 overflow-y-auto p-4 md:p-6 lg:p-8">
-            <div className="max-w-2xl mx-auto">{renderContent()}</div>
-          </main>
+      <div className="flex-1 min-h-0 overflow-hidden flex flex-col md:flex-row">
+        {/* Desktop sidebar nav */}
+        <nav className="hidden md:flex w-56 md:w-64 border-r border-border/20 flex-shrink-0 flex-col p-3 space-y-1 overflow-y-auto">
+          {SETTINGS_TABS.map((tab) => {
+            const Icon = tab.icon
+            const active = activeTab === tab.key
+            return (
+              <button key={tab.key} onClick={() => setActiveTab(tab.key)} className={cn('w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-[13px] font-medium transition-all duration-250', active ? 'bg-gradient-to-r from-indigo-500/10 to-violet-500/10 text-primary border border-primary/10' : 'text-muted-foreground/70 hover:text-foreground hover:bg-foreground/[0.03] border border-transparent')}>
+                <Icon className={cn('h-4 w-4', active && 'text-primary')} />
+                {t(tab.labelKey)}
+              </button>
+            )
+          })}
+        </nav>
+        {/* Mobile horizontal nav */}
+        <div className="md:hidden flex-shrink-0 border-b border-border/20 flex overflow-x-auto scrollbar-none">
+          {SETTINGS_TABS.map((tab) => {
+            const Icon = tab.icon
+            const active = activeTab === tab.key
+            return (
+              <button key={tab.key} onClick={() => setActiveTab(tab.key)} className={cn('flex items-center gap-1.5 px-4 py-3 text-xs font-medium whitespace-nowrap transition-all duration-250 border-b-2 flex-shrink-0', active ? 'text-primary border-primary' : 'text-muted-foreground/60 border-transparent hover:text-foreground')}>
+                <Icon className="h-3.5 w-3.5" />
+                {t(tab.labelKey)}
+              </button>
+            )
+          })}
         </div>
-        <div className="md:hidden flex flex-col h-full">
-          <div className="flex-shrink-0 border-b border-border/20 flex overflow-x-auto scrollbar-none">
-            {SETTINGS_TABS.map((tab) => {
-              const Icon = tab.icon
-              const active = activeTab === tab.key
-              return (
-                <button key={tab.key} onClick={() => setActiveTab(tab.key)} className={cn('flex items-center gap-1.5 px-4 py-3 text-xs font-medium whitespace-nowrap transition-all duration-250 border-b-2 flex-shrink-0', active ? 'text-primary border-primary' : 'text-muted-foreground/60 border-transparent hover:text-foreground')}>
-                  <Icon className="h-3.5 w-3.5" />
-                  {t(tab.labelKey)}
-                </button>
-              )
-            })}
-          </div>
-          <main className="flex-1 min-h-0 overflow-y-auto p-4">
-            <div className="max-w-2xl mx-auto">{renderContent()}</div>
-          </main>
-        </div>
+        {/* Tab content — rendered once, shared by desktop & mobile */}
+        <main className="flex-1 min-h-0 overflow-y-auto p-4 md:p-6 lg:p-8">
+          <div className="max-w-2xl mx-auto">{renderContent()}</div>
+        </main>
       </div>
     </div>
   )

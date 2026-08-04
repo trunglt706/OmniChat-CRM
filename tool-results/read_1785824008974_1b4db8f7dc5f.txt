@@ -1,0 +1,1375 @@
+     1→'use client'
+     2→
+     3→import { Suspense, useState, useEffect, useRef, useMemo } from 'react'
+     4→import { useRouter, useSearchParams } from 'next/navigation'
+     5→import { useCRMStore, type UserProfile } from '@/store/crm-store'
+     6→import { useTheme } from 'next-themes'
+     7→import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+     8→import { Button } from '@/components/ui/button'
+     9→import { Input } from '@/components/ui/input'
+    10→import { Textarea } from '@/components/ui/textarea'
+    11→import { Separator } from '@/components/ui/separator'
+    12→import { Switch } from '@/components/ui/switch'
+    13→import { Label } from '@/components/ui/label'
+    14→import { Badge } from '@/components/ui/badge'
+    15→import {
+    16→  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+    17→} from '@/components/ui/select'
+    18→import {
+    19→  Dialog, DialogContent, DialogDescription, DialogFooter,
+    20→  DialogHeader, DialogTitle,
+    21→} from '@/components/ui/dialog'
+    22→import { apiPut, apiPost, apiFetch } from '@/lib/api-client'
+    23→import { cn } from '@/lib/utils'
+    24→import { CHANNEL_CONFIG, type Agent } from '@/lib/types'
+    25→import { useT } from '@/i18n/useT'
+    26→import { LOCALE_LABELS, LOCALES, type Locale } from '@/i18n/translations'
+    27→import {
+    28→  ArrowLeft, User, Settings, MessageSquare, Users, Moon, Sun,
+    29→  Volume2, Monitor, Mail, Maximize2, Eye, Globe, UserCheck,
+    30→  Camera, Check, X, Shield, Clock, MessageSquareOff, Phone,
+    31→  Send, Trash2, RotateCcw, Pencil, MoreVertical, Plus, Bell,
+    32→  Globe2, ChevronDown, Star, ShieldAlert, Database, Download,
+    33→  Upload, RefreshCw, Ban, AlertTriangle, Loader2, Zap, HardDrive,
+    34→} from 'lucide-react'
+    35→
+    36→const SETTINGS_TABS = [
+    37→  { key: 'profile', labelKey: 'settingsTab.profile', icon: User },
+    38→  { key: 'system', labelKey: 'settingsTab.system', icon: Settings },
+    39→  { key: 'channels', labelKey: 'settingsTab.channels', icon: MessageSquare },
+    40→  { key: 'staff', labelKey: 'settingsTab.staff', icon: Users },
+    41→  { key: 'security', labelKey: 'settingsTab.security', icon: ShieldAlert },
+    42→  { key: 'backup', labelKey: 'settingsTab.backup', icon: Database },
+    43→] as const
+    44→
+    45→type SettingsTab = (typeof SETTINGS_TABS)[number]['key']
+    46→
+    47→const GRADIENT_CLASSES = ['avatar-gradient-1', 'avatar-gradient-2', 'avatar-gradient-3', 'avatar-gradient-4', 'avatar-gradient-5', 'avatar-gradient-6']
+    48→
+    49→const STATUS_OPTIONS: { value: UserProfile['status']; labelKey: string; color: string }[] = [
+    50→  { value: 'online', labelKey: 'profile.status.online', color: 'bg-emerald-500' },
+    51→  { value: 'busy', labelKey: 'profile.status.busy', color: 'bg-amber-500' },
+    52→  { value: 'away', labelKey: 'profile.status.away', color: 'bg-orange-400' },
+    53→  { value: 'offline', labelKey: 'profile.status.offline', color: 'bg-gray-400' },
+    54→]
+    55→
+    56→// Channel data shape returned from /api/channels
+    57→interface ChannelData {
+    58→  key: string
+    59→  enabled: boolean
+    60→  configured: boolean
+    61→  config: Record<string, string>
+    62→  fields: { key: string; label: string; type: 'text' | 'password' | 'url'; placeholder: string }[]
+    63→  lastTestAt: string | null
+    64→  lastTestOk: boolean | null
+    65→  lastTestMsg: string | null
+    66→}
+    67→
+    68→const CHANNEL_ICONS: Record<string, React.ElementType> = {
+    69→  facebook_messenger: MessageSquare,
+    70→  facebook_comment: MessageSquareOff,
+    71→  zalo: Phone,
+    72→  telegram: Send,
+    73→  chatwork: Users,
+    74→  website: Globe2,
+    75→  email: Mail,
+    76→}
+    77→
+    78→const CHANNEL_COLORS_MAP: Record<string, string> = {
+    79→  facebook_messenger: '#1877f2',
+    80→  facebook_comment: '#1877f2',
+    81→  zalo: '#0068ff',
+    82→  telegram: '#26a5e4',
+    83→  chatwork: '#ee2224',
+    84→  website: '#10b981',
+    85→  email: '#ea4335',
+    86→}
+    87→
+    88→const CHANNEL_NAME_KEYS: Record<string, string> = {
+    89→  facebook_messenger: 'channels.fb.name',
+    90→  facebook_comment: 'channels.fbc.name',
+    91→  zalo: 'channels.zalo.name',
+    92→  telegram: 'channels.tg.name',
+    93→  chatwork: 'channels.cw.name',
+    94→  website: 'channels.web.name',
+    95→  email: 'channels.email.name',
+    96→}
+    97→
+    98→const CHANNEL_DESC_KEYS: Record<string, string> = {
+    99→  facebook_messenger: 'channels.fb.desc',
+   100→  facebook_comment: 'channels.fbc.desc',
+   101→  zalo: 'channels.zalo.desc',
+   102→  telegram: 'channels.tg.desc',
+   103→  chatwork: 'channels.cw.desc',
+   104→  website: 'channels.web.desc',
+   105→  email: 'channels.email.desc',
+   106→}
+   107→
+   108→function SettingRow({ icon: Icon, label, description, children }: { icon: React.ElementType; label: string; description?: string; children: React.ReactNode }) {
+   109→  return (
+   110→    <div className="flex items-center justify-between gap-4 py-3.5">
+   111→      <div className="flex items-start gap-3.5 min-w-0">
+   112→        <div className="h-9 w-9 rounded-xl bg-foreground/[0.03] flex items-center justify-center flex-shrink-0 mt-0.5">
+   113→          <Icon className="h-4 w-4 text-muted-foreground/50" />
+   114→        </div>
+   115→        <div className="min-w-0">
+   116→          <p className="text-[13px] font-medium">{label}</p>
+   117→          {description && <p className="text-[11px] text-muted-foreground/50 mt-0.5 leading-relaxed">{description}</p>}
+   118→        </div>
+   119→      </div>
+   120→      <div className="flex-shrink-0">{children}</div>
+   121→    </div>
+   122→  )
+   123→}
+   124→
+   125→function SectionHeader({ title }: { title: string }) {
+   126→  return <h4 className="text-[10px] font-bold text-muted-foreground/40 uppercase tracking-[0.15em] px-1 mb-2">{title}</h4>
+   127→}
+   128→
+   129→// ═══ PROFILE TAB ═══
+   130→interface AgentStats {
+   131→  conversationsToday: number
+   132→  avgResponse: string
+   133→  avgRating: string
+   134→  totalConversations: number
+   135→}
+   136→
+   137→function ProfileTab() {
+   138→  const currentUser = useCRMStore((s) => s.currentUser)
+   139→  const setCurrentUser = useCRMStore((s) => s.setCurrentUser)
+   140→  const { t } = useT()
+   141→  const [editing, setEditing] = useState(false)
+   142→  const [saving, setSaving] = useState(false)
+   143→  const [form, setForm] = useState({ name: '', email: '', phone: '', bio: '' })
+   144→  const fileRef = useRef<HTMLInputElement>(null)
+   145→  const [stats, setStats] = useState<AgentStats | null>(null)
+   146→
+   147→  useEffect(() => {
+   148→    fetch('/api/agents/me/stats')
+   149→      .then(res => res.ok ? res.json() : null)
+   150→      .then(data => { if (data) setStats(data) })
+   151→      .catch(() => {})
+   152→  }, [])
+   153→
+   154→  useEffect(() => {
+   155→    if (currentUser) setForm({ name: currentUser.name, email: currentUser.email, phone: currentUser.phone, bio: currentUser.bio })
+   156→  }, [currentUser])
+   157→
+   158→  const handleSave = async () => {
+   159→    if (!currentUser) return
+   160→    setSaving(true)
+   161→    try {
+   162→      const updated = await apiPut('/api/auth/me', { name: form.name, email: form.email, phone: form.phone, bio: form.bio })
+   163→      setCurrentUser({ ...currentUser, ...updated })
+   164→      setEditing(false)
+   165→    } catch { /* keep local state on error */ }
+   166→    setSaving(false)
+   167→  }
+   168→  const handleCancel = () => { if (currentUser) setForm({ name: currentUser.name, email: currentUser.email, phone: currentUser.phone, bio: currentUser.bio }); setEditing(false) }
+   169→  const handleStatusChange = async (status: UserProfile['status']) => {
+   170→    if (!currentUser) return
+   171→    setCurrentUser({ ...currentUser, status })
+   172→    try { await apiPut('/api/auth/me', { status }) } catch { /* optimistic update already applied */ }
+   173→  }
+   174→
+   175→  if (!currentUser) return null
+   176→
+   177→  return (
+   178→    <div className="space-y-6 animate-fade-in">
+   179→      <div className="glass-card rounded-2xl p-6">
+   180→        <div className="flex flex-col items-center gap-4">
+   181→          <div className="relative group">
+   182→            <Avatar className={cn('h-24 w-24 ring-4 ring-background shadow-xl', GRADIENT_CLASSES[0])}>
+   183→              <AvatarFallback className="text-3xl text-white font-bold">{currentUser.name.split(' ').slice(-2).map(n => n[0]).join('')}</AvatarFallback>
+   184→            </Avatar>
+   185→            <button onClick={() => fileRef.current?.click()} className="absolute inset-0 rounded-full bg-black/0 group-hover:bg-black/30 transition-all duration-200 flex items-center justify-center opacity-0 group-hover:opacity-100">
+   186→              <Camera className="h-6 w-6 text-white" />
+   187→            </button>
+   188→            <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={() => {}} />
+   189→          </div>
+   190→          {!editing && (
+   191→            <div className="text-center">
+   192→              <h3 className="text-xl font-bold tracking-tight">{currentUser.name}</h3>
+   193→              <p className="text-sm text-muted-foreground/60 mt-1 font-medium">{currentUser.email}</p>
+   194→              <span className="inline-flex items-center gap-1.5 mt-2.5 text-xs font-medium px-3 py-1.5 rounded-full bg-foreground/[0.04] text-muted-foreground/70">
+   195→                <Shield className="h-3.5 w-3.5" />
+   196→                {currentUser.role === 'admin' ? t('user.role.admin') : currentUser.role === 'agent' ? t('user.role.agent') : currentUser.role === 'supervisor' ? t('user.role.supervisor') : currentUser.role}
+   197→              </span>
+   198→            </div>
+   199→          )}
+   200→          <div className="flex gap-2">
+   201→            {STATUS_OPTIONS.map((opt) => (
+   202→              <button key={opt.value} onClick={() => handleStatusChange(opt.value)} className={cn('flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-medium transition-all duration-200 border', currentUser.status === opt.value ? 'border-primary/30 bg-primary/5 text-primary' : 'border-transparent text-muted-foreground/50 hover:text-foreground hover:bg-foreground/[0.03]')}>
+   203→                <span className={cn('h-2 w-2 rounded-full', opt.color, currentUser.status === opt.value && 'shadow-sm')} />
+   204→                {t(opt.labelKey)}
+   205→              </button>
+   206→            ))}
+   207→          </div>
+   208→        </div>
+   209→      </div>
+   210→      <div className="space-y-4">
+   211→        <SectionHeader title={t('profile.personalInfo')} />
+   212→        <div className="glass-card rounded-2xl p-5 space-y-4">
+   213→          <div className="space-y-3">
+   214→            <div className="space-y-1.5">
+   215→              <Label className="text-xs font-medium text-muted-foreground/70">{t('profile.displayName')}</Label>
+   216→              <Input value={form.name} onChange={(e) => setForm(f => ({ ...f, name: e.target.value }))} disabled={!editing} className="rounded-xl glass-input h-10 text-sm" />
+   217→            </div>
+   218→            <div className="space-y-1.5">
+   219→              <Label className="text-xs font-medium text-muted-foreground/70">{t('profile.email')}</Label>
+   220→              <Input type="email" value={form.email} onChange={(e) => setForm(f => ({ ...f, email: e.target.value }))} disabled={!editing} className="rounded-xl glass-input h-10 text-sm" />
+   221→            </div>
+   222→            <div className="space-y-1.5">
+   223→              <Label className="text-xs font-medium text-muted-foreground/70">{t('profile.phoneNumber')}</Label>
+   224→              <Input value={form.phone} onChange={(e) => setForm(f => ({ ...f, phone: e.target.value }))} disabled={!editing} className="rounded-xl glass-input h-10 text-sm" />
+   225→            </div>
+   226→            <div className="space-y-1.5">
+   227→              <Label className="text-xs font-medium text-muted-foreground/70">{t('profile.bio')}</Label>
+   228→              <Textarea value={form.bio} onChange={(e) => setForm(f => ({ ...f, bio: e.target.value }))} disabled={!editing} className="rounded-xl glass-input min-h-[80px] resize-none text-sm" />
+   229→            </div>
+   230→          </div>
+   231→          {!editing ? (
+   232→            <Button onClick={() => setEditing(true)} className="w-full h-10 rounded-xl text-sm font-medium"><Pencil className="h-4 w-4 mr-1.5" /> {t('profile.editInfo')}</Button>
+   233→          ) : (
+   234→            <div className="flex gap-2">
+   235→              <Button variant="outline" onClick={handleCancel} className="flex-1 h-10 rounded-xl text-sm font-medium"><X className="h-4 w-4 mr-1.5" /> {t('profile.cancel')}</Button>
+   236→              <Button onClick={handleSave} disabled={saving} className="flex-1 h-10 rounded-xl text-sm font-medium bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600">{saving ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Check className="h-4 w-4 mr-1.5" />} {t('profile.save')}</Button>
+   237→            </div>
+   238→          )}
+   239→        </div>
+   240→      </div>
+   241→      <div className="space-y-2">
+   242→        <SectionHeader title={t('profile.stats.title')} />
+   243→        <div className="grid grid-cols-2 gap-3">
+   244→          {[
+   245→            { label: t('profile.stat.conversationsToday'), value: stats ? String(stats.conversationsToday) : '--', icon: MessageSquare },
+   246→            { label: t('profile.stat.avgResponse'), value: stats?.avgResponse || '--', icon: Clock },
+   247→            { label: t('profile.stat.avgRating'), value: stats?.avgRating || '--', icon: Shield },
+   248→            { label: t('profile.stat.totalConversations'), value: stats ? String(stats.totalConversations) : '--', icon: User },
+   249→          ].map((stat) => (
+   250→            <div key={stat.label} className="glass-card rounded-xl p-4">
+   251→              <stat.icon className="h-4 w-4 text-muted-foreground/40 mb-2" />
+   252→              <p className="text-lg font-bold tabular-nums">{stat.value}</p>
+   253→              <p className="text-[11px] text-muted-foreground/50 mt-0.5 font-medium">{stat.label}</p>
+   254→            </div>
+   255→          ))}
+   256→        </div>
+   257→      </div>
+   258→    </div>
+   259→  )
+   260→}
+   261→
+   262→// ═══ SYSTEM TAB ═══
+   263→function SystemTab() {
+   264→  const settings = useCRMStore((s) => s.settings)
+   265→  const updateSettings = useCRMStore((s) => s.updateSettings)
+   266→  const notifCount = useCRMStore((s) => s.notifications.length)
+   267→  const clearAllNotifications = useCRMStore((s) => s.clearAllNotifications)
+   268→  const { theme, setTheme } = useTheme()
+   269→  const { t } = useT()
+   270→  return (
+   271→    <div className="space-y-6 animate-fade-in">
+   272→      <div className="space-y-1">
+   273→        <SectionHeader title={t('settings.appearance')} />
+   274→        <div className="glass-card rounded-2xl p-5">
+   275→          <SettingRow icon={theme === 'dark' ? Moon : Sun} label={t('settings.theme')} description={t('settings.themeDesc')}>
+   276→            <Button variant="outline" size="sm" className="h-8 rounded-lg text-xs gap-1.5 border-border/40" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>
+   277→              {theme === 'dark' ? <Moon className="h-3.5 w-3.5" /> : <Sun className="h-3.5 w-3.5" />}
+   278→              {theme === 'dark' ? t('settings.dark') : t('settings.light')}
+   279→            </Button>
+   280→          </SettingRow>
+   281→          <Separator className="opacity-30 my-1" />
+   282→          <SettingRow icon={Maximize2} label={t('settings.compactMode')} description={t('settings.compactModeDesc')}>
+   283→            <Switch checked={settings.compactMode} onCheckedChange={(v) => updateSettings({ compactMode: v })} />
+   284→          </SettingRow>
+   285→          <Separator className="opacity-30 my-1" />
+   286→          <SettingRow icon={Eye} label={t('settings.showPreview')} description={t('settings.showPreviewDesc')}>
+   287→            <Switch checked={settings.showPreview} onCheckedChange={(v) => updateSettings({ showPreview: v })} />
+   288→          </SettingRow>
+   289→          <Separator className="opacity-30 my-1" />
+   290→          <SettingRow icon={Globe} label={t('settings.language')}>
+   291→            <Select value={settings.language} onValueChange={(v) => updateSettings({ language: v as Locale })}>
+   292→              <SelectTrigger className="w-32 h-8 rounded-lg text-xs"><SelectValue /></SelectTrigger>
+   293→              <SelectContent>{LOCALES.map((loc) => <SelectItem key={loc} value={loc}>{LOCALE_LABELS[loc]}</SelectItem>)}</SelectContent>
+   294→            </Select>
+   295→          </SettingRow>
+   296→        </div>
+   297→      </div>
+   298→      <div className="space-y-1">
+   299→        <SectionHeader title={t('settings.notifications')} />
+   300→        <div className="glass-card rounded-2xl p-5">
+   301→          <SettingRow icon={Volume2} label={t('settings.sound')} description={t('settings.soundDesc')}>
+   302→            <Switch checked={settings.soundEnabled} onCheckedChange={(v) => updateSettings({ soundEnabled: v })} />
+   303→          </SettingRow>
+   304→          <Separator className="opacity-30 my-1" />
+   305→          <SettingRow icon={Monitor} label={t('settings.desktopNotif')} description={t('settings.desktopNotifDesc')}>
+   306→            <Switch checked={settings.desktopNotifEnabled} onCheckedChange={(v) => updateSettings({ desktopNotifEnabled: v })} />
+   307→          </SettingRow>
+   308→          <Separator className="opacity-30 my-1" />
+   309→          <SettingRow icon={Mail} label={t('settings.emailNotif')} description={t('settings.emailNotifDesc')}>
+   310→            <Switch checked={settings.emailNotifEnabled} onCheckedChange={(v) => updateSettings({ emailNotifEnabled: v })} />
+   311→          </SettingRow>
+   312→          {notifCount > 0 && (
+   313→            <><Separator className="opacity-30 my-1" />
+   314→            <Button variant="ghost" size="sm" className="w-full mt-1 h-9 rounded-xl text-xs text-muted-foreground/60 hover:text-foreground hover:bg-foreground/[0.03]" onClick={clearAllNotifications}>
+   315→              <Trash2 className="h-3.5 w-3.5 mr-1.5" /> {t('settings.clearAllNotifs', { count: notifCount })}
+   316→            </Button></>
+   317→          )}
+   318→        </div>
+   319→      </div>
+   320→      <div className="space-y-1">
+   321→        <SectionHeader title={t('settings.conversations')} />
+   322→        <div className="glass-card rounded-2xl p-5">
+   323→          <SettingRow icon={UserCheck} label={t('settings.autoAssign')} description={t('settings.autoAssignDesc')}>
+   324→            <Switch checked={settings.autoAssign} onCheckedChange={(v) => updateSettings({ autoAssign: v })} />
+   325→          </SettingRow>
+   326→        </div>
+   327→      </div>
+   328→      <div className="space-y-1">
+   329→        <SectionHeader title={t('settings.data')} />
+   330→        <div className="glass-card rounded-2xl p-5">
+   331→          <SettingRow icon={Trash2} label={t('settings.clearCache')} description={t('settings.clearCacheDesc')}>
+   332→            <Button variant="outline" size="sm" className="h-8 rounded-lg text-xs border-border/40 hover:border-red-300 hover:text-red-600">{t('settings.clearCache')}</Button>
+   333→          </SettingRow>
+   334→          <Separator className="opacity-30 my-1" />
+   335→          <Button variant="outline" size="sm" className="w-full h-9 rounded-xl text-xs border-border/40 hover:border-red-300 hover:text-red-600" onClick={() => { localStorage.removeItem('omnichat_settings'); updateSettings({ soundEnabled: true, desktopNotifEnabled: true, emailNotifEnabled: false, compactMode: false, showPreview: true, autoAssign: true, language: settings.language }) }}>
+   336→            <RotateCcw className="h-3.5 w-3.5 mr-1.5" /> {t('settings.resetDefaults')}
+   337→          </Button>
+   338→        </div>
+   339→      </div>
+   340→    </div>
+   341→  )
+   342→}
+   343→
+   344→// ═══ CHANNELS TAB ═══
+   345→function ChannelsTab() {
+   346→  const { t } = useT()
+   347→  const [channels, setChannels] = useState<ChannelData[]>([])
+   348→  const [loading, setLoading] = useState(true)
+   349→  const [editingChannel, setEditingChannel] = useState<string | null>(null)
+   350→  const [editForm, setEditForm] = useState<Record<string, string>>({})
+   351→  const [saving, setSaving] = useState(false)
+   352→  const [testingKey, setTestingKey] = useState<string | null>(null)
+   353→  const [testResults, setTestResults] = useState<Record<string, { ok: boolean; msg: string } | null>>({})
+   354→
+   355→  // Load channels from API
+   356→  useEffect(() => {
+   357→    fetch('/api/channels')
+   358→      .then(r => r.json())
+   359→      .then(data => { if (Array.isArray(data)) setChannels(data) })
+   360→      .catch(() => {})
+   361→      .finally(() => setLoading(false))
+   362→  }, [])
+   363→
+   364→  const toggleChannel = async (key: string) => {
+   365→    const ch = channels.find(c => c.key === key)
+   366→    if (!ch) return
+   367→    setChannels(prev => prev.map(c => c.key === key ? { ...c, enabled: !c.enabled } : c))
+   368→    apiPut('/api/channels', { channel: key, enabled: !ch.enabled, config: ch.config }).catch(() => {})
+   369→  }
+   370→
+   371→  const startEdit = (ch: ChannelData) => {
+   372→    setEditingChannel(ch.key)
+   373→    setEditForm({ ...ch.config })
+   374→    setTestResults(prev => ({ ...prev, [ch.key]: null }))
+   375→  }
+   376→
+   377→  const saveChannel = async (key: string) => {
+   378→    setSaving(true)
+   379→    try {
+   380→      const data = await apiPut('/api/channels', { channel: key, config: editForm })
+   381→      setChannels(prev => prev.map(c => c.key === key ? { ...c, configured: data.configured, config: data.config || c.config } : c))
+   382→      setEditingChannel(null)
+   383→    } catch {}
+   384→    setSaving(false)
+   385→  }
+   386→
+   387→  const testConnection = async (key: string) => {
+   388→    setTestingKey(key)
+   389→    setTestResults(prev => ({ ...prev, [key]: null }))
+   390→    try {
+   391→      const ch = channels.find(c => c.key === key)
+   392→      const result = await apiPost('/api/channels/test', { channel: key, config: { ...ch?.config, ...editForm } })
+   393→      setTestResults(prev => ({ ...prev, [key]: result }))
+   394→      // Update channel data to reflect new test result
+   395→      setChannels(prev => prev.map(c => c.key === key ? {
+   396→        ...c,
+   397→        lastTestAt: new Date().toISOString(),
+   398→        lastTestOk: result.ok,
+   399→        lastTestMsg: result.msg,
+   400→      } : c))
+   401→    } catch {
+   402→      setTestResults(prev => ({ ...prev, [key]: { ok: false, msg: t('common.error.serverConnection') } }))
+   403→    }
+   404→    setTestingKey(null)
+   405→  }
+   406→
+   407→  if (loading) {
+   408→    return (
+   409→      <div className="flex items-center justify-center py-20">
+   410→        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground/40" />
+   411→      </div>
+   412→    )
+   413→  }
+   414→
+   415→  return (
+   416→    <div className="space-y-5 animate-fade-in">
+   417→      <div>
+   418→        <h3 className="text-sm font-bold">{t('channels.configTitle')}</h3>
+   419→        <p className="text-xs text-muted-foreground/60 mt-1">{t('channels.configDesc')}</p>
+   420→      </div>
+   421→      {channels.map((ch) => {
+   422→        const Icon = CHANNEL_ICONS[ch.key] || MessageSquare
+   423→        const color = CHANNEL_COLORS_MAP[ch.key] || '#6b7280'
+   424→        const nameKey = CHANNEL_NAME_KEYS[ch.key] || ch.key
+   425→        const descKey = CHANNEL_DESC_KEYS[ch.key] || ch.key
+   426→        const isEditing = editingChannel === ch.key
+   427→        const testResult = testResults[ch.key]
+   428→        const isTesting = testingKey === ch.key
+   429→
+   430→        return (
+   431→          <div key={ch.key} className="glass-card rounded-2xl overflow-hidden transition-all duration-200">
+   432→            <div className="p-5">
+   433→              <div className="flex items-start justify-between gap-4">
+   434→                <div className="flex items-start gap-3.5 min-w-0">
+   435→                  <div className="h-11 w-11 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm" style={{ backgroundColor: color + '12' }}>
+   436→                    <Icon className="h-5 w-5" style={{ color }} />
+   437→                  </div>
+   438→                  <div className="min-w-0">
+   439→                    <div className="flex items-center gap-2 flex-wrap">
+   440→                      <h4 className="text-[13px] font-semibold">{t(nameKey)}</h4>
+   441→                      {ch.configured && ch.enabled && (
+   442→                        <Badge className="text-[9px] px-1.5 py-0 h-[16px] bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 rounded-md font-medium">
+   443→                          <Check className="h-2.5 w-2.5 mr-0.5" /> {t('channels.connected')}
+   444→                        </Badge>
+   445→                      )}
+   446→                      {!ch.configured && ch.enabled && (
+   447→                        <Badge className="text-[9px] px-1.5 py-0 h-[16px] bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 rounded-md font-medium">
+   448→                          {t('channels.notConfigured')}
+   449→                        </Badge>
+   450→                      )}
+   451→                      {ch.lastTestAt && (
+   452→                        <span className={cn(
+   453→                          'text-[9px] font-medium',
+   454→                          ch.lastTestOk ? 'text-emerald-600' : 'text-red-500'
+   455→                        )}>
+   456→                          {ch.lastTestOk ? t('channels.lastTestOk') : t('channels.lastTestFail')}
+   457→                          {' · '}{new Date(ch.lastTestAt).toLocaleTimeString('vi-VN')}
+   458→                        </span>
+   459→                      )}
+   460→                    </div>
+   461→                    <p className="text-[11px] text-muted-foreground/50 mt-1 leading-relaxed">{t(descKey)}</p>
+   462→                  </div>
+   463→                </div>
+   464→                <Switch checked={ch.enabled} onCheckedChange={() => toggleChannel(ch.key)} />
+   465→              </div>
+   466→            </div>
+   467→
+   468→            {/* Test result banner */}
+   469→            {testResult != null && (
+   470→              <div className={cn(
+   471→                'mx-5 mb-0 px-3.5 py-2.5 rounded-xl text-[11px] font-medium animate-slide-down',
+   472→                testResult.ok
+   473→                  ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400'
+   474→                  : 'bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-400'
+   475→              )}>
+   476→                {testResult.ok ? <Check className="h-3.5 w-3.5 mr-1.5 inline" /> : <AlertTriangle className="h-3.5 w-3.5 mr-1.5 inline" />}
+   477→                {testResult.msg}
+   478→              </div>
+   479→            )}
+   480→
+   481→            {/* Edit form */}
+   482→            {isEditing && (
+   483→              <div className="px-5 pb-5 border-t border-border/30 pt-4 space-y-3 animate-slide-down">
+   484→                {ch.fields.map(field => (
+   485→                  <div key={field.key} className="space-y-1.5">
+   486→                    <Label className="text-xs font-medium text-muted-foreground/70">{field.label}</Label>
+   487→                    <Input
+   488→                      value={editForm[field.key] || ''}
+   489→                      onChange={(e) => setEditForm(f => ({ ...f, [field.key]: e.target.value }))}
+   490→                      type={field.type === 'password' ? 'password' : 'text'}
+   491→                      placeholder={field.placeholder}
+   492→                      className="rounded-xl glass-input h-9 text-sm"
+   493→                    />
+   494→                  </div>
+   495→                ))}
+   496→
+   497→                {/* Website embed snippet */}
+   498→                {ch.key === 'website' && editForm.widgetId && (
+   499→                  <>
+   500→                    <p className="text-[10px] text-muted-foreground/40 mt-1">{t('channels.web.snippetHint')}</p>
+   501→                    <div className="bg-foreground/[0.03] rounded-xl p-3 font-mono text-[11px] text-muted-foreground/70 break-all select-all">
+   502→                      {`<script src="https://omnichat.vn/widget.js" data-id="${editForm.widgetId}"><` + `/script>`}
+   503→                    </div>
+   504→                  </>
+   505→                )}
+   506→
+   507→                <div className="flex gap-2 pt-1">
+   508→                  <Button variant="outline" size="sm" onClick={() => setEditingChannel(null)} className="h-8 rounded-lg text-xs">
+   509→                    <X className="h-3.5 w-3.5 mr-1" /> {t('profile.cancel')}
+   510→                  </Button>
+   511→                  <Button
+   512→                    variant="outline" size="sm"
+   513→                    onClick={() => testConnection(ch.key)}
+   514→                    disabled={isTesting}
+   515→                    className="h-8 rounded-lg text-xs"
+   516→                  >
+   517→                    {isTesting ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Zap className="h-3.5 w-3.5 mr-1" />}
+   518→                    {isTesting ? t('channels.testing') : t('channels.testConnection')}
+   519→                  </Button>
+   520→                  <Button size="sm" onClick={() => saveChannel(ch.key)} disabled={saving} className="h-8 rounded-lg text-xs bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600">
+   521→                    {saving ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Check className="h-3.5 w-3.5 mr-1" />}
+   522→                    {t('channels.saveConfig')}
+   523→                  </Button>
+   524→                </div>
+   525→              </div>
+   526→            )}
+   527→
+   528→            {/* Action buttons when not editing */}
+   529→            {!isEditing && (
+   530→              <div className="px-5 pb-4 flex gap-2">
+   531→                <Button variant="ghost" size="sm" className="h-8 rounded-lg text-xs text-muted-foreground/60 hover:text-foreground hover:bg-foreground/[0.03]" onClick={() => startEdit(ch)}>
+   532→                  <Pencil className="h-3.5 w-3.5 mr-1.5" />{ch.configured ? t('channels.editConfig') : t('channels.configure')}
+   533→                </Button>
+   534→                {ch.configured && (
+   535→                  <Button
+   536→                    variant="ghost" size="sm"
+   537→                    className="h-8 rounded-lg text-xs text-muted-foreground/60 hover:text-foreground hover:bg-foreground/[0.03]"
+   538→                    onClick={() => testConnection(ch.key)}
+   539→                    disabled={isTesting}
+   540→                  >
+   541→                    {isTesting ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Zap className="h-3.5 w-3.5 mr-1.5" />}
+   542→                    {isTesting ? t('channels.testing') : t('channels.testConnection')}
+   543→                  </Button>
+   544→                )}
+   545→              </div>
+   546→            )}
+   547→          </div>
+   548→        )
+   549→      })}
+   550→    </div>
+   551→  )
+   552→}
+   553→
+   554→// ═══ STAFF TAB ═══
+   555→function StaffTab() {
+   556→  const agents = useCRMStore((s) => s.agents)
+   557→  const setAgents = useCRMStore((s) => s.setAgents)
+   558→  const { t } = useT()
+   559→  const [loading, setLoading] = useState(true)
+   560→  const [showInvite, setShowInvite] = useState(false)
+   561→  const [inviteEmail, setInviteEmail] = useState('')
+   562→  const [inviteRole, setInviteRole] = useState('agent')
+   563→  const [editingAgent, setEditingAgent] = useState<Agent | null>(null)
+   564→  const [expandedId, setExpandedId] = useState<string | null>(null)
+   565→  const [deleteConfirm, setDeleteConfirm] = useState(false)
+   566→  const [editForm, setEditForm] = useState({ name: '', email: '', role: 'agent', status: 'online' })
+   567→
+   568→  // Generate stable mock stats per agent
+   569→  const staffStats = useMemo(() => {
+   570→    const stats: Record<string, { conversations: number; avgResponse: number; satisfaction: number; lastActive: string }> = {}
+   571→    agents.forEach((agent) => {
+   572→      // Simple deterministic hash from agent id
+   573→      const hash = agent.id.split('').reduce((a, c) => a + c.charCodeAt(0), 0)
+   574→      const conversations = 100 + (hash * 7) % 500
+   575→      const avgResponse = 60 + (hash * 13) % 120 // 1-3 min in seconds
+   576→      const satisfaction = 4.0 + ((hash * 3) % 10) / 10 // 4.0-5.0
+   577→      const daysAgo = (hash * 11) % 30
+   578→      const hoursAgo = (hash * 7) % 24
+   579→      const lastActive = daysAgo === 0
+   580→        ? t('common.time.hoursAgo', { h: hoursAgo })
+   581→        : t('common.time.daysAgo', { d: daysAgo })
+   582→      stats[agent.id] = { conversations, avgResponse, satisfaction, lastActive }
+   583→    })
+   584→    return stats
+   585→  }, [agents])
+   586→
+   587→  useEffect(() => {
+   588→    if (agents.length > 0) { setLoading(false); return }
+   589→    async function load() {
+   590→      try {
+   591→        const res = await fetch('/api/agents')
+   592→        const data = await res.json()
+   593→        if (Array.isArray(data)) { setAgents(data) }
+   594→      } catch (e) { console.error('Failed', e) }
+   595→      finally { setLoading(false) }
+   596→    }
+   597→    load()
+   598→  }, [agents.length, setAgents])
+   599→
+   600→  const handleInvite = () => {
+   601→    if (!inviteEmail.trim()) return
+   602→    const newAgent: Agent = { id: `agent_${Date.now()}`, name: inviteEmail.split('@')[0], email: inviteEmail, avatar: null, role: inviteRole, status: 'offline' }
+   603→    setAgents([...agents, newAgent])
+   604→    setInviteEmail('')
+   605→    setShowInvite(false)
+   606→  }
+   607→
+   608→  const openEditDialog = (agent: Agent, e?: React.MouseEvent) => {
+   609→    if (e) e.stopPropagation()
+   610→    setEditForm({ name: agent.name, email: agent.email, role: agent.role, status: agent.status })
+   611→    setDeleteConfirm(false)
+   612→    setEditingAgent(agent)
+   613→  }
+   614→
+   615→  const handleSaveEdit = () => {
+   616→    if (!editingAgent) return
+   617→    const updated = { ...editingAgent, ...editForm }
+   618→    const newList = agents.map(a => a.id === editingAgent.id ? updated : a)
+   619→    setAgents(newList)
+   620→    setEditingAgent(null)
+   621→  }
+   622→
+   623→  const handleDelete = () => {
+   624→    if (!editingAgent) return
+   625→    const newList = agents.filter(a => a.id !== editingAgent.id)
+   626→    setAgents(newList)
+   627→    setEditingAgent(null)
+   628→    setDeleteConfirm(false)
+   629→  }
+   630→
+   631→  const toggleExpand = (id: string) => {
+   632→    setExpandedId(prev => prev === id ? null : id)
+   633→  }
+   634→
+   635→  const roleLabel = (role: string) => role === 'admin' ? t('user.role.admin') : role === 'supervisor' ? t('user.role.supervisor') : role === 'agent' ? t('user.role.agent') : role
+   636→  const roleBadge = (role: string) => role === 'admin' ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-400' : role === 'supervisor' ? 'bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-400' : 'bg-slate-100 text-slate-600 dark:bg-slate-800/40 dark:text-slate-400'
+   637→
+   638→  const formatResponseTime = (seconds: number) => {
+   639→    const min = Math.floor(seconds / 60)
+   640→    const sec = seconds % 60
+   641→    return min > 0 ? `~${min}m ${sec > 0 ? `${sec}s` : ''}` : `~${sec}s`
+   642→  }
+   643→
+   644→  return (
+   645→    <div className="space-y-6 animate-fade-in">
+   646→      <div className="flex items-center justify-between">
+   647→        <div>
+   648→          <h3 className="text-sm font-bold">{t('staff.title')}</h3>
+   649→          <p className="text-xs text-muted-foreground/60 mt-1">{t('staff.count', { count: agents.length })}</p>
+   650→        </div>
+   651→        <Button size="sm" className="h-8 rounded-xl text-xs gap-1.5 bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600" onClick={() => setShowInvite(!showInvite)}>
+   652→          <Plus className="h-3.5 w-3.5" /> {t('staff.invite')}
+   653→        </Button>
+   654→      </div>
+   655→      {showInvite && (
+   656→        <div className="glass-card rounded-2xl p-5 animate-slide-down">
+   657→          <h4 className="text-[13px] font-semibold mb-3">{t('staff.inviteTitle')}</h4>
+   658→          <div className="flex gap-2">
+   659→            <Input value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} placeholder={t('staff.emailPlaceholder')} className="flex-1 rounded-xl glass-input h-9 text-sm" onKeyDown={(e) => e.key === 'Enter' && handleInvite()} />
+   660→            <Select value={inviteRole} onValueChange={setInviteRole}>
+   661→              <SelectTrigger className="w-28 h-9 rounded-xl text-xs"><SelectValue /></SelectTrigger>
+   662→              <SelectContent><SelectItem value="agent">{t('user.role.agent')}</SelectItem><SelectItem value="supervisor">{t('user.role.supervisor')}</SelectItem><SelectItem value="admin">{t('user.role.admin')}</SelectItem></SelectContent>
+   663→            </Select>
+   664→            <Button size="sm" onClick={handleInvite} className="h-9 rounded-xl text-xs"><Send className="h-3.5 w-3.5 mr-1" /> {t('staff.send')}</Button>
+   665→          </div>
+   666→        </div>
+   667→      )}
+   668→      <div className="space-y-2">
+   669→        {loading ? (
+   670→          <div className="space-y-3">{[1, 2, 3, 4].map((i) => (<div key={i} className="glass-card rounded-xl p-4 flex items-center gap-3"><div className="skeleton-line h-10 w-10 rounded-full flex-shrink-0" /><div className="flex-1 space-y-2"><div className="skeleton-line h-3.5 w-1/3" /><div className="skeleton-line h-3 w-1/4" /></div></div>))}</div>
+   671→        ) : (
+   672→          agents.map((agent, idx) => {
+   673→            const stats = staffStats[agent.id]
+   674→            const isExpanded = expandedId === agent.id
+   675→            return (
+   676→              <div key={agent.id} className="glass-card rounded-xl overflow-hidden transition-all duration-200 hover:shadow-sm">
+   677→                {/* Main row - clickable to expand */}
+   678→                <div
+   679→                  className="p-4 flex items-center gap-3.5 cursor-pointer"
+   680→                  onClick={() => toggleExpand(agent.id)}
+   681→                >
+   682→                  <Avatar className={cn('h-10 w-10 flex-shrink-0', GRADIENT_CLASSES[idx % GRADIENT_CLASSES.length])}>
+   683→                    <AvatarFallback className="text-xs text-white font-semibold">{agent.name.split(' ').slice(-2).map(n => n[0]).join('')}</AvatarFallback>
+   684→                  </Avatar>
+   685→                  <div className="flex-1 min-w-0">
+   686→                    <div className="flex items-center gap-2">
+   687→                      <span className="text-[13px] font-semibold truncate">{agent.name}</span>
+   688→                      <div className={cn('h-2 w-2 rounded-full flex-shrink-0', agent.status === 'online' ? 'bg-emerald-500' : agent.status === 'busy' ? 'bg-amber-500' : 'bg-gray-400')} />
+   689→                    </div>
+   690→                    <p className="text-[11px] text-muted-foreground/50 truncate mt-0.5">{agent.email}</p>
+   691→                  </div>
+   692→                  <Badge className={cn('text-[10px] px-2 py-0.5 h-[20px] rounded-md font-medium', roleBadge(agent.role))}>{roleLabel(agent.role)}</Badge>
+   693→                  <ChevronDown className={cn('h-4 w-4 text-muted-foreground/30 flex-shrink-0 transition-transform duration-200', isExpanded && 'rotate-180')} />
+   694→                  <Button
+   695→                    variant="ghost"
+   696→                    size="icon"
+   697→                    className="h-8 w-8 rounded-lg text-muted-foreground/40 hover:text-foreground hover:bg-foreground/5"
+   698→                    onClick={(e) => openEditDialog(agent, e)}
+   699→                  >
+   700→                    <MoreVertical className="h-4 w-4" />
+   701→                  </Button>
+   702→                </div>
+   703→                {/* Expanded stats section */}
+   704→                {isExpanded && stats && (
+   705→                  <div className="px-4 pb-4 pt-0 animate-slide-down">
+   706→                    <div className="border-t border-border/20 pt-3 mt-1">
+   707→                      <div className="grid grid-cols-4 gap-3">
+   708→                        <div className="bg-foreground/[0.02] rounded-lg p-2.5 text-center">
+   709→                          <MessageSquare className="h-3.5 w-3.5 text-muted-foreground/40 mx-auto mb-1" />
+   710→                          <p className="text-sm font-bold tabular-nums">{stats.conversations}</p>
+   711→                          <p className="text-[10px] text-muted-foreground/50 font-medium">{t('staff.totalConversations')}</p>
+   712→                        </div>
+   713→                        <div className="bg-foreground/[0.02] rounded-lg p-2.5 text-center">
+   714→                          <Clock className="h-3.5 w-3.5 text-muted-foreground/40 mx-auto mb-1" />
+   715→                          <p className="text-sm font-bold tabular-nums">{formatResponseTime(stats.avgResponse)}</p>
+   716→                          <p className="text-[10px] text-muted-foreground/50 font-medium">{t('staff.avgResponse')}</p>
+   717→                        </div>
+   718→                        <div className="bg-foreground/[0.02] rounded-lg p-2.5 text-center">
+   719→                          <Star className="h-3.5 w-3.5 text-amber-400 mx-auto mb-1" />
+   720→                          <p className="text-sm font-bold tabular-nums">{stats.satisfaction.toFixed(1)}</p>
+   721→                          <p className="text-[10px] text-muted-foreground/50 font-medium">{t('staff.satisfaction')}</p>
+   722→                        </div>
+   723→                        <div className="bg-foreground/[0.02] rounded-lg p-2.5 text-center">
+   724→                          <Clock className="h-3.5 w-3.5 text-muted-foreground/40 mx-auto mb-1" />
+   725→                          <p className="text-sm font-bold">{stats.lastActive}</p>
+   726→                          <p className="text-[10px] text-muted-foreground/50 font-medium">{t('staff.lastActive')}</p>
+   727→                        </div>
+   728→                      </div>
+   729→                    </div>
+   730→                  </div>
+   731→                )}
+   732→              </div>
+   733→            )
+   734→          })
+   735→        )}
+   736→      </div>
+   737→
+   738→      {/* Edit Staff Dialog */}
+   739→      <Dialog open={!!editingAgent} onOpenChange={(open) => { if (!open) { setEditingAgent(null); setDeleteConfirm(false) } }}>
+   740→        <DialogContent className="sm:max-w-md rounded-2xl">
+   741→          <DialogHeader>
+   742→            <DialogTitle className="text-base">{t('staff.edit')}</DialogTitle>
+   743→            <DialogDescription className="text-xs text-muted-foreground/60">
+   744→              {editingAgent?.name}
+   745→            </DialogDescription>
+   746→          </DialogHeader>
+   747→          <div className="space-y-3.5 py-1">
+   748→            <div className="space-y-1.5">
+   749→              <Label className="text-xs font-medium text-muted-foreground/70">{t('staff.name')}</Label>
+   750→              <Input value={editForm.name} onChange={(e) => setEditForm(f => ({ ...f, name: e.target.value }))} className="rounded-xl glass-input h-10 text-sm" />
+   751→            </div>
+   752→            <div className="space-y-1.5">
+   753→              <Label className="text-xs font-medium text-muted-foreground/70">{t('staff.emailLabel')}</Label>
+   754→              <Input value={editForm.email} onChange={(e) => setEditForm(f => ({ ...f, email: e.target.value }))} type="email" className="rounded-xl glass-input h-10 text-sm" />
+   755→            </div>
+   756→            <div className="grid grid-cols-2 gap-3">
+   757→              <div className="space-y-1.5">
+   758→                <Label className="text-xs font-medium text-muted-foreground/70">{t('staff.role')}</Label>
+   759→                <Select value={editForm.role} onValueChange={(v) => setEditForm(f => ({ ...f, role: v }))}>
+   760→                  <SelectTrigger className="h-10 rounded-xl text-sm"><SelectValue /></SelectTrigger>
+   761→                  <SelectContent>
+   762→                    <SelectItem value="admin">{t('user.role.admin')}</SelectItem>
+   763→                    <SelectItem value="supervisor">{t('user.role.supervisor')}</SelectItem>
+   764→                    <SelectItem value="agent">{t('user.role.agent')}</SelectItem>
+   765→                  </SelectContent>
+   766→                </Select>
+   767→              </div>
+   768→              <div className="space-y-1.5">
+   769→                <Label className="text-xs font-medium text-muted-foreground/70">{t('staff.status')}</Label>
+   770→                <Select value={editForm.status} onValueChange={(v) => setEditForm(f => ({ ...f, status: v }))}>
+   771→                  <SelectTrigger className="h-10 rounded-xl text-sm"><SelectValue /></SelectTrigger>
+   772→                  <SelectContent>
+   773→                    <SelectItem value="online">{t('profile.status.online')}</SelectItem>
+   774→                    <SelectItem value="busy">{t('profile.status.busy')}</SelectItem>
+   775→                    <SelectItem value="away">{t('profile.status.away')}</SelectItem>
+   776→                    <SelectItem value="offline">{t('profile.status.offline')}</SelectItem>
+   777→                  </SelectContent>
+   778→                </Select>
+   779→              </div>
+   780→            </div>
+   781→          </div>
+   782→          <DialogFooter className="flex-col gap-2 sm:flex-row sm:justify-between">
+   783→            {!deleteConfirm ? (
+   784→              <Button
+   785→                variant="ghost"
+   786→                size="sm"
+   787→                className="text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 h-8 rounded-lg text-xs"
+   788→                onClick={() => setDeleteConfirm(true)}
+   789→              >
+   790→                <Trash2 className="h-3.5 w-3.5 mr-1.5" /> {t('staff.delete')}
+   791→              </Button>
+   792→            ) : (
+   793→              <div className="flex items-center gap-2">
+   794→                <span className="text-[11px] text-red-500 font-medium">{t('staff.deleteConfirm')}</span>
+   795→                <Button variant="ghost" size="sm" className="h-8 rounded-lg text-xs" onClick={() => setDeleteConfirm(false)}>
+   796→                  <X className="h-3 w-3 mr-1" /> {t('staff.cancelEdit')}
+   797→                </Button>
+   798→                <Button variant="destructive" size="sm" className="h-8 rounded-lg text-xs" onClick={handleDelete}>
+   799→                  <Trash2 className="h-3 w-3 mr-1" /> {t('staff.delete')}
+   800→                </Button>
+   801→              </div>
+   802→            )}
+   803→            <div className="flex gap-2">
+   804→              <Button variant="outline" size="sm" className="h-8 rounded-lg text-xs" onClick={() => { setEditingAgent(null); setDeleteConfirm(false) }}>
+   805→                {t('staff.cancelEdit')}
+   806→              </Button>
+   807→              <Button size="sm" className="h-8 rounded-lg text-xs bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600" onClick={handleSaveEdit}>
+   808→                <Check className="h-3.5 w-3.5 mr-1" /> {t('staff.save')}
+   809→              </Button>
+   810→            </div>
+   811→          </DialogFooter>
+   812→        </DialogContent>
+   813→      </Dialog>
+   814→    </div>
+   815→  )
+   816→}
+   817→
+   818→// ═══ SECURITY TAB ═══
+   819→interface BlacklistItem {
+   820→  type: 'ip' | 'email'
+   821→  value: string
+   822→  reason: string
+   823→  addedAt: string
+   824→  addedBy: string
+   825→}
+   826→
+   827→function SecurityTab() {
+   828→  const { t } = useT()
+   829→  const [config, setConfig] = useState({ rateLimitPerMinute: 60, rateLimitEnabled: true, blacklistEnabled: true })
+   830→  const [blacklist, setBlacklist] = useState<BlacklistItem[]>([])
+   831→  const [loading, setLoading] = useState(true)
+   832→  const [newType, setNewType] = useState<'ip' | 'email'>('ip')
+   833→  const [newValue, setNewValue] = useState('')
+   834→  const [newReason, setNewReason] = useState('')
+   835→  const [adding, setAdding] = useState(false)
+   836→  const [saving, setSaving] = useState(false)
+   837→  const [rateLimitInput, setRateLimitInput] = useState('60')
+   838→
+   839→  const loadData = async () => {
+   840→    setLoading(true)
+   841→    try {
+   842→      const [configRes, blacklistRes] = await Promise.all([
+   843→        fetch('/api/security/config'),
+   844→        fetch('/api/security/blacklist'),
+   845→      ])
+   846→      const configData = await configRes.json()
+   847→      const blacklistData = await blacklistRes.json()
+   848→      setConfig(configData)
+   849→      setRateLimitInput(String(configData.rateLimitPerMinute))
+   850→      setBlacklist(blacklistData.data || [])
+   851→    } catch (e) { console.error('Failed to load security config', e) }
+   852→    finally { setLoading(false) }
+   853→  }
+   854→
+   855→  useEffect(() => { loadData() }, [])
+   856→
+   857→  const saveConfig = async () => {
+   858→    setSaving(true)
+   859→    try {
+   860→      const res = await fetch('/api/security/config', {
+   861→        method: 'PUT',
+   862→        headers: { 'Content-Type': 'application/json' },
+   863→        body: JSON.stringify({
+   864→          ...config,
+   865→          rateLimitPerMinute: parseInt(rateLimitInput) || 60,
+   866→        }),
+   867→      })
+   868→      const data = await res.json()
+   869→      if (data.data) setConfig(data.data)
+   870→    } catch (e) { console.error(e) }
+   871→    finally { setSaving(false) }
+   872→  }
+   873→
+   874→  const addToBlacklist = async () => {
+   875→    if (!newValue.trim()) return
+   876→    setAdding(true)
+   877→    try {
+   878→      const res = await fetch('/api/security/blacklist', {
+   879→        method: 'POST',
+   880→        headers: { 'Content-Type': 'application/json' },
+   881→        body: JSON.stringify({ type: newType, value: newValue.trim(), reason: newReason.trim() }),
+   882→      })
+   883→      if (res.ok) {
+   884→        const data = await res.json()
+   885→        setBlacklist(prev => [data.data, ...prev])
+   886→        setNewValue('')
+   887→        setNewReason('')
+   888→      }
+   889→    } catch (e) { console.error(e) }
+   890→    finally { setAdding(false) }
+   891→  }
+   892→
+   893→  const removeFromBlacklist = async (type: string, value: string) => {
+   894→    try {
+   895→      await fetch(`/api/security/blacklist?type=${type}&value=${encodeURIComponent(value)}`, { method: 'DELETE' })
+   896→      setBlacklist(prev => prev.filter(e => !(e.type === type && e.value === value)))
+   897→    } catch (e) { console.error(e) }
+   898→  }
+   899→
+   900→  const formatSize = (bytes: number) => {
+   901→    if (bytes < 1024) return `${bytes} B`
+   902→    if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`
+   903→    return `${(bytes / 1048576).toFixed(1)} MB`
+   904→  }
+   905→
+   906→  if (loading) {
+   907→    return (
+   908→      <div className="flex items-center justify-center py-20">
+   909→        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground/40" />
+   910→      </div>
+   911→    )
+   912→  }
+   913→
+   914→  return (
+   915→    <div className="space-y-6 animate-fade-in">
+   916→      {/* Rate Limiting */}
+   917→      <div className="space-y-1">
+   918→        <SectionHeader title={t('security.rateLimit.title')} />
+   919→        <div className="glass-card rounded-2xl p-5 space-y-4">
+   920→          <SettingRow icon={Zap} label={t('security.rateLimit.enabled')} description={t('security.rateLimit.enabledDesc')}>
+   921→            <Switch
+   922→              checked={config.rateLimitEnabled}
+   923→              onCheckedChange={(v) => setConfig(c => ({ ...c, rateLimitEnabled: v }))}
+   924→            />
+   925→          </SettingRow>
+   926→          <Separator className="opacity-30 my-1" />
+   927→          <SettingRow icon={Clock} label={t('security.rateLimit.maxRequests')} description={t('security.rateLimit.maxRequestsDesc')}>
+   928→            <div className="flex items-center gap-2">
+   929→              <Input
+   930→                type="number"
+   931→                min={1}
+   932→                max={10000}
+   933→                value={rateLimitInput}
+   934→                onChange={(e) => setRateLimitInput(e.target.value)}
+   935→                className="w-24 h-8 rounded-lg text-sm text-center"
+   936→                disabled={!config.rateLimitEnabled}
+   937→              />
+   938→              <span className="text-xs text-muted-foreground/50">/ {t('security.rateLimit.perMinute')}</span>
+   939→            </div>
+   940→          </SettingRow>
+   941→          <Button
+   942→            onClick={saveConfig}
+   943→            disabled={saving}
+   944→            className="w-full h-9 rounded-xl text-xs font-medium bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600"
+   945→          >
+   946→            {saving ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Check className="h-3.5 w-3.5 mr-1.5" />}
+   947→            {t('security.saveConfig')}
+   948→          </Button>
+   949→        </div>
+   950→      </div>
+   951→
+   952→      {/* Blacklist */}
+   953→      <div className="space-y-1">
+   954→        <SectionHeader title={t('security.blacklist.title')} />
+   955→        <div className="glass-card rounded-2xl p-5 space-y-4">
+   956→          <SettingRow icon={Ban} label={t('security.blacklist.enabled')} description={t('security.blacklist.enabledDesc')}>
+   957→            <Switch
+   958→              checked={config.blacklistEnabled}
+   959→              onCheckedChange={(v) => setConfig(c => ({ ...c, blacklistEnabled: v }))}
+   960→            />
+   961→          </SettingRow>
+   962→          <Separator className="opacity-30 my-1" />
+   963→
+   964→          {/* Add form */}
+   965→          <div className="space-y-3 p-3 rounded-xl bg-foreground/[0.02]">
+   966→            <p className="text-xs font-medium text-muted-foreground/70">{t('security.blacklist.addNew')}</p>
+   967→            <div className="flex gap-2">
+   968→              <Select value={newType} onValueChange={(v) => setNewType(v as 'ip' | 'email')}>
+   969→                <SelectTrigger className="w-24 h-9 rounded-lg text-xs"><SelectValue /></SelectTrigger>
+   970→                <SelectContent>
+   971→                  <SelectItem value="ip">{t('common.type.ip')}</SelectItem>
+   972→                  <SelectItem value="email">{t('common.type.email')}</SelectItem>
+   973→                </SelectContent>
+   974→              </Select>
+   975→              <Input
+   976→                value={newValue}
+   977→                onChange={(e) => setNewValue(e.target.value)}
+   978→                placeholder={newType === 'ip' ? '192.168.1.1' : 'spam@example.com'}
+   979→                className="flex-1 h-9 rounded-lg text-sm"
+   980→              />
+   981→            </div>
+   982→            <Input
+   983→              value={newReason}
+   984→              onChange={(e) => setNewReason(e.target.value)}
+   985→              placeholder={t('security.blacklist.reasonPlaceholder')}
+   986→              className="h-9 rounded-lg text-sm"
+   987→            />
+   988→            <Button
+   989→              onClick={addToBlacklist}
+   990→              disabled={adding || !newValue.trim()}
+   991→              size="sm"
+   992→              className="h-9 rounded-lg text-xs bg-gradient-to-r from-red-500 to-rose-500 hover:from-red-600 hover:to-rose-600"
+   993→            >
+   994→              {adding ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Ban className="h-3.5 w-3.5 mr-1.5" />}
+   995→              {t('security.blacklist.addBtn')}
+   996→            </Button>
+   997→          </div>
+   998→
+   999→          {/* Blacklist table */}
+  1000→          {blacklist.length > 0 && (
+  1001→            <div className="space-y-2">
+  1002→              <p className="text-xs font-medium text-muted-foreground/50">
+  1003→                {t('security.blacklist.count', { count: blacklist.length })}
+  1004→              </p>
+  1005→              <div className="space-y-1.5 max-h-[300px] overflow-y-auto">
+  1006→                {blacklist.map((entry, idx) => (
+  1007→                  <div
+  1008→                    key={idx}
+  1009→                    className="flex items-center justify-between gap-3 p-3 rounded-xl bg-foreground/[0.02] hover:bg-foreground/[0.04] transition-colors group"
+  1010→                  >
+  1011→                    <div className="min-w-0 flex-1">
+  1012→                      <div className="flex items-center gap-2">
+  1013→                        <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-4 rounded-md font-mono">
+  1014→                          {entry.type === 'ip' ? t('common.type.ip') : t('common.type.email')}
+  1015→                        </Badge>
+  1016→                        <span className="text-xs font-mono font-medium truncate">{entry.value}</span>
+  1017→                      </div>
+  1018→                      {entry.reason && (
+  1019→                        <p className="text-[10px] text-muted-foreground/40 mt-0.5 truncate">{entry.reason}</p>
+  1020→                      )}
+  1021→                      <p className="text-[9px] text-muted-foreground/30 mt-0.5">
+  1022→                        {new Date(entry.addedAt).toLocaleString()}
+  1023→                      </p>
+  1024→                    </div>
+  1025→                    <Button
+  1026→                      variant="ghost"
+  1027→                      size="icon"
+  1028→                      className="h-7 w-7 rounded-lg opacity-0 group-hover:opacity-100 text-muted-foreground/40 hover:text-red-500 transition-all"
+  1029→                      onClick={() => removeFromBlacklist(entry.type, entry.value)}
+  1030→                    >
+  1031→                      <X className="h-3.5 w-3.5" />
+  1032→                    </Button>
+  1033→                  </div>
+  1034→                ))}
+  1035→              </div>
+  1036→            </div>
+  1037→          )}
+  1038→
+  1039→          {blacklist.length === 0 && (
+  1040→            <div className="text-center py-6">
+  1041→              <ShieldAlert className="h-8 w-8 text-muted-foreground/20 mx-auto mb-2" />
+  1042→              <p className="text-xs text-muted-foreground/40">{t('security.blacklist.empty')}</p>
+  1043→            </div>
+  1044→          )}
+  1045→
+  1046→          <Button
+  1047→            onClick={saveConfig}
+  1048→            disabled={saving}
+  1049→            className="w-full h-9 rounded-xl text-xs font-medium bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600"
+  1050→          >
+  1051→            {saving ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Check className="h-3.5 w-3.5 mr-1.5" />}
+  1052→            {t('security.saveConfig')}
+  1053→          </Button>
+  1054→        </div>
+  1055→      </div>
+  1056→    </div>
+  1057→  )
+  1058→}
+  1059→
+  1060→// ═══ BACKUP TAB ═══
+  1061→interface BackupItem {
+  1062→  id: string
+  1063→  filename: string
+  1064→  size: number
+  1065→  createdAt: string
+  1066→}
+  1067→
+  1068→function BackupTab() {
+  1069→  const { t } = useT()
+  1070→  const [backups, setBackups] = useState<BackupItem[]>([])
+  1071→  const [loading, setLoading] = useState(true)
+  1072→  const [creating, setCreating] = useState(false)
+  1073→  const [restoring, setRestoring] = useState<string | null>(null)
+  1074→  const [deleting, setDeleting] = useState<string | null>(null)
+  1075→  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  1076→
+  1077→  const loadBackups = async () => {
+  1078→    setLoading(true)
+  1079→    try {
+  1080→      const res = await fetch('/api/backup')
+  1081→      const data = await res.json()
+  1082→      setBackups(data.data || [])
+  1083→    } catch (e) { console.error(e) }
+  1084→    finally { setLoading(false) }
+  1085→  }
+  1086→
+  1087→  useEffect(() => { loadBackups() }, [])
+  1088→
+  1089→  const createBackup = async () => {
+  1090→    setCreating(true)
+  1091→    setMessage(null)
+  1092→    try {
+  1093→      const res = await fetch('/api/backup', { method: 'POST' })
+  1094→      const data = await res.json()
+  1095→      if (res.ok) {
+  1096→        setMessage({ type: 'success', text: t('backup.created') })
+  1097→        loadBackups()
+  1098→      } else {
+  1099→        setMessage({ type: 'error', text: data.error || t('backup.createFailed') })
+  1100→      }
+  1101→    } catch (e) {
+  1102→      setMessage({ type: 'error', text: t('backup.createFailed') })
+  1103→    }
+  1104→    finally { setCreating(false) }
+  1105→  }
+  1106→
+  1107→  const restoreBackup = async (id: string) => {
+  1108→    setRestoring(id)
+  1109→    setMessage(null)
+  1110→    try {
+  1111→      const res = await fetch('/api/backup/restore', {
+  1112→        method: 'POST',
+  1113→        headers: { 'Content-Type': 'application/json' },
+  1114→        body: JSON.stringify({ backupId: id }),
+  1115→      })
+  1116→      const data = await res.json()
+  1117→      if (res.ok) {
+  1118→        setMessage({ type: 'success', text: t('backup.restored') })
+  1119→      } else {
+  1120→        setMessage({ type: 'error', text: data.error || t('backup.restoreFailed') })
+  1121→      }
+  1122→    } catch (e) {
+  1123→      setMessage({ type: 'error', text: t('backup.restoreFailed') })
+  1124→    }
+  1125→    finally { setRestoring(null) }
+  1126→  }
+  1127→
+  1128→  const deleteBackup = async (id: string) => {
+  1129→    setDeleting(id)
+  1130→    try {
+  1131→      await fetch(`/api/backup?id=${id}`, { method: 'DELETE' })
+  1132→      setBackups(prev => prev.filter(b => b.id !== id))
+  1133→    } catch (e) { console.error(e) }
+  1134→    finally { setDeleting(null) }
+  1135→  }
+  1136→
+  1137→  const formatSize = (bytes: number) => {
+  1138→    if (bytes < 1024) return `${bytes} B`
+  1139→    if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`
+  1140→    return `${(bytes / 1048576).toFixed(1)} MB`
+  1141→  }
+  1142→
+  1143→  if (loading) {
+  1144→    return (
+  1145→      <div className="flex items-center justify-center py-20">
+  1146→        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground/40" />
+  1147→      </div>
+  1148→    )
+  1149→  }
+  1150→
+  1151→  return (
+  1152→    <div className="space-y-6 animate-fade-in">
+  1153→      <div className="space-y-1">
+  1154→        <SectionHeader title={t('backup.manage')} />
+  1155→        <div className="glass-card rounded-2xl p-5 space-y-4">
+  1156→          {/* Info */}
+  1157→          <div className="flex items-start gap-3 p-3 rounded-xl bg-foreground/[0.02]">
+  1158→            <HardDrive className="h-5 w-5 text-muted-foreground/40 mt-0.5 flex-shrink-0" />
+  1159→            <div>
+  1160→              <p className="text-xs font-medium">{t('backup.info')}</p>
+  1161→              <p className="text-[10px] text-muted-foreground/40 mt-1 leading-relaxed">{t('backup.infoDesc')}</p>
+  1162→            </div>
+  1163→          </div>
+  1164→
+  1165→          {/* Create backup button */}
+  1166→          <Button
+  1167→            onClick={createBackup}
+  1168→            disabled={creating}
+  1169→            className="w-full h-10 rounded-xl text-sm font-medium bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600 shadow-lg shadow-indigo-500/15"
+  1170→          >
+  1171→            {creating ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Download className="h-4 w-4 mr-2" />}
+  1172→            {t('backup.createBtn')}
+  1173→          </Button>
+  1174→
+  1175→          {/* Message */}
+  1176→          {message && (
+  1177→            <div className={cn(
+  1178→              'p-3 rounded-xl text-xs font-medium flex items-center gap-2',
+  1179→              message.type === 'success' ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400' : 'bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-400'
+  1180→            )}>
+  1181→              {message.type === 'success' ? <Check className="h-3.5 w-3.5" /> : <AlertTriangle className="h-3.5 w-3.5" />}
+  1182→              {message.text}
+  1183→            </div>
+  1184→          )}
+  1185→
+  1186→          {/* Backup list */}
+  1187→          <div className="space-y-2">
+  1188→            <p className="text-xs font-medium text-muted-foreground/50">
+  1189→              {t('backup.list', { count: backups.length })}
+  1190→            </p>
+  1191→            {backups.length === 0 ? (
+  1192→              <div className="text-center py-8">
+  1193→                <Database className="h-8 w-8 text-muted-foreground/20 mx-auto mb-2" />
+  1194→                <p className="text-xs text-muted-foreground/40">{t('backup.empty')}</p>
+  1195→              </div>
+  1196→            ) : (
+  1197→              <div className="space-y-1.5 max-h-[400px] overflow-y-auto">
+  1198→                {backups.map((backup) => (
+  1199→                  <div
+  1200→                    key={backup.id}
+  1201→                    className="flex items-center justify-between gap-3 p-3 rounded-xl bg-foreground/[0.02] hover:bg-foreground/[0.04] transition-colors group"
+  1202→                  >
+  1203→                    <div className="min-w-0 flex-1">
+  1204→                      <div className="flex items-center gap-2">
+  1205→                        <Database className="h-4 w-4 text-muted-foreground/30" />
+  1206→                        <span className="text-xs font-medium truncate">{backup.id}</span>
+  1207→                      </div>
+  1208→                      <div className="flex items-center gap-3 mt-0.5">
+  1209→                        <span className="text-[10px] text-muted-foreground/40">{formatSize(backup.size)}</span>
+  1210→                        <span className="text-[10px] text-muted-foreground/30">
+  1211→                          {new Date(backup.createdAt).toLocaleString()}
+  1212→                        </span>
+  1213→                      </div>
+  1214→                    </div>
+  1215→                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+  1216→                      <Button
+  1217→                        variant="ghost"
+  1218→                        size="sm"
+  1219→                        className="h-7 px-2 rounded-lg text-[10px] text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/30"
+  1220→                        onClick={() => restoreBackup(backup.id)}
+  1221→                        disabled={restoring === backup.id}
+  1222→                      >
+  1223→                        {restoring === backup.id ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <RefreshCw className="h-3 w-3 mr-1" />}
+  1224→                        {t('backup.restore')}
+  1225→                      </Button>
+  1226→                      <Button
+  1227→                        variant="ghost"
+  1228→                        size="icon"
+  1229→                        className="h-7 w-7 rounded-lg text-muted-foreground/40 hover:text-red-500"
+  1230→                        onClick={() => deleteBackup(backup.id)}
+  1231→                        disabled={deleting === backup.id}
+  1232→                      >
+  1233→                        <Trash2 className="h-3.5 w-3.5" />
+  1234→                      </Button>
+  1235→                    </div>
+  1236→                  </div>
+  1237→                ))}
+  1238→              </div>
+  1239→            )}
+  1240→          </div>
+  1241→        </div>
+  1242→      </div>
+  1243→    </div>
+  1244→  )
+  1245→}
+  1246→
+  1247→// ═══ MAIN PAGE ═══
+  1248→export default function SettingsPageWrapper() {
+  1249→  return (
+  1250→    <Suspense>
+  1251→      <SettingsPage />
+  1252→    </Suspense>
+  1253→  )
+  1254→}
+  1255→
+  1256→function SettingsPage() {
+  1257→  const router = useRouter()
+  1258→  const searchParams = useSearchParams()
+  1259→  const { t } = useT()
+  1260→  const [activeTab, setActiveTab] = useState<SettingsTab>('profile')
+  1261→  const setCurrentUser = useCRMStore((s) => s.setCurrentUser)
+  1262→  const setAuthenticated = useCRMStore((s) => s.setAuthenticated)
+  1263→
+  1264→  // Restore tab from URL ?tab=xxx
+  1265→  useEffect(() => {
+  1266→    const tabParam = searchParams.get('tab')
+  1267→    if (tabParam && ['profile', 'system', 'channels', 'staff', 'security', 'backup'].includes(tabParam)) {
+  1268→      setActiveTab(tabParam as SettingsTab)
+  1269→    }
+  1270→  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  1271→
+  1272→  // Load current user from API on mount (skip if already loaded in main page)
+  1273→  useEffect(() => {
+  1274→    if (useCRMStore.getState().currentUser) {
+  1275→      setAuthenticated(true)
+  1276→      return
+  1277→    }
+  1278→    fetch('/api/auth/me')
+  1279→      .then(res => {
+  1280→        if (!res.ok) throw new Error('Not authenticated')
+  1281→        return res.json()
+  1282→      })
+  1283→      .then(user => {
+  1284→        setAuthenticated(true)
+  1285→        setCurrentUser({
+  1286→          id: user.id,
+  1287→          name: user.name,
+  1288→          email: user.email,
+  1289→          phone: user.phone || '',
+  1290→          role: user.role,
+  1291→          avatar: user.avatar,
+  1292→          status: user.status || 'online',
+  1293→          bio: user.bio || '',
+  1294→        })
+  1295→        // Initialize settings from DB (user.settings JSON field)
+  1296→        if (user.settings) {
+  1297→          const { initSettingsFromDB } = useCRMStore.getState()
+  1298→          initSettingsFromDB(typeof user.settings === 'string' ? user.settings : JSON.stringify(user.settings))
+  1299→        }
+  1300→      })
+  1301→      .catch(() => {
+  1302→        window.location.href = '/login'
+  1303→      })
+  1304→  }, [])
+  1305→
+  1306→  const renderContent = () => {
+  1307→    switch (activeTab) {
+  1308→      case 'profile': return <ProfileTab />
+  1309→      case 'system': return <SystemTab />
+  1310→      case 'channels': return <ChannelsTab />
+  1311→      case 'staff': return <StaffTab />
+  1312→      case 'security': return <SecurityTab />
+  1313→      case 'backup': return <BackupTab />
+  1314→      default: return null
+  1315→    }
+  1316→  }
+  1317→
+  1318→  return (
+  1319→    <div className="h-dvh h-screen flex flex-col bg-background overflow-hidden">
+  1320→      <header className="h-12 md:h-14 border-b border-border/30 glass flex items-center justify-between px-3 md:px-6 flex-shrink-0 z-50">
+  1321→        <div className="flex items-center gap-3">
+  1322→          <Button variant="ghost" size="icon" className="h-8 w-8 rounded-xl hover:bg-foreground/5" onClick={() => router.push('/')}>
+  1323→            <ArrowLeft className="h-4 w-4" />
+  1324→          </Button>
+  1325→          <div className="flex items-center gap-2.5">
+  1326→            <div className="h-8 w-8 rounded-xl bg-gradient-to-br from-indigo-500 via-violet-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+  1327→              <Settings className="h-4 w-4 text-white" />
+  1328→            </div>
+  1329→            <div>
+  1330→              <h1 className="text-sm font-bold tracking-tight">{t('settingsPage.title')}</h1>
+  1331→              <p className="text-[10px] text-muted-foreground/50 font-medium hidden sm:block">{t('settingsPage.subtitle')}</p>
+  1332→            </div>
+  1333→          </div>
+  1334→        </div>
+  1335→      </header>
+  1336→      <div className="flex-1 min-h-0 overflow-hidden">
+  1337→        <div className="hidden md:flex h-full">
+  1338→          <nav className="w-56 md:w-64 border-r border-border/20 flex-shrink-0 flex-col p-3 space-y-1 overflow-y-auto">
+  1339→            {SETTINGS_TABS.map((tab) => {
+  1340→              const Icon = tab.icon
+  1341→              const active = activeTab === tab.key
+  1342→              return (
+  1343→                <button key={tab.key} onClick={() => setActiveTab(tab.key)} className={cn('w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-[13px] font-medium transition-all duration-250', active ? 'bg-gradient-to-r from-indigo-500/10 to-violet-500/10 text-primary border border-primary/10' : 'text-muted-foreground/70 hover:text-foreground hover:bg-foreground/[0.03] border border-transparent')}>
+  1344→                  <Icon className={cn('h-4 w-4', active && 'text-primary')} />
+  1345→                  {t(tab.labelKey)}
+  1346→                </button>
+  1347→              )
+  1348→            })}
+  1349→          </nav>
+  1350→          <main className="flex-1 min-h-0 overflow-y-auto p-4 md:p-6 lg:p-8">
+  1351→            <div className="max-w-2xl mx-auto">{renderContent()}</div>
+  1352→          </main>
+  1353→        </div>
+  1354→        <div className="md:hidden flex flex-col h-full">
+  1355→          <div className="flex-shrink-0 border-b border-border/20 flex overflow-x-auto scrollbar-none">
+  1356→            {SETTINGS_TABS.map((tab) => {
+  1357→              const Icon = tab.icon
+  1358→              const active = activeTab === tab.key
+  1359→              return (
+  1360→                <button key={tab.key} onClick={() => setActiveTab(tab.key)} className={cn('flex items-center gap-1.5 px-4 py-3 text-xs font-medium whitespace-nowrap transition-all duration-250 border-b-2 flex-shrink-0', active ? 'text-primary border-primary' : 'text-muted-foreground/60 border-transparent hover:text-foreground')}>
+  1361→                  <Icon className="h-3.5 w-3.5" />
+  1362→                  {t(tab.labelKey)}
+  1363→                </button>
+  1364→              )
+  1365→            })}
+  1366→          </div>
+  1367→          <main className="flex-1 min-h-0 overflow-y-auto p-4">
+  1368→            <div className="max-w-2xl mx-auto">{renderContent()}</div>
+  1369→          </main>
+  1370→        </div>
+  1371→      </div>
+  1372→    </div>
+  1373→  )
+  1374→}
+  1375→

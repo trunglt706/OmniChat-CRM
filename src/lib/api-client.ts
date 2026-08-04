@@ -1,4 +1,4 @@
-import { CSRF_HEADER } from '@/lib/csrf'
+import { CSRF_HEADER } from '@/lib/csrf-constants'
 
 /**
  * Secure API client for client-side fetch calls.
@@ -30,15 +30,37 @@ export function generateIdempotencyKey(): string {
 }
 
 /**
- * Enhanced fetch with automatic:
- * - CSRF token injection
- * - Content-Type header
- * - Error handling
- * - Idempotency key generation
+ * Check if an error response is a CSRF failure.
  */
-export async function apiFetch<T = any>(
+function isCsrfError(response: Response, errorData: any): boolean {
+  return response.status === 403 && (
+    (errorData as any)?.message?.includes?.('CSRF') ||
+    (errorData as any)?.error?.includes?.('CSRF') ||
+    response.headers.get('X-CSRF-Error') === 'invalid'
+  )
+}
+
+/**
+ * Fetch a fresh CSRF token by making a lightweight GET request.
+ * The proxy sets a new CSRF cookie on every authenticated response.
+ */
+async function refreshCsrfToken(): Promise<boolean> {
+  try {
+    // Any authenticated GET will refresh the CSRF cookie via the proxy
+    const res = await fetch('/api/agents/me/stats', { method: 'GET', cache: 'no-store' })
+    return res.ok || res.status === 401
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Internal fetch implementation with optional CSRF retry.
+ */
+async function doFetch<T = any>(
   url: string,
-  options: RequestInit & { idempotencyKey?: string } = {}
+  options: RequestInit & { idempotencyKey?: string },
+  isRetry: boolean
 ): Promise<T> {
   const { idempotencyKey, headers: extraHeaders, ...rest } = options
   const method = (rest.method || 'GET').toUpperCase()
@@ -73,11 +95,13 @@ export async function apiFetch<T = any>(
       error: `HTTP ${response.status}`,
     }))
 
-    // Handle CSRF error — token may be stale, refresh page
-    if (response.status === 403 && (errorData as any).error?.includes?.('CSRF')) {
-      // Force refresh to get new CSRF token
-      window.location.reload()
-      throw new Error('CSRF token expired, refreshing...')
+    // Handle CSRF error — retry once with a fresh token
+    if (!isRetry && isCsrfError(response, errorData)) {
+      const refreshed = await refreshCsrfToken()
+      if (refreshed) {
+        return doFetch<T>(url, options, true)
+      }
+      // If refresh also fails, fall through to throw
     }
 
     throw Object.assign(new Error((errorData as any).error || `HTTP ${response.status}`), {
@@ -96,7 +120,22 @@ export async function apiFetch<T = any>(
 }
 
 /**
- * convenience POST helper.
+ * Enhanced fetch with automatic:
+ * - CSRF token injection
+ * - CSRF retry (one automatic retry on stale token)
+ * - Content-Type header
+ * - Error handling
+ * - Idempotency key generation
+ */
+export async function apiFetch<T = any>(
+  url: string,
+  options: RequestInit & { idempotencyKey?: string } = {}
+): Promise<T> {
+  return doFetch<T>(url, options, false)
+}
+
+/**
+ * Convenience POST helper.
  */
 export async function apiPost<T = any>(url: string, body: unknown, opts?: RequestInit & { idempotencyKey?: string }): Promise<T> {
   return apiFetch<T>(url, {
@@ -107,7 +146,7 @@ export async function apiPost<T = any>(url: string, body: unknown, opts?: Reques
 }
 
 /**
- * convenience PUT helper.
+ * Convenience PUT helper.
  */
 export async function apiPut<T = any>(url: string, body: unknown, opts?: RequestInit & { idempotencyKey?: string }): Promise<T> {
   return apiFetch<T>(url, {

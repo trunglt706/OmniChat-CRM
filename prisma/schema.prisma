@@ -25,13 +25,17 @@ model User {
   email          String         @unique
   name           String
   avatar         String?
+  phone          String?
+  bio            String?
   role           String         @default("agent") // admin, supervisor, agent, viewer
-  status         String         @default("online") // online, offline, busy
+  status         String         @default("online") // online, offline, busy, away
+  settings       String         @default("{}") // JSON: user preferences (sound, notifications, language, etc.)
   organizationId String?
   organization   Organization?  @relation(fields: [organizationId], references: [id])
   assignedConvos Conversation[]  @relation("Owner")
   followedConvos Conversation[]  @relation("Follower")
   notes          InternalNote[]
+  notifications   Notification[]
   ownedLeads     Lead[]          @relation("LeadOwner")
   autoAssignRules AutomationRule[] @relation("AutoAssign")
   createdAt      DateTime       @default(now())
@@ -215,4 +219,19 @@ model ChannelConfig {
   lastTestMsg String?
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
+}
+
+model Notification {
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type           String   // new_message, assignment, sla_breach, mention, system, automation
+  title          String
+  body           String
+  conversationId String?
+  read           Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([userId, read, createdAt])
 }

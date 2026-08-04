@@ -1,0 +1,805 @@
+     1→# Huong dan Test Webhook nhan tin nhan tu cac Channel dong bo ve CRM
+     2→
+     3→## Tai lieu ky thuat - OmniChat CRM
+     4→
+     5→---
+     6→
+     7→## Muc luc
+     8→
+     9→1. [Tong quan kien truc Webhook](#1-tong-quan-kien-truc-webhook)
+    10→2. [Cai dat Postman Collection](#2-cai-dat-postman-collection)
+    11→3. [Chuan bi moi truong](#3-chuan-bi-moi-truong)
+    12→4. [Test tung Channel](#4-test-tung-channel)
+    13→   - 4.1 [Facebook Messenger](#41-facebook-messenger)
+    14→   - 4.2 [Facebook Comment](#42-facebook-comment)
+    15→   - 4.3 [Zalo OA](#43-zalo-oa)
+    16→   - 4.4 [Telegram Bot](#44-telegram-bot)
+    17→   - 4.5 [Chatwork](#45-chatwork)
+    18→   - 4.6 [Website Widget](#46-website-widget)
+    19→   - 4.7 [Email](#47-email)
+    20→5. [Test loi (Error Cases)](#5-test-loi-error-cases)
+    21→6. [Ghi chu quan trong - Gap CRM Sync](#6-ghi-chu-quan-trong---gap-crm-sync)
+    22→7. [Appendix: Postman Pre-request Script tu dong tao Signature](#7-appendix-postman-pre-request-script-tu-dong-tao-signature)
+    23→
+    24→---
+    25→
+    26→## 1. Tong quan kien truc Webhook
+    27→
+    28→### 1.1 Luong xu ly hien tai
+    29→
+    30→```
+    31→Platform (FB/Zalo/TG/...)
+    32→  -> POST /api/webhook/[channel]
+    33→    -> proxy.ts: BO qua auth/CSRF/rate-limit (public path)
+    34→    -> route.ts: Doc rawBody, tai ChannelConfig tu DB
+    35→    -> channelRegistry.verifyWebhook(channel, rawBody, headers, config)
+    36→      -> adapter.verifyWebhook() -- HMAC-SHA256 hoac platform-specific
+    37→    -> channelRegistry.handleWebhook(channel, payload, channel)
+    38→      -> adapter.handleWebhook() -- Tra ve ParsedWebhookMessage[]
+    39→    -> Tra ve { received: N, messages: [...] } nhu JSON response
+    40→```
+    41→
+    42→### 1.2 Endpoint chung
+    43→
+    44→| Phuong thuc | URL | Mo ta |
+    45→|---|---|---|
+    46→| `POST` | `/api/webhook/{channel}` | Nhan webhook tu platform |
+    47→| `GET` | `/api/channels` | Lay danh sach channels + config |
+    48→| `PUT` | `/api/channels` | Cap nhat channel config |
+    49→
+    50→### 1.3 Danh sach channel va header verification
+    51→
+    52→| Channel | URL Path | Signature Header | Thuat toan |
+    53→|---|---|---|---|
+    54→| Facebook Messenger | `/api/webhook/facebook_messenger` | `X-Hub-Signature-256` | HMAC-SHA256(appSecret, rawBody) |
+    55→| Facebook Comment | `/api/webhook/facebook_comment` | `X-Hub-Signature-256` | HMAC-SHA256(appSecret, rawBody) |
+    56→| Zalo OA | `/api/webhook/zalo` | `X-Zalo-Signature` | HMAC-SHA256(appSecret, rawBody) |
+    57→| Telegram Bot | `/api/webhook/telegram` | (trong body: `secret_token`) | So sanh secret_token trong payload |
+    58→| Chatwork | `/api/webhook/chatwork` | `X-ChatWorkWebhookSignature` | HMAC-SHA256(apiToken, rawBody) |
+    59→| Website Widget | `/api/webhook/website` | `X-Webhook-Signature` + `X-Webhook-Timestamp` | HMAC-SHA256(secret, timestamp.rawBody) |
+    60→| Email | `/api/webhook/email` | (Khong co) | Luon pass (khong verify) |
+    61→
+    62→### 1.4 Cau truc response webhook
+    63→
+    64→```json
+    65→{
+    66→  "received": 1,
+    67→  "messages": [
+    68→    {
+    69→      "platform": "facebook_messenger",
+    70→      "platformMessageId": "m_xxxxx",
+    71→      "senderId": "123456789",
+    72→      "senderName": null,
+    73→      "content": "Xin chao, toi can ho tro",
+    74→      "messageType": "text",
+    75→      "attachmentUrl": null,
+    76→      "attachmentName": null,
+    77→      "attachmentType": null
+    78→    }
+    79→  ]
+    80→}
+    81→```
+    82→
+    83→---
+    84→
+    85→## 2. Cai dat Postman Collection
+    86→
+    87→### 2.1 Import collection
+    88→
+    89→1. Mo Postman > Import > Raw text
+    90→2. Copy toan bo JSON ben duoi dan vao
+    91→3. Luu voi ten "OmniChat Webhook Testing"
+    92→
+    93→### 2.2 Collection JSON (Import vao Postman)
+    94→
+    95→```json
+    96→{
+    97→  "info": {
+    98→    "name": "OmniChat Webhook Testing",
+    99→    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+   100→  },
+   101→  "variable": [
+   102→    { "key": "base_url", "value": "http://localhost:3000" },
+   103→    { "key": "fb_app_secret", "value": "test_app_secret_123" },
+   104→    { "key": "zalo_app_secret", "value": "test_zalo_secret_456" },
+   105→    { "key": "telegram_secret", "value": "test_telegram_secret_789" },
+   106→    { "key": "chatwork_token", "value": "test_chatwork_token_abc" },
+   107→    { "key": "webhook_secret", "value": "test_webhook_secret_xyz" }
+   108→  ],
+   109→  "item": [
+   110→    {
+   111→      "name": "0. Setup - Channel Config",
+   112→      "item": [
+   113→        {
+   114→          "name": "Get All Channels",
+   115→          "request": {
+   116→            "method": "GET",
+   117→            "header": [],
+   118→            "url": { "raw": "{{base_url}}/api/channels", "host": ["{{base_url}}"], "path": ["api", "channels"] }
+   119→          }
+   120→        },
+   121→        {
+   122→          "name": "Setup FB Messenger Config",
+   123→          "request": {
+   124→            "method": "PUT",
+   125→            "header": [{ "key": "Content-Type", "value": "application/json" }],
+   126→            "body": {
+   127→              "mode": "raw",
+   128→              "raw": "{\n  \"channel\": \"facebook_messenger\",\n  \"enabled\": true,\n  \"config\": {\n    \"appId\": \"1234567890123456\",\n    \"appSecret\": \"{{fb_app_secret}}\",\n    \"pageId\": \"987654321098765\",\n    \"pageAccessToken\": \"EAAxxxxxxx\",\n    \"verifyToken\": \"custom_verify_string\"\n  }\n}"
+   129→            },
+   130→            "url": { "raw": "{{base_url}}/api/channels", "host": ["{{base_url}}"], "path": ["api", "channels"] }
+   131→          }
+   132→        },
+   133→        {
+   134→          "name": "Setup Zalo Config",
+   135→          "request": {
+   136→            "method": "PUT",
+   137→            "header": [{ "key": "Content-Type", "value": "application/json" }],
+   138→            "body": {
+   139→              "mode": "raw",
+   140→              "raw": "{\n  \"channel\": \"zalo\",\n  \"enabled\": true,\n  \"config\": {\n    \"appId\": \"123456789012345678\",\n    \"appSecret\": \"{{zalo_app_secret}}\",\n    \"oaId\": \"111222333\",\n    \"accessToken\": \"ZAxxxxxxx\"\n  }\n}"
+   141→            },
+   142→            "url": { "raw": "{{base_url}}/api/channels", "host": ["{{base_url}}"], "path": ["api", "channels"] }
+   143→          }
+   144→        },
+   145→        {
+   146→          "name": "Setup Telegram Config",
+   147→          "request": {
+   148→            "method": "PUT",
+   149→            "header": [{ "key": "Content-Type", "value": "application/json" }],
+   150→            "body": {
+   151→              "mode": "raw",
+   152→              "raw": "{\n  \"channel\": \"telegram\",\n  \"enabled\": true,\n  \"config\": {\n    \"botToken\": \"123456789:ABCdefGHIjklMNOpqrsTUVwxyz\"\n  }\n}"
+   153→            },
+   154→            "url": { "raw": "{{base_url}}/api/channels", "host": ["{{base_url}}"], "path": ["api", "channels"] }
+   155→          }
+   156→        },
+   157→        {
+   158→          "name": "Setup Chatwork Config",
+   159→          "request": {
+   160→            "method": "PUT",
+   161→            "header": [{ "key": "Content-Type", "value": "application/json" }],
+   162→            "body": {
+   163→              "mode": "raw",
+   164→              "raw": "{\n  \"channel\": \"chatwork\",\n  \"enabled\": true,\n  \"config\": {\n    \"apiToken\": \"{{chatwork_token}}\",\n    \"roomId\": \"12345678\"\n  }\n}"
+   165→            },
+   166→            "url": { "raw": "{{base_url}}/api/channels", "host": ["{{base_url}}"], "path": ["api", "channels"] }
+   167→          }
+   168→        },
+   169→        {
+   170→          "name": "Setup Website Config",
+   171→          "request": {
+   172→            "method": "PUT",
+   173→            "header": [{ "key": "Content-Type", "value": "application/json" }],
+   174→            "body": {
+   175→              "mode": "raw",
+   176→              "raw": "{\n  \"channel\": \"website\",\n  \"enabled\": true,\n  \"config\": {\n    \"webhookSecret\": \"{{webhook_secret}}\"\n  }\n}"
+   177→            },
+   178→            "url": { "raw": "{{base_url}}/api/channels", "host": ["{{base_url}}"], "path": ["api", "channels"] }
+   179→          }
+   180→        }
+   181→      ]
+   182→    },
+   183→    {
+   184→      "name": "1. Facebook Messenger",
+   185→      "item": [
+   186→        {
+   187→          "name": "Text Message",
+   188→          "request": {
+   189→            "method": "POST",
+   190→            "header": [
+   191→              { "key": "Content-Type", "value": "application/json" },
+   192→              { "key": "X-Hub-Signature-256", "value": "sha256=PLACEHOLDER_USE_PRE_REQUEST_SCRIPT" }
+   193→            ],
+   194→            "body": {
+   195→              "mode": "raw",
+   196→              "raw": "{\n  \"object\": \"page\",\n  \"entry\": [\n    {\n      \"id\": \"987654321098765\",\n      \"time\": 1722672000000,\n      \"messaging\": [\n        {\n          \"sender\": {\n            \"id\": \"112233445566778\"\n          },\n          \"recipient\": {\n            \"id\": \"987654321098765\"\n          },\n          \"timestamp\": 1722672000000,\n          \"message\": {\n            \"mid\": \"m_001_abc123def456\",\n            \"text\": \"Xin chao, toi can ho tro ve don hang DH2024001\"\n          }\n        }\n      ]\n    }\n  ]\n}"
+   197→            },
+   198→            "url": {
+   199→              "raw": "{{base_url}}/api/webhook/facebook_messenger",
+   200→              "host": ["{{base_url}}"],
+   201→              "path": ["api", "webhook", "facebook_messenger"]
+   202→            }
+   203→          },
+   204→          "event": [
+   205→            {
+   206→              "listen": "prerequest",
+   207→              "script": {
+   208→                "type": "text/javascript",
+   209→                "exec": [
+   210→                  "const crypto = require('crypto');",
+   211→                  "const secret = pm.variables.get('fb_app_secret');",
+   212→                  "const body = pm.request.body.raw;",
+   213→                  "const sig = 'sha256=' + crypto.createHmac('sha256', secret).update(body).digest('hex');",
+   214→                  "pm.request.headers.upsert({ key: 'X-Hub-Signature-256', value: sig });"
+   215→                ]
+   216→              }
+   217→            }
+   218→          ]
+   219→        },
+   220→        {
+   221→          "name": "Image Attachment",
+   222→          "request": {
+   223→            "method": "POST",
+   224→            "header": [
+   225→              { "key": "Content-Type", "value": "application/json" }
+   226→            ],
+   227→            "body": {
+   228→              "mode": "raw",
+   229→              "raw": "{\n  \"object\": \"page\",\n  \"entry\": [\n    {\n      \"id\": \"987654321098765\",\n      \"time\": 1722672000000,\n      \"messaging\": [\n        {\n          \"sender\": {\n            \"id\": \"112233445566778\"\n          },\n          \"recipient\": {\n            \"id\": \"987654321098765\"\n          },\n          \"timestamp\": 1722672000000,\n          \"message\": {\n            \"mid\": \"m_002_img789xyz\",\n            \"attachments\": [\n              {\n                \"type\": \"image\",\n                \"payload\": {\n                  \"url\": \"https://example.com/photo.jpg\",\n                  \"name\": \"anh_san_pham.jpg\"\n                }\n              }\n            ]\n          }\n        }\n      ]\n    }\n  ]\n}"
+   230→            },
+   231→            "url": {
+   232→              "raw": "{{base_url}}/api/webhook/facebook_messenger",
+   233→              "host": ["{{base_url}}"],
+   234→              "path": ["api", "webhook", "facebook_messenger"]
+   235→            }
+   236→          },
+   237→          "event": [
+   238→            {
+   239→              "listen": "prerequest",
+   240→              "script": {
+   241→                "type": "text/javascript",
+   242→                "exec": [
+   243→                  "const crypto = require('crypto');",
+   244→                  "const secret = pm.variables.get('fb_app_secret');",
+   245→                  "const body = pm.request.body.raw;",
+   246→                  "const sig = 'sha256=' + crypto.createHmac('sha256', secret).update(body).digest('hex');",
+   247→                  "pm.request.headers.upsert({ key: 'X-Hub-Signature-256', value: sig });"
+   248→                ]
+   249→              }
+   250→            }
+   251→          ]
+   252→        },
+   253→        {
+   254→          "name": "Multiple Messages (batch)",
+   255→          "request": {
+   256→            "method": "POST",
+   257→            "header": [
+   258→              { "key": "Content-Type", "value": "application/json" }
+   259→            ],
+   260→            "body": {
+   261→              "mode": "raw",
+   262→              "raw": "{\n  \"object\": \"page\",\n  \"entry\": [\n    {\n      \"id\": \"987654321098765\",\n      \"time\": 1722672000000,\n      \"messaging\": [\n        {\n          \"sender\": { \"id\": \"112233445566778\" },\n          \"recipient\": { \"id\": \"987654321098765\" },\n          \"timestamp\": 1722672000000,\n          \"message\": {\n            \"mid\": \"m_003_multi1\",\n            \"text\": \"Tin nhan thu nhat tu khach hang\"\n          }\n        },\n        {\n          \"sender\": { \"id\": \"998877665544332\" },\n          \"recipient\": { \"id\": \"987654321098765\" },\n          \"timestamp\": 1722672001000,\n          \"message\": {\n            \"mid\": \"m_004_multi2\",\n            \"text\": \"Tin nhan thu hai tu khach hang khac\"\n          }\n        }\n      ]\n    }\n  ]\n}"
+   263→            },
+   264→            "url": {
+   265→              "raw": "{{base_url}}/api/webhook/facebook_messenger",
+   266→              "host": ["{{base_url}}"],
+   267→              "path": ["api", "webhook", "facebook_messenger"]
+   268→            }
+   269→          },
+   270→          "event": [
+   271→            {
+   272→              "listen": "prerequest",
+   273→              "script": {
+   274→                "type": "text/javascript",
+   275→                "exec": [
+   276→                  "const crypto = require('crypto');",
+   277→                  "const secret = pm.variables.get('fb_app_secret');",
+   278→                  "const body = pm.request.body.raw;",
+   279→                  "const sig = 'sha256=' + crypto.createHmac('sha256', secret).update(body).digest('hex');",
+   280→                  "pm.request.headers.upsert({ key: 'X-Hub-Signature-256', value: sig });"
+   281→                ]
+   282→              }
+   283→            }
+   284→          ]
+   285→        }
+   286→      ]
+   287→    },
+   288→    {
+   289→      "name": "2. Facebook Comment",
+   290→      "item": [
+   291→        {
+   292→          "name": "Comment on Post",
+   293→          "request": {
+   294→            "method": "POST",
+   295→            "header": [
+   296→              { "key": "Content-Type", "value": "application/json" }
+   297→            ],
+   298→            "body": {
+   299→              "mode": "raw",
+   300→              "raw": "{\n  \"object\": \"page\",\n  \"entry\": [\n    {\n      \"id\": \"987654321098765\",\n      \"time\": 1722672000000,\n      \"changes\": [\n        {\n          \"field\": \"feed\",\n          \"value\": {\n            \"comment_id\": \"112233445566778_001\",\n            \"from\": {\n              \"id\": \"445566778899001\",\n              \"name\": \"Nguyen Van A\"\n            },\n            \"message\": \"San pham ben ban co bao hanh khong a?\",\n            \"post_id\": \"987654321098765_100\",\n            \"created_time\": 1722672000000\n          }\n        }\n      ]\n    }\n  ]\n}"
+   301→            },
+   302→            "url": {
+   303→              "raw": "{{base_url}}/api/webhook/facebook_comment",
+   304→              "host": ["{{base_url}}"],
+   305→              "path": ["api", "webhook", "facebook_comment"]
+   306→            }
+   307→          },
+   308→          "event": [
+   309→            {
+   310→              "listen": "prerequest",
+   311→              "script": {
+   312→                "type": "text/javascript",
+   313→                "exec": [
+   314→                  "const crypto = require('crypto');",
+   315→                  "const secret = pm.variables.get('fb_app_secret');",
+   316→                  "const body = pm.request.body.raw;",
+   317→                  "const sig = 'sha256=' + crypto.createHmac('sha256', secret).update(body).digest('hex');",
+   318→                  "pm.request.headers.upsert({ key: 'X-Hub-Signature-256', value: sig });"
+   319→                ]
+   320→              }
+   321→            }
+   322→          ]
+   323→        },
+   324→        {
+   325→          "name": "Comment with Attachment",
+   326→          "request": {
+   327→            "method": "POST",
+   328→            "header": [
+   329→              { "key": "Content-Type", "value": "application/json" }
+   330→            ],
+   331→            "body": {
+   332→              "mode": "raw",
+   333→              "raw": "{\n  \"object\": \"page\",\n  \"entry\": [\n    {\n      \"id\": \"987654321098765\",\n      \"time\": 1722672000000,\n      \"changes\": [\n        {\n          \"field\": \"feed\",\n          \"value\": {\n            \"comment_id\": \"112233445566778_002\",\n            \"from\": {\n              \"id\": \"556677889900112\",\n              \"name\": \"Tran Thi B\"\n            },\n            \"message\": \"Toi dat hang 3 ngay roi chua nhan duoc\",\n            \"attachment_url\": \"https://example.com/attachment.jpg\",\n            \"post_id\": \"987654321098765_101\"\n          }\n        }\n      ]\n    }\n  ]\n}"
+   334→            },
+   335→            "url": {
+   336→              "raw": "{{base_url}}/api/webhook/facebook_comment",
+   337→              "host": ["{{base_url}}"],
+   338→              "path": ["api", "webhook", "facebook_comment"]
+   339→            }
+   340→          },
+   341→          "event": [
+   342→            {
+   343→              "listen": "prerequest",
+   344→              "script": {
+   345→                "type": "text/javascript",
+   346→                "exec": [
+   347→                  "const crypto = require('crypto');",
+   348→                  "const secret = pm.variables.get('fb_app_secret');",
+   349→                  "const body = pm.request.body.raw;",
+   350→                  "const sig = 'sha256=' + crypto.createHmac('sha256', secret).update(body).digest('hex');",
+   351→                  "pm.request.headers.upsert({ key: 'X-Hub-Signature-256', value: sig });"
+   352→                ]
+   353→              }
+   354→            }
+   355→          ]
+   356→        }
+   357→      ]
+   358→    },
+   359→    {
+   360→      "name": "3. Zalo OA",
+   361→      "item": [
+   362→        {
+   363→          "name": "Text Message",
+   364→          "request": {
+   365→            "method": "POST",
+   366→            "header": [
+   367→              { "key": "Content-Type", "value": "application/json" }
+   368→            ],
+   369→            "body": {
+   370→              "mode": "raw",
+   371→              "raw": "{\n  \"data\": [\n    {\n      \"message_id\": \"zalo_msg_001\",\n      \"user_id_by_app\": \"zalo_user_12345\",\n      \"from\": {\n        \"user_id\": \"zalo_user_12345\"\n      },\n      \"message\": {\n        \"msg_id\": \"zalo_msg_001\",\n        \"content\": \"Cho toi hoi thong tin lien he cua shop\"\n      },\n      \"timestamp\": 1722672000000\n    }\n  ]\n}"
+   372→            },
+   373→            "url": {
+   374→              "raw": "{{base_url}}/api/webhook/zalo",
+   375→              "host": ["{{base_url}}"],
+   376→              "path": ["api", "webhook", "zalo"]
+   377→            }
+   378→          },
+   379→          "event": [
+   380→            {
+   381→              "listen": "prerequest",
+   382→              "script": {
+   383→                "type": "text/javascript",
+   384→                "exec": [
+   385→                  "const crypto = require('crypto');",
+   386→                  "const secret = pm.variables.get('zalo_app_secret');",
+   387→                  "const body = pm.request.body.raw;",
+   388→                  "const sig = crypto.createHmac('sha256', secret).update(body).digest('hex');",
+   389→                  "pm.request.headers.upsert({ key: 'X-Zalo-Signature', value: sig });"
+   390→                ]
+   391→              }
+   392→            }
+   393→          ]
+   394→        },
+   395→        {
+   396→          "name": "Multiple Zalo Messages",
+   397→          "request": {
+   398→            "method": "POST",
+   399→            "header": [
+   400→              { "key": "Content-Type", "value": "application/json" }
+   401→            ],
+   402→            "body": {
+   403→              "mode": "raw",
+   404→              "raw": "{\n  \"data\": [\n    {\n      \"message_id\": \"zalo_msg_002\",\n      \"user_id_by_app\": \"zalo_user_99999\",\n      \"from\": { \"user_id\": \"zalo_user_99999\" },\n      \"message\": {\n        \"msg_id\": \"zalo_msg_002\",\n        \"content\": \"Toi can ho tro gap, co ai truc khong?\"\n      },\n      \"timestamp\": 1722672000000\n    },\n    {\n      \"message_id\": \"zalo_msg_003\",\n      \"user_id_by_app\": \"zalo_user_88888\",\n      \"from\": { \"user_id\": \"zalo_user_88888\" },\n      \"message\": {\n        \"msg_id\": \"zalo_msg_003\",\n        \"content\": \"Xac nhan don hang qua Zalo duoc khong?\"\n      },\n      \"timestamp\": 1722672001000\n    }\n  ]\n}"
+   405→            },
+   406→            "url": {
+   407→              "raw": "{{base_url}}/api/webhook/zalo",
+   408→              "host": ["{{base_url}}"],
+   409→              "path": ["api", "webhook", "zalo"]
+   410→            }
+   411→          },
+   412→          "event": [
+   413→            {
+   414→              "listen": "prerequest",
+   415→              "script": {
+   416→                "type": "text/javascript",
+   417→                "exec": [
+   418→                  "const crypto = require('crypto');",
+   419→                  "const secret = pm.variables.get('zalo_app_secret');",
+   420→                  "const body = pm.request.body.raw;",
+   421→                  "const sig = crypto.createHmac('sha256', secret).update(body).digest('hex');",
+   422→                  "pm.request.headers.upsert({ key: 'X-Zalo-Signature', value: sig });"
+   423→                ]
+   424→              }
+   425→            }
+   426→          ]
+   427→        }
+   428→      ]
+   429→    },
+   430→    {
+   431→      "name": "4. Telegram Bot",
+   432→      "item": [
+   433→        {
+   434→          "name": "Text Message",
+   435→          "request": {
+   436→            "method": "POST",
+   437→            "header": [
+   438→              { "key": "Content-Type", "value": "application/json" }
+   439→            ],
+   440→            "body": {
+   441→              "mode": "raw",
+   442→              "raw": "{\n  \"update_id\": 100000001,\n  \"message\": {\n    \"message_id\": 5001,\n    \"from\": {\n      \"id\": 123456789,\n      \"is_bot\": false,\n      \"first_name\": \"John\",\n      \"username\": \"johndoe\"\n    },\n    \"chat\": {\n      \"id\": 123456789,\n      \"first_name\": \"John\",\n      \"type\": \"private\"\n    },\n    \"date\": 1722672000,\n    \"text\": \"Hello, I need help with my order\",\n    \"secret_token\": \"{{telegram_secret}}\"\n  }\n}"
+   443→            },
+   444→            "url": {
+   445→              "raw": "{{base_url}}/api/webhook/telegram",
+   446→              "host": ["{{base_url}}"],
+   447→              "path": ["api", "webhook", "telegram"]
+   448→            }
+   449→          }
+   450→        },
+   451→        {
+   452→          "name": "Photo Message",
+   453→          "request": {
+   454→            "method": "POST",
+   455→            "header": [
+   456→              { "key": "Content-Type", "value": "application/json" }
+   457→            ],
+   458→            "body": {
+   459→              "mode": "raw",
+   460→              "raw": "{\n  \"update_id\": 100000002,\n  \"message\": {\n    \"message_id\": 5002,\n    \"from\": {\n      \"id\": 987654321,\n      \"is_bot\": false,\n      \"first_name\": \"Jane\"\n    },\n    \"chat\": {\n      \"id\": 987654321,\n      \"first_name\": \"Jane\",\n      \"type\": \"private\"\n    },\n    \"date\": 1722672100,\n    \"photo\": [\n      {\n        \"file_id\": \"AbcDefGhIJKL\",\n        \"file_unique_id\": \"xyz789\",\n        \"width\": 800,\n        \"height\": 600\n      }\n    ],\n    \"caption\": \"Anh san pham bi loi, toi muon doi moi\",\n    \"secret_token\": \"{{telegram_secret}}\"\n  }\n}"
+   461→            },
+   462→            "url": {
+   463→              "raw": "{{base_url}}/api/webhook/telegram",
+   464→              "host": ["{{base_url}}"],
+   465→              "path": ["api", "webhook", "telegram"]
+   466→            }
+   467→          }
+   468→        },
+   469→        {
+   470→          "name": "Document/File Message",
+   471→          "request": {
+   472→            "method": "POST",
+   473→            "header": [
+   474→              { "key": "Content-Type", "value": "application/json" }
+   475→            ],
+   476→            "body": {
+   477→              "mode": "raw",
+   478→              "raw": "{\n  \"update_id\": 100000003,\n  \"message\": {\n    \"message_id\": 5003,\n    \"from\": {\n      \"id\": 555666777,\n      \"is_bot\": false,\n      \"first_name\": \"Bob\"\n    },\n    \"chat\": {\n      \"id\": 555666777,\n      \"first_name\": \"Bob\",\n      \"type\": \"private\"\n    },\n    \"date\": 1722672200,\n    \"document\": {\n      \"file_name\": \"contract.pdf\",\n      \"mime_type\": \"application/pdf\",\n      \"file_url\": \"https://example.com/contract.pdf\"\n    },\n    \"caption\": \"Hop dong can gia han\",\n    \"secret_token\": \"{{telegram_secret}}\"\n  }\n}"
+   479→            },
+   480→            "url": {
+   481→              "raw": "{{base_url}}/api/webhook/telegram",
+   482→              "host": ["{{base_url}}"],
+   483→              "path": ["api", "webhook", "telegram"]
+   484→            }
+   485→          }
+   486→        }
+   487→      ]
+   488→    },
+   489→    {
+   490→      "name": "5. Chatwork",
+   491→      "item": [
+   492→        {
+   493→          "name": "Message in Room",
+   494→          "request": {
+   495→            "method": "POST",
+   496→            "header": [
+   497→              { "key": "Content-Type", "value": "application/json" }
+   498→            ],
+   499→            "body": {
+   500→              "mode": "raw",
+   501→              "raw": "{\n  \"webhook_event\": {\n    \"message_id\": \"cw_msg_001\",\n    \"room_id\": 12345678,\n    \"from_account_id\": 999888777,\n    \"body\": \"Xin chao, toi can ho tro ve dich vu\",\n    \"send_time\": 1722672000,\n    \"update_time\": 1722672000\n  },\n  \"webhook_event_id\": 1\n}"
+   502→            },
+   503→            "url": {
+   504→              "raw": "{{base_url}}/api/webhook/chatwork",
+   505→              "host": ["{{base_url}}"],
+   506→              "path": ["api", "webhook", "chatwork"]
+   507→            }
+   508→          },
+   509→          "event": [
+   510→            {
+   511→              "listen": "prerequest",
+   512→              "script": {
+   513→                "type": "text/javascript",
+   514→                "exec": [
+   515→                  "const crypto = require('crypto');",
+   516→                  "const secret = pm.variables.get('chatwork_token');",
+   517→                  "const body = pm.request.body.raw;",
+   518→                  "const sig = crypto.createHmac('sha256', secret).update(body).digest('hex');",
+   519→                  "pm.request.headers.upsert({ key: 'X-ChatWorkWebhookSignature', value: sig });"
+   520→                ]
+   521→              }
+   522→            }
+   523→          ]
+   524→        },
+   525→        {
+   526→          "name": "Mention Message",
+   527→          "request": {
+   528→            "method": "POST",
+   529→            "header": [
+   530→              { "key": "Content-Type", "value": "application/json" }
+   531→            ],
+   532→            "body": {
+   533→              "mode": "raw",
+   534→              "raw": "{\n  \"webhook_event\": {\n    \"message_id\": \"cw_msg_002\",\n    \"room_id\": 12345678,\n    \"from_account_id\": 111222333,\n    \"body\": \"[To:444555666] Cho toi xin bao gia goi dich vu doanh nghiep\",\n    \"send_time\": 1722672100,\n    \"update_time\": 1722672100\n  },\n  \"webhook_event_id\": 2\n}"
+   535→            },
+   536→            "url": {
+   537→              "raw": "{{base_url}}/api/webhook/chatwork",
+   538→              "host": ["{{base_url}}"],
+   539→              "path": ["api", "webhook", "chatwork"]
+   540→            }
+   541→          },
+   542→          "event": [
+   543→            {
+   544→              "listen": "prerequest",
+   545→              "script": {
+   546→                "type": "text/javascript",
+   547→                "exec": [
+   548→                  "const crypto = require('crypto');",
+   549→                  "const secret = pm.variables.get('chatwork_token');",
+   550→                  "const body = pm.request.body.raw;",
+   551→                  "const sig = crypto.createHmac('sha256', secret).update(body).digest('hex');",
+   552→                  "pm.request.headers.upsert({ key: 'X-ChatWorkWebhookSignature', value: sig });"
+   553→                ]
+   554→              }
+   555→            }
+   556→          ]
+   557→        }
+   558→      ]
+   559→    },
+   560→    {
+   561→      "name": "6. Website Widget",
+   562→      "item": [
+   563→        {
+   564→          "name": "Visitor Text Message",
+   565→          "request": {
+   566→            "method": "POST",
+   567→            "header": [
+   568→              { "key": "Content-Type", "value": "application/json" }
+   569→            ],
+   570→            "body": {
+   571→              "mode": "raw",
+   572→              "raw": "{\n  \"messageId\": \"web_msg_001\",\n  \"visitorId\": \"vis_abc123def456\",\n  \"visitorName\": \"Khach vang\",\n  \"content\": \"Xin chao, toi can ho tro ve don hang\",\n  \"type\": \"text\"\n}"
+   573→            },
+   574→            "url": {
+   575→              "raw": "{{base_url}}/api/webhook/website",
+   576→              "host": ["{{base_url}}"],
+   577→              "path": ["api", "webhook", "website"]
+   578→            }
+   579→          },
+   580→          "event": [
+   581→            {
+   582→              "listen": "prerequest",
+   583→              "script": {
+   584→                "type": "text/javascript",
+   585→                "exec": [
+   586→                  "const crypto = require('crypto');",
+   587→                  "const secret = pm.variables.get('webhook_secret');",
+   588→                  "const body = pm.request.body.raw;",
+   589→                  "const timestamp = Math.floor(Date.now() / 1000);",
+   590→                  "const signedPayload = timestamp + '.' + body;",
+   591→                  "const sig = crypto.createHmac('sha256', secret).update(signedPayload).digest('hex');",
+   592→                  "pm.request.headers.upsert({ key: 'X-Webhook-Timestamp', value: String(timestamp) });",
+   593→                  "pm.request.headers.upsert({ key: 'X-Webhook-Signature', value: sig });"
+   594→                ]
+   595→              }
+   596→            }
+   597→          ]
+   598→        },
+   599→        {
+   600→          "name": "Visitor File Upload",
+   601→          "request": {
+   602→            "method": "POST",
+   603→            "header": [
+   604→              { "key": "Content-Type", "value": "application/json" }
+   605→            ],
+   606→            "body": {
+   607→              "mode": "raw",
+   608→              "raw": "{\n  \"messageId\": \"web_msg_002\",\n  \"visitorId\": \"vis_xyz789uvw012\",\n  \"visitorName\": \"Nguyen Van C\",\n  \"content\": \"\",\n  \"type\": \"file\",\n  \"attachmentUrl\": \"https://example.com/invoice.pdf\",\n  \"attachmentName\": \"hoadon.pdf\",\n  \"attachmentType\": \"application/pdf\"\n}"
+   609→            },
+   610→            "url": {
+   611→              "raw": "{{base_url}}/api/webhook/website",
+   612→              "host": ["{{base_url}}"],
+   613→              "path": ["api", "webhook", "website"]
+   614→            }
+   615→          },
+   616→          "event": [
+   617→            {
+   618→              "listen": "prerequest",
+   619→              "script": {
+   620→                "type": "text/javascript",
+   621→                "exec": [
+   622→                  "const crypto = require('crypto');",
+   623→                  "const secret = pm.variables.get('webhook_secret');",
+   624→                  "const body = pm.request.body.raw;",
+   625→                  "const timestamp = Math.floor(Date.now() / 1000);",
+   626→                  "const signedPayload = timestamp + '.' + body;",
+   627→                  "const sig = crypto.createHmac('sha256', secret).update(signedPayload).digest('hex');",
+   628→                  "pm.request.headers.upsert({ key: 'X-Webhook-Timestamp', value: String(timestamp) });",
+   629→                  "pm.request.headers.upsert({ key: 'X-Webhook-Signature', value: sig });"
+   630→                ]
+   631→              }
+   632→            }
+   633→          ]
+   634→        }
+   635→      ]
+   636→    },
+   637→    {
+   638→      "name": "7. Email",
+   639→      "item": [
+   640→        {
+   641→          "name": "Customer Email",
+   642→          "request": {
+   643→            "method": "POST",
+   644→            "header": [
+   645→              { "key": "Content-Type", "value": "application/json" }
+   646→            ],
+   647→            "body": {
+   648→              "mode": "raw",
+   649→              "raw": "{\n  \"messageId\": \"email_msg_001\",\n  \"id\": \"<abc123@example.com>\",\n  \"from\": \"customer@gmail.com\",\n  \"fromName\": \"Le Van D\",\n  \"subject\": \"Phan hoi ve dich vu\",\n  \"text\": \"Kinh gui bo phan CSKH, toi muon phan hoi ve dich vu don hang #DH2024-0891. San pham nhan duoc khong dung voi mo ta tren website. Toi yeu cau doi moi hoac hoan tien.\",\n  \"body\": \"Kinh gui bo phan CSKH, toi muon phan hoi ve dich vu.\",\n  \"hasAttachments\": false\n}"
+   650→            },
+   651→            "url": {
+   652→              "raw": "{{base_url}}/api/webhook/email",
+   653→              "host": ["{{base_url}}"],
+   654→              "path": ["api", "webhook", "email"]
+   655→            }
+   656→          }
+   657→        },
+   658→        {
+   659→          "name": "Email with Attachment",
+   660→          "request": {
+   661→            "method": "POST",
+   662→            "header": [
+   663→              { "key": "Content-Type", "value": "application/json" }
+   664→            ],
+   665→            "body": {
+   666→              "mode": "raw",
+   667→              "raw": "{\n  \"messageId\": \"email_msg_002\",\n  \"id\": \"<def456@example.com>\",\n  \"from\": \"client@company.com\",\n  \"fromName\": \"Pham Thi E\",\n  \"subject\": \"Yeu cau bao gia chi tiet\",\n  \"text\": \"Xin vui long gui bao gia chi tiet cho toi.\",\n  \"hasAttachments\": true\n}"
+   668→            },
+   669→            "url": {
+   670→              "raw": "{{base_url}}/api/webhook/email",
+   671→              "host": ["{{base_url}}"],
+   672→              "path": ["api", "webhook", "email"]
+   673→            }
+   674→          }
+   675→        }
+   676→      ]
+   677→    },
+   678→    {
+   679→      "name": "8. Error Cases",
+   680→      "item": [
+   681→        {
+   682→          "name": "Unsupported Channel",
+   683→          "request": {
+   684→            "method": "POST",
+   685→            "header": [{ "key": "Content-Type", "value": "application/json" }],
+   686→            "body": { "mode": "raw", "raw": "{\"test\": true}" },
+   687→            "url": {
+   688→              "raw": "{{base_url}}/api/webhook/unsupported_channel",
+   689→              "host": ["{{base_url}}"],
+   690→              "path": ["api", "webhook", "unsupported_channel"]
+   691→            }
+   692→          }
+   693→        },
+   694→        {
+   695→          "name": "Invalid Signature (FB)",
+   696→          "request": {
+   697→            "method": "POST",
+   698→            "header": [
+   699→              { "key": "Content-Type", "value": "application/json" },
+   700→              { "key": "X-Hub-Signature-256", "value": "sha256=invalid_signature_here" }
+   701→            ],
+   702→            "body": {
+   703→              "mode": "raw",
+   704→              "raw": "{\n  \"object\": \"page\",\n  \"entry\": [\n    {\n      \"id\": \"987654321098765\",\n      \"messaging\": [\n        {\n          \"sender\": {\n            \"id\": \"112233445566778\"\n          },\n          \"message\": {\n            \"mid\": \"m_test_invalid\",\n            \"text\": \"test\"\n          }\n        }\n      ]\n    }\n  ]\n}"
+   705→            },
+   706→            "url": {
+   707→              "raw": "{{base_url}}/api/webhook/facebook_messenger",
+   708→              "host": ["{{base_url}}"],
+   709→              "path": ["api", "webhook", "facebook_messenger"]
+   710→            }
+   711→          }
+   712→        },
+   713→        {
+   714→          "name": "Missing Signature Header (Zalo)",
+   715→          "request": {
+   716→            "method": "POST",
+   717→            "header": [
+   718→              { "key": "Content-Type", "value": "application/json" }
+   719→            ],
+   720→            "body": {
+   721→              "mode": "raw",
+   722→              "raw": "{\n  \"data\": [\n    {\n      \"message_id\": \"zalo_test\",\n      \"user_id_by_app\": \"123\",\n      \"message\": { \"content\": \"test\" }\n    }\n  ]\n}"
+   723→            },
+   724→            "url": {
+   725→              "raw": "{{base_url}}/api/webhook/zalo",
+   726→              "host": ["{{base_url}}"],
+   727→              "path": ["api", "webhook", "zalo"]
+   728→            }
+   729→          }
+   730→        },
+   731→        {
+   732→          "name": "Invalid JSON Payload",
+   733→          "request": {
+   734→            "method": "POST",
+   735→            "header": [
+   736→              { "key": "Content-Type", "value": "application/json" },
+   737→              { "key": "X-Hub-Signature-256", "value": "sha256=anything" }
+   738→            ],
+   739→            "body": { "mode": "raw", "raw": "this is not json" },
+   740→            "url": {
+   741→              "raw": "{{base_url}}/api/webhook/facebook_messenger",
+   742→              "host": ["{{base_url}}"],
+   743→              "path": ["api", "webhook", "facebook_messenger"]
+   744→            }
+   745→          }
+   746→        },
+   747→        {
+   748→          "name": "Expired Timestamp (Website)",
+   749→          "request": {
+   750→            "method": "POST",
+   751→            "header": [
+   752→              { "key": "Content-Type", "value": "application/json" }
+   753→            ],
+   754→            "body": {
+   755→              "mode": "raw",
+   756→              "raw": "{\n  \"messageId\": \"web_expired\",\n  \"content\": \"test\"\n}"
+   757→            },
+   758→            "url": {
+   759→              "raw": "{{base_url}}/api/webhook/website",
+   760→              "host": ["{{base_url}}"],
+   761→              "path": ["api", "webhook", "website"]
+   762→            }
+   763→          },
+   764→          "event": [
+   765→            {
+   766→              "listen": "prerequest",
+   767→              "script": {
+   768→                "type": "text/javascript",
+   769→                "exec": [
+   770→                  "const crypto = require('crypto');",
+   771→                  "const secret = pm.variables.get('webhook_secret');",
+   772→                  "const body = pm.request.body.raw;",
+   773→                  "const timestamp = Math.floor(Date.now() / 1000) - 600;",
+   774→                  "const signedPayload = timestamp + '.' + body;",
+   775→                  "const sig = crypto.createHmac('sha256', secret).update(signedPayload).digest('hex');",
+   776→                  "pm.request.headers.upsert({ key: 'X-Webhook-Timestamp', value: String(timestamp) });",
+   777→                  "pm.request.headers.upsert({ key: 'X-Webhook-Signature', value: sig });"
+   778→                ]
+   779→              }
+   780→            }
+   781→          ]
+   782→        },
+   783→        {
+   784→          "name": "Wrong Telegram secret_token",
+   785→          "request": {
+   786→            "method": "POST",
+   787→            "header": [
+   788→              { "key": "Content-Type", "value": "application/json" }
+   789→            ],
+   790→            "body": {
+   791→              "mode": "raw",
+   792→              "raw": "{\n  \"update_id\": 999,\n  \"message\": {\n    \"message_id\": 9999,\n    \"from\": { \"id\": 111, \"first_name\": \"Hacker\" },\n    \"chat\": { \"id\": 111, \"type\": \"private\" },\n    \"date\": 1722672000,\n    \"text\": \"malicious\",\n    \"secret_token\": \"WRONG_TOKEN\"\n  }\n}"
+   793→            },
+   794→            "url": {
+   795→              "raw": "{{base_url}}/api/webhook/telegram",
+   796→              "host": ["{{base_url}}"],
+   797→              "path": ["api", "webhook", "telegram"]
+   798→            }
+   799→          }
+   800→        }
+   801→      ]
+   802→    }
+   803→  ]
+   804→}
+   805→```
