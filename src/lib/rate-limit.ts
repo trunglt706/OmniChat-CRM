@@ -161,6 +161,10 @@ export function rateLimitResponse(result: RateLimitResult) {
  * auto-add to blacklist to protect the system.
  */
 export async function checkAutoBlacklist(ip: string): Promise<boolean> {
+  // Never auto-blacklist loopback/localhost IPs
+  if (ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1' || ip === 'localhost') {
+    return false
+  }
   try {
     const redis = getRedis()
     const key = `rl:violations:${ip}`

@@ -84,6 +84,10 @@ export function invalidateBlacklistCache() {
 }
 
 export function isBlacklisted(ip: string, email?: string): boolean {
+  // Never block loopback/localhost IPs
+  if (ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1' || ip === 'localhost') {
+    return false
+  }
   const list = getCachedBlacklist()
   return list.some(entry => {
     if (entry.type === 'ip' && (entry.value === ip || entry.value === '*')) return true
