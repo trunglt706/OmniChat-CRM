@@ -26,13 +26,13 @@ function SettingRow({
   icon: React.ElementType; label: string; description?: string; children: React.ReactNode
 }) {
   return (
-    <div className="flex items-center justify-between gap-3 py-3">
+    <div className="flex items-center justify-between gap-3 py-3 px-2 rounded-xl transition-all duration-200 hover:bg-foreground/[0.03] group">
       <div className="flex items-start gap-3 min-w-0">
-        <div className="h-9 w-9 rounded-xl bg-foreground/[0.03] flex items-center justify-center flex-shrink-0 mt-0.5">
-          <Icon className="h-4 w-4 text-muted-foreground/50" />
+        <div className="h-9 w-9 rounded-xl bg-foreground/[0.04] group-hover:bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5 transition-all duration-200 group-hover:scale-105">
+          <Icon className="h-4 w-4 text-muted-foreground/50 group-hover:text-primary transition-colors" />
         </div>
         <div className="min-w-0">
-          <p className="text-[13px] font-medium">{label}</p>
+          <p className="text-[13px] font-medium group-hover:text-foreground transition-colors">{label}</p>
           {description && <p className="text-[11px] text-muted-foreground/50 mt-0.5 leading-relaxed">{description}</p>}
         </div>
       </div>

@@ -11,8 +11,8 @@ interface Props {
 }
 
 export function AgentDetail({ data, t }: Props) {
-  if (!data) return null
-  const { agent, recentConversations } = data
+  if (!data || !data.agent) return null
+  const { agent, recentConversations = [] } = data
   return (
     <div className="space-y-4">
       <div className="glass-card rounded-2xl p-4 md:p-5">

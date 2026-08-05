@@ -9,16 +9,16 @@ export function SummaryCard({ label, value, icon: Icon, gradient }: {
 }) {
   return (
     <div className={cn(
-      'glass-card rounded-2xl p-4 md:p-5 relative overflow-hidden group transition-all duration-300 hover:shadow-lg',
-      'card-lift'
+      'glass-card rounded-2xl p-4 md:p-5 relative overflow-hidden group transition-all duration-300 hover:shadow-xl hover:shadow-primary/5 hover:border-primary/20',
+      'card-lift animate-fade-in'
     )}>
-      <div className={cn('absolute inset-0 opacity-[0.07] group-hover:opacity-[0.12] transition-opacity duration-300', gradient)} />
+      <div className={cn('absolute inset-0 opacity-[0.07] group-hover:opacity-[0.15] transition-all duration-500 blur-xl', gradient)} />
       <div className="relative z-10 flex items-start justify-between">
         <div className="min-w-0">
           <p className="text-[11px] md:text-xs text-muted-foreground font-medium truncate">{label}</p>
-          <p className="text-xl md:text-2xl font-bold mt-1 tabular-nums tracking-tight">{value}</p>
+          <p className="text-xl md:text-2xl font-bold mt-1 tabular-nums tracking-tight group-hover:text-primary transition-colors duration-300">{value}</p>
         </div>
-        <div className={cn('h-9 w-9 md:h-10 md:w-10 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm', gradient)}>
+        <div className={cn('h-9 w-9 md:h-10 md:w-10 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm transition-all duration-300 group-hover:scale-110 group-hover:rotate-3 group-hover:shadow-md', gradient)}>
           <Icon className="h-4.5 w-4.5 md:h-5 md:w-5 text-white" />
         </div>
       </div>

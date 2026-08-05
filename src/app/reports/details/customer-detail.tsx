@@ -11,8 +11,8 @@ interface Props {
 }
 
 export function CustomerDetail({ data, t }: Props) {
-  if (!data) return null
-  const { customer, conversationHistory } = data
+  if (!data || !data.customer) return null
+  const { customer, conversationHistory = [] } = data
   return (
     <div className="space-y-4">
       <div className="glass-card rounded-2xl p-4 md:p-5">

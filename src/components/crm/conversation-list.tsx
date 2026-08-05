@@ -180,6 +180,20 @@ export default function ConversationList() {
   const setSearchQuery = useCRMStore((s) => s.setSearchQuery)
   const setIsLoadingConversations = useCRMStore((s) => s.setIsLoadingConversations)
   const incrementUnread = useCRMStore((s) => s.incrementUnread)
+  const storeAgents = useCRMStore((s) => s.agents)
+  const setAgents = useCRMStore((s) => s.setAgents)
+
+  // ── Fetch agents once on conversation list page load ──
+  useEffect(() => {
+    if (storeAgents.length === 0) {
+      fetch('/api/agents')
+        .then((r) => r.json())
+        .then((data) => {
+          if (Array.isArray(data)) setAgents(data)
+        })
+        .catch(console.error)
+    }
+  }, [storeAgents.length, setAgents])
 
   // ── Scroll fade indicator refs ──
   const statusTabsRef = useRef<HTMLDivElement>(null)
@@ -212,6 +226,8 @@ export default function ConversationList() {
   // fetchConversations uses debouncedSearch to avoid firing on every keystroke
   const DEBOUNCE_MS = 300
   const [debouncedSearch, setDebouncedSearch] = useState(searchQuery)
+  const abortControllerRef = useRef<AbortController | null>(null)
+  const inFlightUrlRef = useRef<string | null>(null)
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(searchQuery), DEBOUNCE_MS)
@@ -219,19 +235,38 @@ export default function ConversationList() {
   }, [searchQuery])
 
   const fetchConversations = useCallback(async () => {
+    const p = new URLSearchParams()
+    if (activeFilter === 'unassigned') p.set('assigned', 'unassigned')
+    else if (activeFilter !== 'all') p.set('status', activeFilter)
+    if (activeChannel !== 'all') p.set('channel', activeChannel)
+    if (debouncedSearch) p.set('search', debouncedSearch)
+    const url = `/api/conversations?${p.toString()}`
+
+    // Skip if identical request URL is already in flight
+    if (inFlightUrlRef.current === url) return
+
+    // Abort previous pending request if URL changed
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+    }
+    const controller = new AbortController()
+    abortControllerRef.current = controller
+    inFlightUrlRef.current = url
+
     setIsLoadingConversations(true)
     try {
-      const p = new URLSearchParams()
-      if (activeFilter === 'unassigned') p.set('assigned', 'unassigned')
-      else if (activeFilter !== 'all') p.set('status', activeFilter)
-      if (activeChannel !== 'all') p.set('channel', activeChannel)
-      if (debouncedSearch) p.set('search', debouncedSearch)
-      const res = await fetch(`/api/conversations?${p}`)
+      const res = await fetch(url, { signal: controller.signal })
       const json = await res.json()
       setConversations(json.data || [])
       setTotalConversations(json.total || 0)
-    } catch (e) { console.error(e) }
-    finally { setIsLoadingConversations(false) }
+    } catch (e: any) {
+      if (e.name !== 'AbortError') console.error(e)
+    } finally {
+      if (inFlightUrlRef.current === url) {
+        inFlightUrlRef.current = null
+        setIsLoadingConversations(false)
+      }
+    }
   }, [activeFilter, activeChannel, debouncedSearch, setConversations, setTotalConversations, setIsLoadingConversations])
 
   useEffect(() => { fetchConversations() }, [fetchConversations])

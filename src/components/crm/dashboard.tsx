@@ -65,15 +65,15 @@ function StatCard({ title, value, icon: Icon, subtitle, color }: {
   subtitle?: string; color?: string
 }) {
   return (
-    <Card>
+    <Card className="card-lift glass-card transition-all duration-300 hover:shadow-xl hover:shadow-primary/5 hover:border-primary/20 group overflow-hidden relative">
       <CardContent className="p-3 md:p-4">
         <div className="flex items-start justify-between">
           <div className="min-w-0">
             <p className="text-[11px] md:text-xs text-muted-foreground font-medium truncate">{title}</p>
-            <p className="text-xl md:text-2xl font-bold mt-0.5 tabular-nums">{value}</p>
+            <p className="text-xl md:text-2xl font-bold mt-0.5 tabular-nums tracking-tight group-hover:text-primary transition-colors">{value}</p>
             {subtitle && <p className="text-[10px] md:text-[11px] text-muted-foreground mt-0.5 truncate">{subtitle}</p>}
           </div>
-          <div className={cn('h-8 w-8 md:h-9 md:w-9 rounded-lg flex items-center justify-center flex-shrink-0', color || 'bg-primary/10')}>
+          <div className={cn('h-8 w-8 md:h-9 md:w-9 rounded-lg flex items-center justify-center flex-shrink-0 shadow-sm transition-all duration-300 group-hover:scale-110 group-hover:rotate-3', color || 'bg-primary/10')}>
             <Icon className={cn('h-4 w-4 md:h-4.5 md:w-4.5', color ? 'text-white' : 'text-primary')} />
           </div>
         </div>
@@ -97,7 +97,7 @@ export default function Dashboard() {
 
   if (loading || !data) {
     return (
-      <div className="h-full overflow-y-auto p-4 md:p-6 space-y-5">
+      <div className="h-full overflow-y-auto p-4 md:p-6 space-y-5 animate-pulse">
         {/* Summary cards skeleton */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
           {[1,2,3,4].map(i => (
@@ -164,10 +164,13 @@ export default function Dashboard() {
 
   return (
     <div className="h-full min-h-0 overflow-y-auto">
-      <div className="p-4 md:p-6 max-w-[1400px] mx-auto space-y-4 md:space-y-6">
+      <div className="p-4 md:p-6 max-w-[1400px] mx-auto space-y-4 md:space-y-6 animate-slide-up">
         {/* Header */}
         <div>
-          <h1 className="text-lg md:text-xl font-bold">{t('dashboard.title')}</h1>
+          <h1 className="text-lg md:text-xl font-bold flex items-center gap-2">
+            <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse" />
+            {t('dashboard.title')}
+          </h1>
           <p className="text-xs md:text-sm text-muted-foreground mt-0.5">{t('dashboard.subtitle')}</p>
         </div>
 
@@ -182,7 +185,7 @@ export default function Dashboard() {
         {/* Charts row 1 */}
         <div className="grid lg:grid-cols-3 gap-3 md:gap-4">
           {/* Trend chart */}
-          <Card className="lg:col-span-2 min-w-0">
+          <Card className="lg:col-span-2 min-w-0 card-lift glass-card transition-all duration-300 hover:shadow-xl hover:shadow-blue-500/5 hover:border-blue-500/20">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-semibold">{t('dashboard.trend')}</CardTitle>
             </CardHeader>
@@ -190,13 +193,13 @@ export default function Dashboard() {
               <div className="h-48 md:h-64">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={trendData}>
-                    <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-border opacity-40" />
                     <XAxis dataKey="name" tick={{ fontSize: 10 }} className="text-muted-foreground" />
                     <YAxis tick={{ fontSize: 10 }} className="text-muted-foreground" />
-                    <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid var(--border)', fontSize: 12 }} />
+                    <Tooltip contentStyle={{ borderRadius: 12, border: '1px solid var(--border)', fontSize: 12, boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }} />
                     <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11 }} />
-                    <Area type="monotone" dataKey="new" name={t('dashboard.trend.new')} fill="#3b82f6" fillOpacity={0.15} stroke="#3b82f6" strokeWidth={2} />
-                    <Area type="monotone" dataKey="resolved" name={t('dashboard.trend.resolved')} fill="#10b981" fillOpacity={0.15} stroke="#10b981" strokeWidth={2} />
+                    <Area type="monotone" dataKey="new" name={t('dashboard.trend.new')} fill="#3b82f6" fillOpacity={0.15} stroke="#3b82f6" strokeWidth={2} isAnimationActive animationDuration={1200} animationEasing="ease-in-out" />
+                    <Area type="monotone" dataKey="resolved" name={t('dashboard.trend.resolved')} fill="#10b981" fillOpacity={0.15} stroke="#10b981" strokeWidth={2} isAnimationActive animationDuration={1200} animationEasing="ease-in-out" />
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
@@ -204,7 +207,7 @@ export default function Dashboard() {
           </Card>
 
           {/* Channel distribution */}
-          <Card className="min-w-0">
+          <Card className="min-w-0 card-lift glass-card transition-all duration-300 hover:shadow-xl hover:shadow-violet-500/5 hover:border-violet-500/20">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-semibold">{t('dashboard.channelDist')}</CardTitle>
             </CardHeader>
@@ -212,18 +215,18 @@ export default function Dashboard() {
               <div className="h-40 md:h-48">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
-                    <Pie data={channelData} cx="50%" cy="50%" innerRadius={35} outerRadius={60} paddingAngle={3} dataKey="value">
+                    <Pie data={channelData} cx="50%" cy="50%" innerRadius={35} outerRadius={60} paddingAngle={3} dataKey="value" isAnimationActive animationDuration={1200}>
                       {channelData.map((entry, i) => (
                         <Cell key={i} fill={entry.color} />
                       ))}
                     </Pie>
-                    <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid var(--border)', fontSize: 12 }} />
+                    <Tooltip contentStyle={{ borderRadius: 12, border: '1px solid var(--border)', fontSize: 12, boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }} />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
               <div className="grid grid-cols-2 gap-1.5 mt-2">
                 {channelData.map((ch) => (
-                  <div key={ch.name} className="flex items-center gap-1.5 text-[11px]">
+                  <div key={ch.name} className="flex items-center gap-1.5 text-[11px] p-1 rounded-md hover:bg-primary/[0.04] transition-all">
                     <div className="h-2 w-2 rounded-full flex-shrink-0" style={{ backgroundColor: ch.color }} />
                     <span className="text-muted-foreground truncate">{ch.name}</span>
                     <span className="font-medium ml-auto">{ch.value}</span>

@@ -13,20 +13,23 @@ interface Props {
 
 export function MessagesTab({ data, t, chartRef }: Props) {
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 animate-slide-up">
       {data && (
-        <div className="glass-card rounded-2xl p-4 md:p-5 flex items-center gap-3">
-          <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center shadow-sm">
+        <div className="glass-card card-lift rounded-2xl p-4 md:p-5 flex items-center gap-3 transition-all duration-300 hover:shadow-xl hover:shadow-violet-500/5 hover:border-violet-500/20">
+          <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center shadow-sm animate-breathe">
             <TrendingUp className="h-4.5 w-4.5 text-white" />
           </div>
           <div>
             <p className="text-[11px] text-muted-foreground font-medium">{t('reports.messages.peakHour')}</p>
-            <p className="text-sm font-bold tabular-nums">{data.peakHour}</p>
+            <p className="text-sm font-bold tabular-nums text-violet-600 dark:text-violet-400">{data.peakHour}</p>
           </div>
         </div>
       )}
-      <div id="chart-messages" ref={chartRef} className="glass-card rounded-2xl p-4 md:p-5">
-        <p className="text-xs font-semibold mb-4">{t('reports.messages.byHour')}</p>
+      <div id="chart-messages" ref={chartRef} className="glass-card card-lift rounded-2xl p-4 md:p-5 transition-all duration-300 hover:shadow-xl hover:shadow-violet-500/5 hover:border-violet-500/20">
+        <p className="text-xs font-semibold mb-4 flex items-center gap-2">
+          <span className="h-2 w-2 rounded-full bg-violet-500 animate-pulse" />
+          {t('reports.messages.byHour')}
+        </p>
         {data && data.hourly && (
           <div className="h-64 md:h-80">
             <ResponsiveContainer width="100%" height="100%">
@@ -36,14 +39,14 @@ export function MessagesTab({ data, t, chartRef }: Props) {
                 <YAxis tick={{ fontSize: 10 }} />
                 <Tooltip contentStyle={{ fontSize: 12, borderRadius: 12, border: '1px solid oklch(0 0 0 / 0.06)', boxShadow: '0 4px 12px oklch(0 0 0 / 0.08)' }} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
-                <Bar dataKey="incoming" name={t('reports.messages.col.incoming')} fill="#10b981" radius={[3, 3, 0, 0]} />
-                <Bar dataKey="outgoing" name={t('reports.messages.col.outgoing')} fill="#8b5cf6" radius={[3, 3, 0, 0]} />
+                <Bar dataKey="incoming" name={t('reports.messages.col.incoming')} fill="#10b981" radius={[6, 6, 0, 0]} isAnimationActive animationDuration={1200} animationEasing="ease-in-out" />
+                <Bar dataKey="outgoing" name={t('reports.messages.col.outgoing')} fill="#8b5cf6" radius={[6, 6, 0, 0]} isAnimationActive animationDuration={1200} animationEasing="ease-in-out" />
               </BarChart>
             </ResponsiveContainer>
           </div>
         )}
       </div>
-      <div className="glass-card rounded-2xl p-4 md:p-5">
+      <div className="glass-card card-lift rounded-2xl p-4 md:p-5 transition-all duration-300">
         <div className="overflow-x-auto max-h-96 overflow-y-auto">
           <Table>
             <TableHeader>
@@ -56,7 +59,7 @@ export function MessagesTab({ data, t, chartRef }: Props) {
             </TableHeader>
             <TableBody>
               {data?.hourly?.map((row, i) => (
-                <TableRow key={i} className="text-xs">
+                <TableRow key={i} className="text-xs hover:bg-primary/[0.04] transition-all duration-200 hover:translate-x-0.5">
                   <TableCell className="font-medium font-mono">{row.period}</TableCell>
                   <TableCell className="text-right tabular-nums text-emerald-600 dark:text-emerald-400">{row.incoming}</TableCell>
                   <TableCell className="text-right tabular-nums text-violet-600 dark:text-violet-400">{row.outgoing}</TableCell>

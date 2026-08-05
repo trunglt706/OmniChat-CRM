@@ -66,12 +66,12 @@ function InfoTab() {
   const identities = customer.identities || []
 
   return (
-    <div className="space-y-5 animate-fade-in">
+    <div className="space-y-5 animate-slide-up">
       {/* Customer name & avatar - premium card */}
-      <div className="glass-card rounded-2xl p-4">
+      <div className="glass-card card-lift rounded-2xl p-4 transition-all duration-300 hover:shadow-xl hover:shadow-primary/5">
         <div className="flex items-center gap-3.5">
           <div className="relative">
-            <Avatar className="h-14 w-14 ring-2 ring-background shadow-lg">
+            <Avatar className="h-14 w-14 ring-2 ring-primary/30 shadow-lg transition-transform duration-300 hover:scale-105">
               <AvatarFallback className={cn('text-lg text-white font-bold', GRADIENT_CLASSES[0])}>
                 {customer.name.split(' ').slice(-2).map((n) => n[0]).join('')}
               </AvatarFallback>

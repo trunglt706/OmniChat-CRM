@@ -14,11 +14,14 @@ interface Props {
 
 export function TagsTab({ data, t, onRowClick }: Props) {
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 animate-slide-up">
       {/* Top Chart */}
       {data.length > 0 && (
-        <div id="chart-tags" className="glass-card rounded-2xl p-4 md:p-5">
-          <p className="text-xs font-semibold mb-3">{t('reports.tags.title') || 'Phân bổ thẻ nhãn'}</p>
+        <div id="chart-tags" className="glass-card card-lift rounded-2xl p-4 md:p-5 transition-all duration-300 hover:shadow-xl hover:shadow-violet-500/5 hover:border-violet-500/20">
+          <p className="text-xs font-semibold mb-3 flex items-center gap-2">
+            <span className="h-2 w-2 rounded-full bg-violet-500 animate-pulse" />
+            {t('reports.tags.title') || 'Phân bổ thẻ nhãn'}
+          </p>
           <div className="h-56 md:h-64">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={data} margin={{ top: 4, right: 4, left: -20, bottom: 4 }}>
@@ -27,8 +30,8 @@ export function TagsTab({ data, t, onRowClick }: Props) {
                 <YAxis tick={{ fontSize: 10 }} />
                 <Tooltip contentStyle={{ fontSize: 12, borderRadius: 12, border: '1px solid oklch(0 0 0 / 0.06)', boxShadow: '0 4px 12px oklch(0 0 0 / 0.08)' }} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
-                <Bar dataKey="conversations" name={t('reports.tags.col.conversations')} fill="#8b5cf6" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="count" name={t('reports.tags.col.count')} fill="#f59e0b" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="conversations" name={t('reports.tags.col.conversations')} fill="#8b5cf6" radius={[6, 6, 0, 0]} isAnimationActive animationDuration={1200} animationEasing="ease-in-out" />
+                <Bar dataKey="count" name={t('reports.tags.col.count')} fill="#f59e0b" radius={[6, 6, 0, 0]} isAnimationActive animationDuration={1200} animationEasing="ease-in-out" />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -36,7 +39,7 @@ export function TagsTab({ data, t, onRowClick }: Props) {
       )}
 
       {/* Table */}
-      <div className="glass-card rounded-2xl p-4 md:p-5">
+      <div className="glass-card card-lift rounded-2xl p-4 md:p-5 transition-all duration-300">
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
@@ -52,7 +55,7 @@ export function TagsTab({ data, t, onRowClick }: Props) {
               {data.map((row, i) => (
                 <TableRow
                   key={i}
-                  className="text-xs cursor-pointer hover:bg-foreground/[0.04] transition-colors"
+                  className="text-xs cursor-pointer hover:bg-primary/[0.04] transition-all duration-200 hover:translate-x-0.5"
                   onClick={() => onRowClick('tags', row.id, row.tag)}
                 >
                   <TableCell className="font-medium">

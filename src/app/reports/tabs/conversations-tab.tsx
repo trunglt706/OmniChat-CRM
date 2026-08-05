@@ -16,12 +16,15 @@ interface Props {
 
 export function ConversationsTab({ data, t, loading, onRowClick }: Props) {
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 animate-slide-up">
       {/* Top Chart */}
       {data.length > 0 && (
-        <div id="chart-conversations" className="glass-card rounded-2xl p-4 md:p-5">
+        <div id="chart-conversations" className="glass-card card-lift rounded-2xl p-4 md:p-5 transition-all duration-300 hover:shadow-xl hover:shadow-amber-500/5 hover:border-amber-500/20">
           <div className="flex items-center justify-between mb-3">
-            <p className="text-xs font-semibold">{t('reports.conversations.title') || 'Xu hướng hội thoại'}</p>
+            <p className="text-xs font-semibold flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
+              {t('reports.conversations.title') || 'Xu hướng hội thoại'}
+            </p>
           </div>
           <div className="h-56 md:h-64">
             <ResponsiveContainer width="100%" height="100%">
@@ -45,9 +48,9 @@ export function ConversationsTab({ data, t, loading, onRowClick }: Props) {
                 <YAxis tick={{ fontSize: 10 }} />
                 <Tooltip contentStyle={{ fontSize: 12, borderRadius: 12, border: '1px solid oklch(0 0 0 / 0.06)', boxShadow: '0 4px 12px oklch(0 0 0 / 0.08)' }} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
-                <Area type="monotone" dataKey="open" name={t('reports.conversations.col.open')} stroke="#f59e0b" fillOpacity={1} fill="url(#colorOpen)" strokeWidth={2} />
-                <Area type="monotone" dataKey="resolved" name={t('reports.conversations.col.resolved')} stroke="#10b981" fillOpacity={1} fill="url(#colorResolved)" strokeWidth={2} />
-                <Area type="monotone" dataKey="closed" name={t('reports.conversations.col.closed')} stroke="#6366f1" fillOpacity={1} fill="url(#colorClosed)" strokeWidth={2} />
+                <Area type="monotone" dataKey="open" name={t('reports.conversations.col.open')} stroke="#f59e0b" fillOpacity={1} fill="url(#colorOpen)" strokeWidth={2} isAnimationActive animationDuration={1200} animationEasing="ease-in-out" />
+                <Area type="monotone" dataKey="resolved" name={t('reports.conversations.col.resolved')} stroke="#10b981" fillOpacity={1} fill="url(#colorResolved)" strokeWidth={2} isAnimationActive animationDuration={1200} animationEasing="ease-in-out" />
+                <Area type="monotone" dataKey="closed" name={t('reports.conversations.col.closed')} stroke="#6366f1" fillOpacity={1} fill="url(#colorClosed)" strokeWidth={2} isAnimationActive animationDuration={1200} animationEasing="ease-in-out" />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -55,7 +58,7 @@ export function ConversationsTab({ data, t, loading, onRowClick }: Props) {
       )}
 
       {/* Table */}
-      <div className="glass-card rounded-2xl p-4 md:p-5">
+      <div className="glass-card card-lift rounded-2xl p-4 md:p-5 transition-all duration-300">
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
@@ -73,16 +76,16 @@ export function ConversationsTab({ data, t, loading, onRowClick }: Props) {
               {data.map((row, i) => (
                 <TableRow
                   key={i}
-                  className="text-xs cursor-pointer hover:bg-foreground/[0.04] transition-colors"
+                  className="text-xs cursor-pointer hover:bg-primary/[0.04] transition-all duration-200 hover:translate-x-0.5"
                   onClick={() => onRowClick('conversations', row.date, row.date)}
                 >
                   <TableCell className="font-medium">{row.date}</TableCell>
                   <TableCell className="text-right tabular-nums font-semibold">{row.total}</TableCell>
                   <TableCell className="text-right tabular-nums">
-                    <Badge variant="secondary" className="text-[10px] h-5 px-1.5 bg-amber-500/10 text-amber-600 dark:text-amber-400 hover:bg-amber-500/15">{row.open}</Badge>
+                    <Badge variant="secondary" className="text-[10px] h-5 px-1.5 bg-amber-500/10 text-amber-600 dark:text-amber-400 hover:bg-amber-500/15 transition-transform hover:scale-105">{row.open}</Badge>
                   </TableCell>
                   <TableCell className="text-right tabular-nums">
-                    <Badge variant="secondary" className="text-[10px] h-5 px-1.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/15">{row.resolved}</Badge>
+                    <Badge variant="secondary" className="text-[10px] h-5 px-1.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/15 transition-transform hover:scale-105">{row.resolved}</Badge>
                   </TableCell>
                   <TableCell className="text-right tabular-nums">{row.closed}</TableCell>
                   <TableCell className="text-right tabular-nums text-muted-foreground">{row.avgResponseTime}</TableCell>

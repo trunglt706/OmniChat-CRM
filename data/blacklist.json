@@ -1,1 +1,9 @@
-[]
+[
+  {
+    "type": "ip",
+    "value": "192.0.0.1",
+    "reason": "ok",
+    "addedAt": "2026-08-05T15:33:12.089Z",
+    "addedBy": "admin"
+  }
+]

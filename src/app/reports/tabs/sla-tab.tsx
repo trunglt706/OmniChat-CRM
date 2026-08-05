@@ -23,11 +23,14 @@ export function SlaTab({ data, t }: Props) {
   })
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 animate-slide-up">
       {/* Top Chart */}
       {chartData.length > 0 && (
-        <div id="chart-sla" className="glass-card rounded-2xl p-4 md:p-5">
-          <p className="text-xs font-semibold mb-3">{t('reports.sla.title') || 'Tỉ lệ tuân thủ cam kết SLA'}</p>
+        <div id="chart-sla" className="glass-card card-lift rounded-2xl p-4 md:p-5 transition-all duration-300 hover:shadow-xl hover:shadow-emerald-500/5 hover:border-emerald-500/20">
+          <p className="text-xs font-semibold mb-3 flex items-center gap-2">
+            <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+            {t('reports.sla.title') || 'Tỉ lệ tuân thủ cam kết SLA'}
+          </p>
           <div className="h-56 md:h-64">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={chartData} margin={{ top: 4, right: 4, left: -20, bottom: 4 }}>
@@ -38,7 +41,7 @@ export function SlaTab({ data, t }: Props) {
                   formatter={(val: any) => [`${val}%`, t('reports.sla.col.compliance')]}
                   contentStyle={{ fontSize: 12, borderRadius: 12, border: '1px solid oklch(0 0 0 / 0.06)', boxShadow: '0 4px 12px oklch(0 0 0 / 0.08)' }}
                 />
-                <Bar dataKey="compliance" name={t('reports.sla.col.compliance')} radius={[4, 4, 0, 0]}>
+                <Bar dataKey="compliance" name={t('reports.sla.col.compliance')} radius={[6, 6, 0, 0]} isAnimationActive animationDuration={1200} animationEasing="ease-in-out">
                   {chartData.map((entry, index) => (
                     <Cell
                       key={`cell-${index}`}
@@ -53,7 +56,7 @@ export function SlaTab({ data, t }: Props) {
       )}
 
       {/* Table */}
-      <div className="glass-card rounded-2xl p-4 md:p-5">
+      <div className="glass-card card-lift rounded-2xl p-4 md:p-5 transition-all duration-300">
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
@@ -68,7 +71,7 @@ export function SlaTab({ data, t }: Props) {
               {data.map((row, i) => {
                 const complianceNum = parseInt(row.compliance) || 0
                 return (
-                  <TableRow key={i} className="text-xs">
+                  <TableRow key={i} className="text-xs hover:bg-primary/[0.04] transition-all duration-200 hover:translate-x-0.5">
                     <TableCell className="font-medium">{row.metric}</TableCell>
                     <TableCell className="text-center">
                       <Badge variant="outline" className="text-[10px] h-5 px-2 font-mono">{row.target}</Badge>

@@ -87,6 +87,7 @@ interface CRMState {
   setTags: (t: Tag[]) => void
   agents: Agent[]
   setAgents: (a: Agent[]) => void
+  updateAgentStatus: (agentId: number | string, status: string) => void
 
   // Notes
   notes: InternalNote[]
@@ -264,6 +265,9 @@ export const useCRMStore = create<CRMState>((set, get) => ({
   setTags: (t) => set({ tags: t }),
   agents: [],
   setAgents: (a) => set({ agents: a }),
+  updateAgentStatus: (agentId, status) => set((s) => ({
+    agents: s.agents.map((a) => (String(a.id) === String(agentId) ? { ...a, status: status as any } : a)),
+  })),
 
   notes: [],
   setNotes: (n) => set({ notes: n }),

@@ -30,11 +30,14 @@ export function BotPerformanceTab({ data, t }: Props) {
   const colors = ['#8b5cf6', '#10b981', '#3b82f6', '#f59e0b', '#06b6d4', '#ec4899']
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 animate-slide-up">
       {/* Top Chart */}
       {chartData.length > 0 && (
-        <div id="chart-botPerformance" className="glass-card rounded-2xl p-4 md:p-5">
-          <p className="text-xs font-semibold mb-3">{t('reports.botPerformance.title') || 'Chỉ số hiệu suất Bot AI'}</p>
+        <div id="chart-botPerformance" className="glass-card card-lift rounded-2xl p-4 md:p-5 transition-all duration-300 hover:shadow-xl hover:shadow-cyan-500/5 hover:border-cyan-500/20">
+          <p className="text-xs font-semibold mb-3 flex items-center gap-2">
+            <span className="h-2 w-2 rounded-full bg-cyan-500 animate-pulse" />
+            {t('reports.botPerformance.title') || 'Chỉ số hiệu suất Bot AI'}
+          </p>
           <div className="h-56 md:h-64">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={chartData} margin={{ top: 4, right: 4, left: -20, bottom: 4 }}>
@@ -45,7 +48,7 @@ export function BotPerformanceTab({ data, t }: Props) {
                   formatter={(val: any, _name: any, entry: any) => [entry.payload.rawDisplay, t('reports.botPerformance.col.value')]}
                   contentStyle={{ fontSize: 12, borderRadius: 12, border: '1px solid oklch(0 0 0 / 0.06)', boxShadow: '0 4px 12px oklch(0 0 0 / 0.08)' }}
                 />
-                <Bar dataKey="value" name={t('reports.botPerformance.col.value')} radius={[4, 4, 0, 0]}>
+                <Bar dataKey="value" name={t('reports.botPerformance.col.value')} radius={[6, 6, 0, 0]} isAnimationActive animationDuration={1200} animationEasing="ease-in-out">
                   {chartData.map((_, index) => (
                     <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
                   ))}
@@ -57,7 +60,7 @@ export function BotPerformanceTab({ data, t }: Props) {
       )}
 
       {/* Table */}
-      <div className="glass-card rounded-2xl p-4 md:p-5">
+      <div className="glass-card card-lift rounded-2xl p-4 md:p-5 transition-all duration-300">
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
@@ -69,7 +72,7 @@ export function BotPerformanceTab({ data, t }: Props) {
             </TableHeader>
             <TableBody>
               {data.metrics.map((row: any, i: number) => (
-                <TableRow key={i} className="text-xs">
+                <TableRow key={i} className="text-xs hover:bg-primary/[0.04] transition-all duration-200 hover:translate-x-0.5">
                   <TableCell className="font-medium">{metricLabel(row.metric)}</TableCell>
                   <TableCell className="text-right tabular-nums font-semibold">{row.value}</TableCell>
                   <TableCell className="text-center">

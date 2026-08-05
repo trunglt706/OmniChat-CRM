@@ -11,7 +11,9 @@ interface Props {
 }
 
 export function TagDetail({ data, t }: Props) {
-  if (!data) return null
+  if (!data || !data.tag) return null
+  const conversations = Array.isArray(data.conversations) ? data.conversations : []
+
   return (
     <div className="glass-card rounded-2xl p-4 md:p-5">
       <p className="text-sm font-bold mb-3">{t('reports.tags.detail.title', { tag: data.tag })}</p>
@@ -30,7 +32,7 @@ export function TagDetail({ data, t }: Props) {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {(data.conversations || []).map((c: any, i: number) => (
+            {conversations.map((c: any, i: number) => (
               <TableRow key={i} className="text-xs">
                 <TableCell className="font-mono text-[10px] text-muted-foreground">{c.id}</TableCell>
                 <TableCell className="font-medium">{c.customer}</TableCell>

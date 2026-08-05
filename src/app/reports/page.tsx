@@ -117,39 +117,46 @@ export default function ReportsPage() {
     return params.toString()
   }, [startDate, endDate, preset])
 
-  // ─── Fetch all report data ───
-  const fetchAll = useCallback(async () => {
+  // ─── Cache tracking for loaded tabs per queryParams ───
+  const loadedTabsRef = useRef<Record<string, Set<string>>>({})
+
+  // ─── Fetch ONLY active tab API on demand ───
+  const fetchActiveTabData = useCallback(async (forceRefresh = false) => {
+    const currentKey = queryParams
+    if (!loadedTabsRef.current[currentKey] || forceRefresh) {
+      loadedTabsRef.current[currentKey] = new Set()
+    }
+    const loadedSet = loadedTabsRef.current[currentKey]
+
+    // Skip if active tab is already loaded and not forceRefresh
+    if (!forceRefresh && loadedSet.has(activeTab)) {
+      return
+    }
+
     setLoading(true)
     try {
-      const base = `/api/reports?${queryParams}`
-      const [conv, agents, sla, channels, customers, messages, rt, bot, tags, trends] = await Promise.all([
-        fetch(`${base}&type=conversations`).then(r => r.json()),
-        fetch(`${base}&type=agents`).then(r => r.json()),
-        fetch(`${base}&type=sla`).then(r => r.json()),
-        fetch(`${base}&type=channels`).then(r => r.json()),
-        fetch(`${base}&type=customers`).then(r => r.json()),
-        fetch(`${base}&type=messages`).then(r => r.json()),
-        fetch(`${base}&type=responseTime`).then(r => r.json()),
-        fetch(`${base}&type=botPerformance`).then(r => r.json()),
-        fetch(`${base}&type=tags`).then(r => r.json()),
-        fetch(`${base}&type=resolutionTrends`).then(r => r.json()),
-      ])
-      setConversationsData(Array.isArray(conv) ? conv : [])
-      setAgentsData(Array.isArray(agents) ? agents : [])
-      setSlaData(Array.isArray(sla) ? sla : [])
-      setChannelsData(Array.isArray(channels) ? channels : [])
-      setCustomersData(Array.isArray(customers) ? customers : [])
-      if (messages && messages.hourly) setMessagesData(messages)
-      if (rt && rt.buckets) setResponseTimeData(rt)
-      if (bot && bot.metrics) setBotPerformanceData(bot)
-      setTagsData(Array.isArray(tags) ? tags : [])
-      setResolutionTrendsData(Array.isArray(trends) ? trends : [])
+      const res = await fetch(`/api/reports?${queryParams}&type=${activeTab}`)
+      const data = await res.json()
+      loadedSet.add(activeTab)
+
+      switch (activeTab) {
+        case 'conversations': setConversationsData(Array.isArray(data) ? data : []); break
+        case 'agents': setAgentsData(Array.isArray(data) ? data : []); break
+        case 'sla': setSlaData(Array.isArray(data) ? data : []); break
+        case 'channels': setChannelsData(Array.isArray(data) ? data : []); break
+        case 'customers': setCustomersData(Array.isArray(data) ? data : []); break
+        case 'messages': if (data && data.hourly) setMessagesData(data); break
+        case 'responseTime': if (data && data.buckets) setResponseTimeData(data); break
+        case 'botPerformance': if (data && data.metrics) setBotPerformanceData(data); break
+        case 'tags': setTagsData(Array.isArray(data) ? data : []); break
+        case 'resolutionTrends': setResolutionTrendsData(Array.isArray(data) ? data : []); break
+      }
     } catch (e) {
       console.error('Reports fetch error', e)
     } finally {
       setLoading(false)
     }
-  }, [queryParams])
+  }, [queryParams, activeTab])
 
   // ─── Fetch detail ───
   const fetchDetail = useCallback(async (type: string, id: string | number) => {
@@ -168,7 +175,7 @@ export default function ReportsPage() {
     }
   }, [startDate, endDate])
 
-  useEffect(() => { fetchAll() }, [fetchAll])
+  useEffect(() => { fetchActiveTabData() }, [fetchActiveTabData])
 
   const handleRowClick = useCallback((type: string, id: string | number, label: string) => {
     setDetailView({ type, id, label })
@@ -176,21 +183,21 @@ export default function ReportsPage() {
   }, [fetchDetail])
 
   // ─── Summary stats ───
-  const totalConvs = conversationsData.reduce((s, d) => s + (d.total || 0), 0)
-  const totalResolved = conversationsData.reduce((s, d) => s + (d.resolved || 0), 0)
+  const totalConvs = conversationsData.length ? conversationsData.reduce((s, d) => s + (d.total || 0), 0) : null
+  const totalResolved = conversationsData.length ? conversationsData.reduce((s, d) => s + (d.resolved || 0), 0) : null
   const avgSatisfaction = agentsData.length
     ? (agentsData.reduce((s: number, d: any) => s + parseFloat(d.satisfaction || 0), 0) / agentsData.length).toFixed(1)
-    : '0.0'
+    : null
   const slaCompliance = slaData.length
     ? (slaData.reduce((s: number, d: any) => { const n = parseInt(d.compliance); return s + (isNaN(n) ? 0 : n) }, 0) / slaData.length).toFixed(0) + '%'
-    : '0%'
+    : null
 
   const summaryValues = useMemo(() => [
-    totalConvs.toLocaleString(),
-    totalResolved.toLocaleString(),
+    totalConvs !== null ? totalConvs.toLocaleString() : '-',
+    totalResolved !== null ? totalResolved.toLocaleString() : '-',
     conversationsData.length > 0 ? conversationsData[conversationsData.length - 1]?.avgResponseTime || '-' : '-',
-    avgSatisfaction,
-    slaCompliance,
+    avgSatisfaction !== null ? avgSatisfaction : '-',
+    slaCompliance !== null ? slaCompliance : '-',
   ], [totalConvs, totalResolved, conversationsData, avgSatisfaction, slaCompliance])
 
   // ─── Channel names ───
@@ -352,23 +359,21 @@ export default function ReportsPage() {
     }
   }, [activeTab, t, getDateRangeLabel, conversationsData, agentsData, responseTimeData, channelsData, customersData, messagesData, slaData, botPerformanceData, tagsData, resolutionTrendsData])
 
+  const reportTabContainerRef = useRef<HTMLDivElement>(null)
+
   const handleExportChartImage = useCallback(() => {
-    const refMap: Record<string, React.RefObject<HTMLDivElement | null>> = {
-      messages: chartRefMessages,
-      responseTime: chartRefResponseTime,
-      resolutionTrends: chartRefResolutionTrends,
-    }
-    const el = refMap[activeTab]?.current
+    const el = reportTabContainerRef.current
     if (!el) return
     toPng(el, { backgroundColor: '#ffffff', pixelRatio: 2 }).then((dataUrl) => {
       const link = document.createElement('a')
-      link.download = `omnichat-chart-${activeTab}-${getDateRangeLabel()}.png`
+      const name = detailView ? detailView.type : activeTab
+      link.download = `omnichat-report-${name}-${getDateRangeLabel()}.png`
       link.href = dataUrl
       link.click()
     }).catch((err) => {
       console.error('Chart image export error', err)
     })
-  }, [activeTab, getDateRangeLabel])
+  }, [activeTab, detailView, getDateRangeLabel])
 
   // ═══════════════════════════════════════════
   // ─── Tab content renderer ───
@@ -461,7 +466,7 @@ export default function ReportsPage() {
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
             <Button variant="outline" size="sm" className="h-8 rounded-xl text-xs gap-1.5 border-border/40"
-              onClick={fetchAll} disabled={loading}>
+              onClick={() => fetchActiveTabData(true)} disabled={loading}>
               {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
               <span className="hidden sm:inline">{t('reports.refresh')}</span>
             </Button>
@@ -470,13 +475,11 @@ export default function ReportsPage() {
               <Download className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">{t('reports.export')}</span>
             </Button>
-            {!detailView && CHART_TABS.includes(activeTab) && (
-              <Button variant="outline" size="sm" className="h-8 rounded-xl text-xs gap-1.5 border-border/40"
-                onClick={handleExportChartImage}>
-                <ImageIcon className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">{t('reports.export') || 'PNG'}</span>
-              </Button>
-            )}
+            <Button variant="outline" size="sm" className="h-8 rounded-xl text-xs gap-1.5 border-border/40"
+              onClick={handleExportChartImage} disabled={loading}>
+              <ImageIcon className="h-3.5 w-3.5 text-violet-500" />
+              <span className="hidden sm:inline">PNG</span>
+            </Button>
           </div>
         </div>
 
@@ -548,7 +551,7 @@ export default function ReportsPage() {
       </div>
 
       {/* Scrollable content */}
-      <div className="flex-1 min-h-0 overflow-y-auto px-4 md:px-6 pb-6">
+      <div ref={reportTabContainerRef} className="flex-1 min-h-0 overflow-y-auto px-4 md:px-6 pb-6 bg-background">
         {detailView ? (
           renderDetailContent()
         ) : (

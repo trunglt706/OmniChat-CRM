@@ -39,6 +39,18 @@ function MobileCustomerPanel() {
   )
 }
 
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState<boolean | null>(null)
+  useEffect(() => {
+    const mql = window.matchMedia('(max-width: 767px)')
+    const onChange = () => setIsMobile(mql.matches)
+    setIsMobile(mql.matches)
+    mql.addEventListener('change', onChange)
+    return () => mql.removeEventListener('change', onChange)
+  }, [])
+  return isMobile
+}
+
 export default function CRMPageWrapper() {
   return (
     <Suspense>
@@ -112,11 +124,36 @@ function CRMPage() {
     }
   }, [])
 
+  const isMobile = useIsMobile()
+
   // Socket: connect/disconnect based on simulation state
   useEffect(() => {
     if (simulationRunning) { socket.connect() } else { socket.disconnect() }
     return () => { socket.disconnect() }
   }, [simulationRunning])
+
+  const updateAgentStatus = useCRMStore((s) => s.updateAgentStatus)
+
+  // ── Global socket agent status listener ──
+  useEffect(() => {
+    const unsubStatus = socket.on('agent_status', (data: { agentId?: number | string; userId?: number | string; id?: number | string; status: string }) => {
+      const id = data.agentId || data.userId || data.id
+      if (id && data.status) updateAgentStatus(id, data.status)
+    })
+    const unsubUserStatus = socket.on('user_status', (data: { userId?: number | string; agentId?: number | string; id?: number | string; status: string }) => {
+      const id = data.userId || data.agentId || data.id
+      if (id && data.status) updateAgentStatus(id, data.status)
+    })
+    const unsubAgentUpdate = socket.on('agent_update', (data: { id?: number | string; agentId?: number | string; status: string }) => {
+      const id = data.id || data.agentId
+      if (id && data.status) updateAgentStatus(id, data.status)
+    })
+    return () => {
+      unsubStatus()
+      unsubUserStatus()
+      unsubAgentUpdate()
+    }
+  }, [updateAgentStatus])
 
   // Socket: listen for new messages from OTHER conversations
   useEffect(() => {
@@ -132,11 +169,21 @@ function CRMPage() {
       })
     })
     return unsub
-  }, [incrementUnread, addNotification])
+  }, [incrementUnread, addNotification, t])
 
-  const renderInbox = () => (
-    <>
-      <div className="hidden md:flex flex-1 overflow-hidden">
+  const renderInbox = () => {
+    if (isMobile) {
+      return (
+        <div className="flex-1 overflow-hidden">
+          {mobileView === 'list' && <div className="h-full min-h-0 mobile-slide-enter"><ConversationList /></div>}
+          {mobileView === 'chat' && <div className="h-full min-h-0 mobile-slide-enter"><ChatArea /></div>}
+          {mobileView === 'panel' && <div className="h-full min-h-0 mobile-slide-enter"><MobileCustomerPanel /></div>}
+        </div>
+      )
+    }
+
+    return (
+      <div className="flex flex-1 overflow-hidden">
         <ResizablePanelGroup direction="horizontal">
           <ResizablePanel defaultSize={26} minSize={20} maxSize={40} className="border-r border-border/20">
             <ConversationList />
@@ -155,13 +202,8 @@ function CRMPage() {
           )}
         </ResizablePanelGroup>
       </div>
-      <div className="md:hidden flex-1 overflow-hidden">
-        {mobileView === 'list' && <div className="h-full min-h-0 mobile-slide-enter"><ConversationList /></div>}
-        {mobileView === 'chat' && <div className="h-full min-h-0 mobile-slide-enter"><ChatArea /></div>}
-        {mobileView === 'panel' && <div className="h-full min-h-0 mobile-slide-enter"><MobileCustomerPanel /></div>}
-      </div>
-    </>
-  )
+    )
+  }
 
   return (
     <div className="h-dvh h-screen flex flex-col bg-background overflow-hidden">

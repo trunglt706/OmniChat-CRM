@@ -10,8 +10,8 @@ interface Props {
 }
 
 export function ChannelDetail({ data, t }: Props) {
-  if (!data) return null
-  const { channel, dailyBreakdown } = data
+  if (!data || !data.channel) return null
+  const { channel, dailyBreakdown = [] } = data
   return (
     <div className="space-y-4">
       <div className="glass-card rounded-2xl p-4 md:p-5">

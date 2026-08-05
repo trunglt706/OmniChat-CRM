@@ -12,6 +12,8 @@ interface Props {
 
 export function ConversationDetail({ data, t }: Props) {
   if (!data) return null
+  const items = Array.isArray(data) ? data : (Array.isArray(data?.items) ? data.items : (Array.isArray(data?.conversations) ? data.conversations : []))
+
   return (
     <div className="glass-card rounded-2xl p-4 md:p-5">
       <div className="overflow-x-auto max-h-[60vh] overflow-y-auto">
@@ -30,7 +32,7 @@ export function ConversationDetail({ data, t }: Props) {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {data.map((c: any, i: number) => (
+            {items.map((c: any, i: number) => (
               <TableRow key={i} className="text-xs">
                 <TableCell className="font-mono text-[10px] text-muted-foreground">{c.id}</TableCell>
                 <TableCell className="font-medium">{c.customer}</TableCell>
