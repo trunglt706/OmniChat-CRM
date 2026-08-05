@@ -136,8 +136,8 @@ const ConversationItem = memo(function ConversationItem({ convo, index }: ConvoI
             <span className={cn(
               'text-[10px] px-1.5 py-0.5 rounded-md font-semibold transition-all duration-200',
               convo.priority === 'urgent' ? 'bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400 badge-glow-red' :
-              convo.priority === 'high' ? 'bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400 badge-glow-amber' :
-              'bg-slate-50 text-slate-500 dark:bg-slate-800/40 dark:text-slate-400'
+                convo.priority === 'high' ? 'bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400 badge-glow-amber' :
+                  'bg-slate-50 text-slate-500 dark:bg-slate-800/40 dark:text-slate-400'
             )}>
               {priorityLabel}
             </span>

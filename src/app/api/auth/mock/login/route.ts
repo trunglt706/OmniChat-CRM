@@ -52,7 +52,7 @@ export async function POST(request: Request) {
 
     const token = await encode({
       token: {
-        sub: user.id,
+        sub: String(user.id),
         name: user.name,
         email: user.email,
         picture: user.avatar,

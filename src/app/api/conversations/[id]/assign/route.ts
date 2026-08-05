@@ -5,12 +5,15 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await params;
+  const { id: idStr } = await params;
+  const id = Number(idStr);
+  if (isNaN(id)) return NextResponse.json({ error: 'Invalid ID' }, { status: 400 });
+
   const { ownerId } = await request.json();
 
   const conversation = await db.conversation.update({
     where: { id },
-    data: { ownerId: ownerId || null, updatedAt: new Date() },
+    data: { ownerId: ownerId ? Number(ownerId) : null, updatedAt: new Date() },
     include: {
       owner: { select: { id: true, name: true, avatar: true, status: true } },
     },

@@ -5,7 +5,10 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await params;
+  const { id: idStr } = await params;
+  const id = Number(idStr);
+  if (isNaN(id)) return NextResponse.json({ error: 'Invalid ID' }, { status: 400 });
+
   const notes = await db.internalNote.findMany({
     where: { conversationId: id },
     include: { author: { select: { id: true, name: true, avatar: true } } },
@@ -18,7 +21,10 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await params;
+  const { id: idStr } = await params;
+  const id = Number(idStr);
+  if (isNaN(id)) return NextResponse.json({ error: 'Invalid ID' }, { status: 400 });
+
   const { content, isPinned = false, customerId } = await request.json();
 
   // Use first available agent as author for mock
@@ -30,7 +36,7 @@ export async function POST(
   const note = await db.internalNote.create({
     data: {
       conversationId: id,
-      customerId: customerId || null,
+      customerId: customerId ? Number(customerId) : null,
       authorId: firstAgent.id,
       content,
       isPinned,
@@ -45,9 +51,13 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id: conversationId } = await params;
+  const { id: conversationIdStr } = await params;
+  const conversationId = Number(conversationIdStr);
+  if (isNaN(conversationId)) return NextResponse.json({ error: 'Invalid ID' }, { status: 400 });
+
   const body = await request.json();
-  const { noteId, content, isPinned } = body;
+  const { noteId: noteIdStr, content, isPinned } = body;
+  const noteId = Number(noteIdStr);
   if (!noteId) return NextResponse.json({ error: 'noteId required' }, { status: 400 });
 
   const data: Record<string, unknown> = {};
@@ -67,10 +77,14 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id: conversationId } = await params;
+  const { id: conversationIdStr } = await params;
+  const conversationId = Number(conversationIdStr);
+  if (isNaN(conversationId)) return NextResponse.json({ error: 'Invalid ID' }, { status: 400 });
+
   const { searchParams } = new URL(request.url);
-  const noteId = searchParams.get('noteId');
-  if (!noteId) return NextResponse.json({ error: 'noteId required' }, { status: 400 });
+  const noteIdStr = searchParams.get('noteId');
+  if (!noteIdStr) return NextResponse.json({ error: 'noteId required' }, { status: 400 });
+  const noteId = Number(noteIdStr);
 
   await db.internalNote.delete({
     where: { id: noteId, conversationId },

@@ -285,7 +285,7 @@ async function main() {
     ],
   }
 
-  const conversations = []
+  const conversations: any[] = []
   for (const cd of convoData) {
     const customer = customers[cd.customerIdx]
     const owner = cd.ownerIdx !== null ? agents[cd.ownerIdx] : null
@@ -308,7 +308,7 @@ async function main() {
         messages: {
           create: messageTemplates[String(convoData.indexOf(cd))]?.map((m, mi) => ({
             senderType: m.senderType,
-            senderId: m.senderType === 'agent' ? owner?.id : m.senderType === 'bot' ? 'bot' : null,
+            senderId: m.senderType === 'agent' ? owner?.id : null,
             senderName: m.senderName,
             messageType: m.messageType || 'text',
             content: m.content,
@@ -438,7 +438,7 @@ async function main() {
   // Audit Logs
   await Promise.all([
     prisma.auditLog.create({ data: { userId: agents[2].id, action: 'assign', entityType: 'conversation', entityId: conversations[0].id, details: '{"to":"Phạm Minh Tuấn"}' } }),
-    prisma.auditLog.create({ data: { userId: agents[2].id, action: 'reply', entityType: 'message', entityId: conversations[0].messages[1]?.id || '', details: null } }),
+    prisma.auditLog.create({ data: { userId: agents[2].id, action: 'reply', entityType: 'message', entityId: conversations[0].messages[1]?.id || null, details: null } }),
     prisma.auditLog.create({ data: { userId: agents[1].id, action: 'status_change', entityType: 'conversation', entityId: conversations[3].id, details: '{"from":"open","to":"pending"}' } }),
   ])
 

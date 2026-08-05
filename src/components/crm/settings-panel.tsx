@@ -102,29 +102,29 @@ export default function SettingsPanel() {
         }
       </div>
       {/* Config summary */}
-      {result.config && (
+      {result.config && typeof result.config === 'object' ? (
         <div className="space-y-0.5">
-          {Object.entries(result.config).map(([k, v]) => (
+          {Object.entries(result.config as Record<string, unknown>).map(([k, v]) => (
             <div key={k} className="flex justify-between gap-4">
               <span className="text-muted-foreground/60">{k}</span>
               <span className="font-medium">{String(v)}</span>
             </div>
           ))}
         </div>
-      )}
+      ) : null}
       {/* Transport details */}
-      {result.transport?.sse && (result.transport.sse as Record<string, unknown>).alive && (
+      {result.transport?.sse && (result.transport.sse as Record<string, unknown>).alive ? (
         <div className="flex items-center gap-1.5 text-emerald-600">
           <Wifi className="h-3 w-3" />
-          SSE: {t('settings.ws.connected')} ({(result.transport.sse as Record<string, unknown>).latency}ms)
+          SSE: {t('settings.ws.connected')} ({String((result.transport.sse as Record<string, unknown>).latency)}ms)
         </div>
-      )}
-      {result.transport?.websocket && (result.transport.websocket as Record<string, unknown>).alive && (
+      ) : null}
+      {result.transport?.websocket && (result.transport.websocket as Record<string, unknown>).alive ? (
         <div className="flex items-center gap-1.5 text-emerald-600">
           <Wifi className="h-3 w-3" />
-          WebSocket: {t('settings.ws.connected')} ({(result.transport.websocket as Record<string, unknown>).latency}ms)
+          WebSocket: {t('settings.ws.connected')} ({String((result.transport.websocket as Record<string, unknown>).latency)}ms)
         </div>
-      )}
+      ) : null}
       {/* Errors */}
       {result.errors && result.errors.length > 0 && (
         <div className="space-y-0.5">

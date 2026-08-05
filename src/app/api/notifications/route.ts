@@ -13,12 +13,15 @@ export async function GET(req: NextRequest) {
     })
     if (!token?.sub) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+    const userId = Number(token.sub)
+    if (isNaN(userId)) return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
+
     const { searchParams } = new URL(req.url)
     const unreadOnly = searchParams.get('unread') === 'true'
     const limit = Math.min(parseInt(searchParams.get('limit') || '50'), 100)
     const offset = parseInt(searchParams.get('offset') || '0')
 
-    const where: any = { userId: token.sub as string }
+    const where: any = { userId }
     if (unreadOnly) where.read = false
 
     const [data, total] = await Promise.all([
@@ -59,6 +62,9 @@ export async function POST(req: NextRequest) {
     })
     if (!token?.sub) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+    const userId = Number(token.sub)
+    if (isNaN(userId)) return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
+
     const body = await req.json()
     const { type, title, body: notifBody, conversationId } = body
 
@@ -68,11 +74,11 @@ export async function POST(req: NextRequest) {
 
     const notification = await db.notification.create({
       data: {
-        userId: token.sub as string,
+        userId,
         type,
         title,
         body: notifBody,
-        conversationId: conversationId || null,
+        conversationId: conversationId ? Number(conversationId) : null,
       },
     })
 
@@ -103,18 +109,22 @@ export async function DELETE(req: NextRequest) {
     })
     if (!token?.sub) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    const { searchParams } = new URL(req.url)
-    const singleId = searchParams.get('id')
+    const userId = Number(token.sub)
+    if (isNaN(userId)) return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
 
-    if (singleId) {
+    const { searchParams } = new URL(req.url)
+    const singleIdStr = searchParams.get('id')
+
+    if (singleIdStr) {
+      const singleId = Number(singleIdStr)
       // Delete single notification (must belong to current user)
       await db.notification.deleteMany({
-        where: { id: singleId, userId: token.sub as string },
+        where: { id: singleId, userId },
       })
     } else {
       // Clear all notifications for current user
       await db.notification.deleteMany({
-        where: { userId: token.sub as string },
+        where: { userId },
       })
     }
 

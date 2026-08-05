@@ -16,10 +16,13 @@ export async function PATCH(
     })
     if (!token?.sub) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    const { id } = await params
+    const { id: idStr } = await params
+    const id = Number(idStr)
+    const userId = Number(token.sub)
+    if (isNaN(id) || isNaN(userId)) return NextResponse.json({ error: 'Invalid ID' }, { status: 400 })
 
     await db.notification.updateMany({
-      where: { id, userId: token.sub as string },
+      where: { id, userId },
       data: { read: true },
     })
 

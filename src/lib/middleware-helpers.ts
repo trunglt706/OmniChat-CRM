@@ -60,7 +60,7 @@ export async function withBusinessRateLimit(
   const user = await getAuthUser(request)
   if (!user) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json' } })
 
-  const result = await checkBusinessRateLimit(conversationId, user.id)
+  const result = await checkBusinessRateLimit(conversationId, String(user.id))
   if (!result.allowed) {
     return rateLimitResponse(result)
   }

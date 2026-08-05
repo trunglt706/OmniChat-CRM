@@ -1,5 +1,5 @@
 export interface Agent {
-  id: string
+  id: number
   name: string
   email: string
   avatar: string | null
@@ -8,7 +8,7 @@ export interface Agent {
 }
 
 export interface CustomerIdentity {
-  id: string
+  id: number
   platform: string
   platformUserId: string | null
   platformPageId: string | null
@@ -17,7 +17,7 @@ export interface CustomerIdentity {
 }
 
 export interface Customer {
-  id: string
+  id: number
   name: string
   phone: string | null
   email: string | null
@@ -33,25 +33,25 @@ export interface Customer {
 }
 
 export interface Tag {
-  id: string
+  id: number
   name: string
   color: string
   description: string | null
 }
 
 export interface ConversationTag {
-  id: string
-  conversationId: string
-  tagId: string
+  id: number
+  conversationId: number
+  tagId: number
   tag: Tag
   createdAt: string
 }
 
 export interface Message {
-  id: string
-  conversationId: string
+  id: number
+  conversationId: number
   senderType: 'customer' | 'agent' | 'bot' | 'system'
-  senderId: string | null
+  senderId: number | null
   senderName: string | null
   messageType: 'text' | 'image' | 'video' | 'audio' | 'file' | 'sticker' | 'location' | 'system' | 'event'
   content: string | null
@@ -65,11 +65,11 @@ export interface Message {
 }
 
 export interface InternalNote {
-  id: string
-  conversationId: string | null
-  customerId: string | null
-  authorId: string
-  author: { id: string; name: string; avatar: string | null }
+  id: number
+  conversationId: number | null
+  customerId: number | null
+  authorId: number
+  author: { id: number; name: string; avatar: string | null }
   content: string
   isPinned: boolean
   createdAt: string
@@ -77,15 +77,15 @@ export interface InternalNote {
 }
 
 export interface Lead {
-  id: string
-  customerId: string | null
-  conversationId: string | null
+  id: number
+  customerId: number | null
+  conversationId: number | null
   source: string | null
   campaign: string | null
   status: 'new' | 'contacted' | 'qualified' | 'proposal' | 'negotiation' | 'won' | 'lost'
   value: number | null
-  ownerId: string | null
-  owner: { id: string; name: string; avatar: string | null } | null
+  ownerId: number | null
+  owner: { id: number; name: string; avatar: string | null } | null
   nextFollowup: string | null
   probability: number | null
   notes: string | null
@@ -94,20 +94,20 @@ export interface Lead {
 }
 
 export interface Conversation {
-  id: string
-  customerId: string
+  id: number
+  customerId: number
   channel: string
   status: 'open' | 'pending' | 'resolved' | 'closed' | 'spam' | 'archived'
   priority: 'low' | 'medium' | 'high' | 'urgent'
   subject: string | null
   slaFirstResponse: string | null
   slaResolve: string | null
-  ownerId: string | null
+  ownerId: number | null
   createdAt: string
   updatedAt: string
   customer: Customer
-  owner: { id: string; name: string; avatar: string | null; status: string } | null
-  followers?: { id: string; name: string; avatar: string | null }[]
+  owner: { id: number; name: string; avatar: string | null; status: string } | null
+  followers?: { id: number; name: string; avatar: string | null }[]
   tags: ConversationTag[]
   notes?: InternalNote[]
   leads?: Lead[]

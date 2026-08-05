@@ -52,7 +52,7 @@ interface DashboardData {
   }
   channelDistribution: { channel: string; count: number }[]
   agentPerformance: {
-    id: string; name: string; role: string; status: string
+    id: number; name: string; role: string; status: string
     activeConversations: number; totalMessages: number; resolvedConversations: number
   }[]
   leadFunnel: Record<string, number>

@@ -22,10 +22,11 @@ const WS_PRESENCE_PREFIX = 'ws:presence:'
 const WS_AUTH_TTL = 86400 // 24h (matches session)
 
 interface WsUser {
-  id: string
+  id: number
+  uuid: string
   name: string
   role: string
-  tenantId?: string
+  tenantId?: number
 }
 
 /**
@@ -40,19 +41,23 @@ export async function authenticateWsConnection(request: NextRequest): Promise<Ws
   const tokenParam = request.nextUrl.searchParams.get('token')
   if (tokenParam) {
     try {
-      const { jwt } = await import('next-auth/jwt')
-      const token = await jwt.decode({ token: tokenParam, secret })
+      const { decode } = await import('next-auth/jwt')
+      const token = await decode({ token: tokenParam, secret })
       if (token?.sub) {
-        const user = await db.user.findUnique({
-          where: { id: token.sub as string },
-          select: { id: true, name: true, role: true, organizationId: true },
-        })
-        if (user) {
-          return {
-            id: user.id,
-            name: user.name,
-            role: user.role,
-            tenantId: user.organizationId || undefined,
+        const userId = Number(token.sub)
+        if (!isNaN(userId)) {
+          const user = await db.user.findUnique({
+            where: { id: userId },
+            select: { id: true, uuid: true, name: true, role: true, organizationId: true },
+          })
+          if (user) {
+            return {
+              id: user.id,
+              uuid: user.uuid,
+              name: user.name,
+              role: user.role,
+              tenantId: user.organizationId || undefined,
+            }
           }
         }
       }
@@ -64,15 +69,19 @@ export async function authenticateWsConnection(request: NextRequest): Promise<Ws
     const token = await getToken({ req: request, secret, cookieName: 'next-auth.session-token' })
     if (!token?.sub) return null
 
+    const userId = Number(token.sub)
+    if (isNaN(userId)) return null
+
     const user = await db.user.findUnique({
-      where: { id: token.sub as string },
-      select: { id: true, name: true, role: true, organizationId: true },
+      where: { id: userId },
+      select: { id: true, uuid: true, name: true, role: true, organizationId: true },
     })
 
     if (!user) return null
 
     return {
       id: user.id,
+      uuid: user.uuid,
       name: user.name,
       role: user.role,
       tenantId: user.organizationId || undefined,
@@ -87,7 +96,7 @@ export async function authenticateWsConnection(request: NextRequest): Promise<Ws
  * Users can subscribe to conversations they own or follow.
  */
 export async function authorizeChannelAccess(
-  userId: string,
+  userId: number,
   channel: string
 ): Promise<boolean> {
   const redis = getRedis()
@@ -100,7 +109,9 @@ export async function authorizeChannelAccess(
 
   // Parse channel name: conversation:{id} or user:{id}
   if (channel.startsWith('conversation:')) {
-    const conversationId = channel.replace('conversation:', '')
+    const conversationId = Number(channel.replace('conversation:', ''))
+    if (isNaN(conversationId)) return false
+
     const conversation = await db.conversation.findUnique({
       where: { id: conversationId },
       select: { ownerId: true },
@@ -112,14 +123,14 @@ export async function authorizeChannelAccess(
   }
 
   if (channel.startsWith('user:')) {
-    const targetUserId = channel.replace('user:', '')
+    const targetUserId = Number(channel.replace('user:', ''))
     // Users can subscribe to their own notifications
     const authorized = targetUserId === userId
     await redis.set(cacheKey, authorized ? '1' : '0', 300)
     return authorized
   }
 
-  // Global channels (dashboard, notifications)
+  // Global channels (dashboard, notifications, system)
   if (['dashboard', 'notifications', 'system'].includes(channel)) {
     return true
   }
@@ -131,7 +142,7 @@ export async function authorizeChannelAccess(
  * Set user presence (online/offline).
  */
 export async function setPresence(
-  userId: string,
+  userId: number,
   status: 'online' | 'offline' | 'away'
 ): Promise<void> {
   const redis = getRedis()
@@ -142,7 +153,7 @@ export async function setPresence(
 /**
  * Get user presence.
  */
-export async function getPresence(userId: string): Promise<{ status: string; at: number } | null> {
+export async function getPresence(userId: number): Promise<{ status: string; at: number } | null> {
   const redis = getRedis()
   const data = await redis.get(`${WS_PRESENCE_PREFIX}${userId}`)
   if (!data) return null
@@ -152,7 +163,7 @@ export async function getPresence(userId: string): Promise<{ status: string; at:
 /**
  * Extend presence TTL (called on heartbeat).
  */
-export async function heartbeatPresence(userId: string): Promise<void> {
+export async function heartbeatPresence(userId: number): Promise<void> {
   const redis = getRedis()
   const key = `${WS_PRESENCE_PREFIX}${userId}`
   const exists = await redis.exists(key)

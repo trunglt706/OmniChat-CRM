@@ -15,7 +15,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import { CHANNEL_CONFIG, LEAD_STATUS_CONFIG, type InternalNote } from '@/lib/types'
-import type { Lead } from '@/lib/types'
+import { LOCALE_MAP, GRADIENT_CLASSES } from '@/lib/const/chat'
 import {
   User, Phone, Mail, Building, MapPin, Calendar, MessageCircle, Send,
   Globe, Pin, Plus, Loader2, X, ChevronRight, ExternalLink,
@@ -24,10 +24,6 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { apiFetch, apiPost, apiPut, generateIdempotencyKey } from '@/lib/api-client'
-
-const LOCALE_MAP: Record<string, string> = { vi: 'vi-VN', en: 'en-US', zh: 'zh-CN' }
-
-const GRADIENT_CLASSES = ['avatar-gradient-1', 'avatar-gradient-2', 'avatar-gradient-3', 'avatar-gradient-4', 'avatar-gradient-5', 'avatar-gradient-6', 'avatar-gradient-7', 'avatar-gradient-8']
 
 function PlatformBadge({ platform, userName }: { platform: string; userName?: string | null }) {
   const cfg = CHANNEL_CONFIG[platform as keyof typeof CHANNEL_CONFIG]
@@ -161,10 +157,10 @@ function NotesTab() {
   const { t, locale } = useT()
   const [newNote, setNewNote] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editingId, setEditingId] = useState<number | null>(null)
   const [editContent, setEditContent] = useState('')
-  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
-  const [actionLoadingId, setActionLoadingId] = useState<string | null>(null)
+  const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null)
+  const [actionLoadingId, setActionLoadingId] = useState<number | null>(null)
 
   const fetchNotes = async () => {
     if (!selectedConversationId) return
@@ -231,7 +227,7 @@ function NotesTab() {
     }
   }
 
-  const handleDelete = async (noteId: string) => {
+  const handleDelete = async (noteId: number) => {
     if (!selectedConversationId) return
     setActionLoadingId(noteId)
     try {

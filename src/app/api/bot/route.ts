@@ -2,10 +2,15 @@ import { db } from '@/lib/db';
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(request: NextRequest) {
-  const { message, conversationId, customerName } = await request.json();
+  const { message, conversationId: conversationIdStr, customerName } = await request.json();
 
-  if (!message || !conversationId) {
+  if (!message || !conversationIdStr) {
     return NextResponse.json({ error: 'message and conversationId required' }, { status: 400 });
+  }
+
+  const conversationId = Number(conversationIdStr);
+  if (isNaN(conversationId)) {
+    return NextResponse.json({ error: 'Invalid conversationId' }, { status: 400 });
   }
 
   // Get conversation context for better AI response

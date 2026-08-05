@@ -13,8 +13,11 @@ export async function PATCH(req: NextRequest) {
     })
     if (!token?.sub) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+    const userId = Number(token.sub)
+    if (isNaN(userId)) return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
+
     await db.notification.updateMany({
-      where: { userId: token.sub as string, read: false },
+      where: { userId, read: false },
       data: { read: true },
     })
 

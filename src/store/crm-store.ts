@@ -4,18 +4,18 @@ import type { Conversation, ConversationDetail, Message, Tag, Agent, InternalNot
 // ─── Notification Types ───
 export type NotificationType = 'new_message' | 'assignment' | 'sla_breach' | 'mention' | 'system' | 'automation'
 export interface AppNotification {
-  id: string
+  id: number
   type: NotificationType
   title: string
   body: string
-  conversationId?: string
+  conversationId?: number
   read: boolean
   createdAt: string
 }
 
 // ─── User Profile (extended) ───
 export interface UserProfile {
-  id: string
+  id: number
   name: string
   email: string
   phone: string
@@ -34,6 +34,10 @@ export interface AppSettings {
   showPreview: boolean
   autoAssign: boolean
   language: 'vi' | 'en' | 'zh'
+  desktopNotifications?: boolean
+  messagePreview?: boolean
+  emailNotification?: boolean
+  showCustomerPanel?: boolean
 }
 
 // ─── UI Sheet state ───
@@ -55,8 +59,8 @@ interface CRMState {
   setSearchQuery: (q: string) => void
 
   // Selected conversation
-  selectedConversationId: string | null
-  setSelectedConversationId: (id: string | null) => void
+  selectedConversationId: number | null
+  setSelectedConversationId: (id: number | null) => void
   conversationDetail: ConversationDetail | null
   setConversationDetail: (d: ConversationDetail | null) => void
 
@@ -88,8 +92,8 @@ interface CRMState {
   notes: InternalNote[]
   setNotes: (n: InternalNote[]) => void
   addNote: (n: InternalNote) => void
-  updateNote: (id: string, patch: Partial<InternalNote>) => void
-  deleteNote: (id: string) => void
+  updateNote: (id: number, patch: Partial<InternalNote>) => void
+  deleteNote: (id: number) => void
 
   // Loading
   isLoadingConversations: boolean
@@ -127,18 +131,18 @@ interface CRMState {
   setCurrentUser: (u: UserProfile | null) => void
 
   // Unread counts per conversation
-  unreadCounts: Record<string, number>
-  setUnreadCounts: (counts: Record<string, number>) => void
-  incrementUnread: (conversationId: string) => void
-  clearUnread: (conversationId: string) => void
+  unreadCounts: Record<number, number>
+  setUnreadCounts: (counts: Record<number, number>) => void
+  incrementUnread: (conversationId: number) => void
+  clearUnread: (conversationId: number) => void
 
   // ─── Notifications ───
   notifications: AppNotification[]
   setNotifications: (n: AppNotification[]) => void
   addNotification: (n: Omit<AppNotification, 'id' | 'read' | 'createdAt'>) => void
-  markNotificationRead: (id: string) => void
+  markNotificationRead: (id: number) => void
   markAllNotificationsRead: () => void
-  clearNotification: (id: string) => void
+  clearNotification: (id: number) => void
   clearAllNotifications: () => void
   unreadNotificationCount: () => number
   loadNotifications: () => Promise<void>
@@ -167,13 +171,16 @@ const DEFAULT_SETTINGS: AppSettings = {
   language: 'vi',
 }
 
+type NotifQueueItem =
+  | { action: 'create'; data: Omit<AppNotification, 'id' | 'read' | 'createdAt'>; id?: number }
+  | { action: 'read'; id: number }
+  | { action: 'readAll' }
+  | { action: 'delete'; id: number }
+  | { action: 'deleteAll' }
+
 let _notifCounter = 0
 let _settingsPersistTimer: ReturnType<typeof setTimeout> | null = null
-let _notifPersistQueue: { action: 'create'; data: Omit<AppNotification, 'id' | 'read' | 'createdAt'>; id: string }
-  | { action: 'read'; id: string }
-  | { action: 'readAll' }
-  | { action: 'delete'; id: string }
-  | { action: 'deleteAll' }[] = []
+let _notifPersistQueue: NotifQueueItem[] = []
 let _notifFlushTimer: ReturnType<typeof setTimeout> | null = null
 
 /**
@@ -317,7 +324,7 @@ export const useCRMStore = create<CRMState>((set, get) => ({
     _notifCounter++
     const notif: AppNotification = {
       ...n,
-      id: `notif_${Date.now()}_${_notifCounter}`,
+      id: -(Date.now() * 1000 + _notifCounter), // negative ID = client-generated
       read: false,
       createdAt: new Date().toISOString(),
     }
@@ -350,8 +357,8 @@ export const useCRMStore = create<CRMState>((set, get) => ({
     set((s) => ({
       notifications: s.notifications.map(n => n.id === id ? { ...n, read: true } : n)
     }))
-    // Background persist (skip client-generated IDs that start with notif_)
-    if (!id.startsWith('notif_')) {
+    // Background persist (skip client-generated negative IDs)
+    if (id > 0) {
       _notifPersistQueue.push({ action: 'read', id })
       flushNotifToDB()
     }
@@ -367,7 +374,7 @@ export const useCRMStore = create<CRMState>((set, get) => ({
     set((s) => ({
       notifications: s.notifications.filter(n => n.id !== id)
     }))
-    if (!id.startsWith('notif_')) {
+    if (id > 0) {
       _notifPersistQueue.push({ action: 'delete', id })
       flushNotifToDB()
     }
@@ -399,7 +406,7 @@ export const useCRMStore = create<CRMState>((set, get) => ({
       // Merge: keep any client-generated notifs that aren't in DB yet
       const existing = get().notifications
       const dbIds = new Set(dbNotifs.map(n => n.id))
-      const localOnly = existing.filter(n => n.id.startsWith('notif_') && !dbIds.has(n.id))
+      const localOnly = existing.filter(n => n.id < 0 && !dbIds.has(n.id))
       set({ notifications: [...localOnly, ...dbNotifs] })
     } catch {}
   },

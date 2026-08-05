@@ -5,8 +5,12 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await params;
-  const { tagId } = await request.json();
+  const { id: idStr } = await params;
+  const id = Number(idStr);
+  if (isNaN(id)) return NextResponse.json({ error: 'Invalid ID' }, { status: 400 });
+
+  const { tagId: tagIdStr } = await request.json();
+  const tagId = Number(tagIdStr);
 
   const ct = await db.conversationTag.create({
     data: { conversationId: id, tagId },
@@ -20,13 +24,17 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await params;
-  const { searchParams } = new URL(request.url);
-  const tagId = searchParams.get('tagId');
+  const { id: idStr } = await params;
+  const id = Number(idStr);
+  if (isNaN(id)) return NextResponse.json({ error: 'Invalid ID' }, { status: 400 });
 
-  if (!tagId) {
+  const { searchParams } = new URL(request.url);
+  const tagIdStr = searchParams.get('tagId');
+
+  if (!tagIdStr) {
     return NextResponse.json({ error: 'tagId is required' }, { status: 400 });
   }
+  const tagId = Number(tagIdStr);
 
   await db.conversationTag.deleteMany({
     where: { conversationId: id, tagId },

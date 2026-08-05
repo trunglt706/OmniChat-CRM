@@ -26,31 +26,7 @@ import { useCRMStore } from '@/store/crm-store'
 import { apiFetch, apiPost, apiPut, generateIdempotencyKey } from '@/lib/api-client'
 import type { Agent, Tag as TagType } from '@/lib/types'
 import { useT } from '@/i18n/useT'
-
-interface AutomationRule {
-  id: string
-  name: string
-  keyword: string
-  replyMessage: string | null
-  assignTo: { id: string; name: string } | null
-  tag: { id: string; name: string; color: string } | null
-  enabled: boolean
-  createdAt: string
-}
-
-type ActionType = 'auto_reply' | 'assign_agent' | 'tag' | 'auto_reply_assign' | 'auto_reply_tag'
-
-const ACTION_TYPES: { key: ActionType; labelKey: string; icon: React.ElementType; descKey: string }[] = [
-  { key: 'auto_reply', labelKey: 'auto.type.autoReply', icon: Bot, descKey: 'auto.type.autoReplyDesc' },
-  { key: 'assign_agent', labelKey: 'auto.type.assignAgent', icon: UserPlus, descKey: 'auto.type.assignAgentDesc' },
-  { key: 'tag', labelKey: 'auto.type.tag', icon: Tag, descKey: 'auto.type.tagDesc' },
-  { key: 'auto_reply_assign', labelKey: 'auto.type.replyAssign', icon: Wand2, descKey: 'auto.type.replyAssignDesc' },
-  { key: 'auto_reply_tag', labelKey: 'auto.type.replyTag', icon: Sparkles, descKey: 'auto.type.replyTagDesc' },
-]
-
-function getActionTypeInfo(type: string) {
-  return ACTION_TYPES.find(a => a.key === type) || ACTION_TYPES[0]
-}
+import { type AutomationRule, type ActionType, ACTION_TYPES } from '@/lib/const/automation'
 
 export default function AutomationPanel() {
   const { t } = useT()
@@ -72,7 +48,7 @@ export default function AutomationPanel() {
     searchTimerRef.current = setTimeout(() => setDebouncedSearch(searchQuery), 300)
     return () => clearTimeout(searchTimerRef.current)
   }, [searchQuery])
-  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | number | null>(null)
   const [deleting, setDeleting] = useState(false)
 
   // Form state
@@ -122,8 +98,8 @@ export default function AutomationPanel() {
     setFormName(rule.name)
     setFormKeyword(rule.keyword)
     setFormReply(rule.replyMessage || '')
-    setFormAgent(rule.assignTo?.id || '')
-    setFormTag(rule.tag?.id || '')
+    setFormAgent(rule.assignTo?.id ? String(rule.assignTo.id) : '')
+    setFormTag(rule.tag?.id ? String(rule.tag.id) : '')
     // Determine action type
     const hasReply = !!rule.replyMessage
     const hasAssign = !!rule.assignTo
@@ -171,7 +147,7 @@ export default function AutomationPanel() {
     }
   }
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = async (id: number) => {
     setDeleting(true)
     await apiFetch(`/api/automation/rules?id=${id}`, { method: 'DELETE' })
     setDeleteConfirmId(null)
@@ -436,7 +412,7 @@ export default function AutomationPanel() {
                 <Select value={formAgent} onValueChange={setFormAgent}>
                   <SelectTrigger className="h-9 text-sm rounded-xl"><SelectValue placeholder={t('auto.selectAgent')} /></SelectTrigger>
                   <SelectContent>
-                    {storeAgents.map((a) => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
+                    {storeAgents.map((a) => <SelectItem key={a.id} value={String(a.id)}>{a.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
@@ -448,7 +424,7 @@ export default function AutomationPanel() {
                   <SelectTrigger className="h-9 text-sm rounded-xl"><SelectValue placeholder={t('auto.selectTag')} /></SelectTrigger>
                   <SelectContent>
                     {tags.map((tg) => (
-                      <SelectItem key={tg.id} value={tg.id}>
+                      <SelectItem key={tg.id} value={String(tg.id)}>
                         <div className="flex items-center gap-2">
                           <div className="h-2 w-2 rounded-full" style={{ backgroundColor: tg.color }} />
                           {tg.name}
