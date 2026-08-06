@@ -30,14 +30,7 @@ export async function GET() {
         slaFirstResponse: { lt: now },
       },
     }),
-    db.conversation.findMany({
-      include: {
-        owner: { select: { id: true, name: true } },
-        messages: { select: { id: true, senderType: true, createdAt: true } },
-      },
-      orderBy: { updatedAt: 'desc' },
-      take: 100,
-    }),
+
     // Channel distribution
     db.conversation.groupBy({
       by: ['channel'],

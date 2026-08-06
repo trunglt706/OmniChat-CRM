@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useCRMStore, type UserProfile } from '@/store/crm-store'
 import { apiPut } from '@/lib/api-client'
 import logger from '@/lib/logger'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -114,6 +114,7 @@ export default function ProfilePanel() {
           <div className="flex flex-col items-center gap-4">
             <div className="relative group">
               <Avatar className={cn('h-20 w-20 ring-4 ring-background shadow-xl', GRADIENT_CLASSES[0])}>
+                {currentUser.avatar && <AvatarImage src={currentUser.avatar} alt={currentUser.name} className="object-cover" />}
                 <AvatarFallback className="text-2xl text-white font-bold">
                   {currentUser.name.split(' ').slice(-2).map(n => n[0]).join('')}
                 </AvatarFallback>

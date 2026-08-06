@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
+import { Toaster as SonnerToaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "next-themes";
 import { HtmlLangSync } from "@/components/i18n/html-lang";
 
@@ -73,6 +74,7 @@ export default function RootLayout({
           <HtmlLangSync />
           {children}
           <Toaster />
+          <SonnerToaster />
         </ThemeProvider>
       </body>
     </html>

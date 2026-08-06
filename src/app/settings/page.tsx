@@ -69,7 +69,6 @@ function SettingsPage() {
           initSettingsFromDB(typeof user.settings === 'string' ? user.settings : JSON.stringify(user.settings))
           loadSystemSettings()
         }
-        setLoading(false)
       })
       .catch(() => { router.push('/login') })
   }, [router, setAuthenticated, setCurrentUser])

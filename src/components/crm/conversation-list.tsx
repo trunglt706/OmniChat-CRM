@@ -54,9 +54,9 @@ function formatTime(d: string, t: (key: string, params?: Record<string, string |
   const date = new Date(d), now = new Date(), diff = now.getTime() - date.getTime()
   const m = Math.floor(diff / 60000), h = Math.floor(diff / 3600000), days = Math.floor(diff / 86400000)
   if (m < 1) return t('convo.time.justNow')
-  if (m < 60) return t('convo.time.minutes', { count: m })
-  if (h < 24) return t('convo.time.hours', { count: h })
-  if (days < 7) return t('convo.time.days', { count: days })
+  if (m < 60) return t('convo.time.minutes', { m })
+  if (h < 24) return t('convo.time.hours', { h })
+  if (days < 7) return t('convo.time.days', { d: days })
   return formatDateOnly(d)
 }
 

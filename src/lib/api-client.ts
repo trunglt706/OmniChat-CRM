@@ -155,3 +155,25 @@ export async function apiPut<T = any>(url: string, body: unknown, opts?: Request
     ...opts,
   })
 }
+
+/**
+ * Convenience PATCH helper.
+ */
+export async function apiPatch<T = any>(url: string, body: unknown, opts?: RequestInit & { idempotencyKey?: string }): Promise<T> {
+  return apiFetch<T>(url, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+    ...opts,
+  })
+}
+
+/**
+ * Convenience DELETE helper.
+ */
+export async function apiDelete<T = any>(url: string, body?: unknown, opts?: RequestInit & { idempotencyKey?: string }): Promise<T> {
+  return apiFetch<T>(url, {
+    method: 'DELETE',
+    ...(body ? { body: JSON.stringify(body) } : {}),
+    ...opts,
+  })
+}

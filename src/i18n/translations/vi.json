@@ -580,5 +580,10 @@
   "staff.detail.satisfactionScore": "Đánh giá Hài lòng",
   "staff.detail.noSessions": "Không có phiên đăng nhập nào.",
   "staff.detail.unknownDevice": "Thiết bị không rõ",
-  "staff.detail.noLogs": "Chưa có lịch sử hoạt động."
+  "staff.detail.noLogs": "Chưa có lịch sử hoạt động.",
+  "settings.timeConfig": "Cấu hình thời gian",
+  "settings.timezone": "Múi giờ",
+  "settings.timezoneDesc": "Chọn múi giờ địa phương của bạn",
+  "settings.timeFormat": "Định dạng thời gian",
+  "settings.timeFormatDesc": "Chọn định dạng 12 giờ hoặc 24 giờ"
 }

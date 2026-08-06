@@ -33,7 +33,7 @@ export default function AutomationPanel() {
   const storeAgents = useCRMStore((s) => s.agents)
   const setAgents = useCRMStore((s) => s.setAgents)
   const [rules, setRules] = useState<AutomationRule[]>([])
-  const [tags, setTags] = useState<TagType[]>([])
+  const tags = useCRMStore((s) => s.tags)
   const [showCreate, setShowCreate] = useState(false)
   const [editing, setEditing] = useState<AutomationRule | null>(null)
   const [loading, setLoading] = useState(true)
@@ -61,12 +61,8 @@ export default function AutomationPanel() {
 
   const fetchInitialData = async () => {
     try {
-      const [rulesRes, tagsRes] = await Promise.all([
-        fetch('/api/automation/rules'),
-        fetch('/api/tags'),
-      ])
+      const rulesRes = await fetch('/api/automation/rules')
       setRules(await rulesRes.json())
-      setTags(await tagsRes.json())
       // Load agents from store if empty
       if (storeAgents.length === 0) {
         const agentsRes = await fetch('/api/agents')

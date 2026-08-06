@@ -580,5 +580,10 @@
   "staff.detail.satisfactionScore": "Satisfaction Score",
   "staff.detail.noSessions": "No active sessions.",
   "staff.detail.unknownDevice": "Unknown Device",
-  "staff.detail.noLogs": "No activity logs yet."
+  "staff.detail.noLogs": "No activity logs yet.",
+  "settings.timeConfig": "Time Configuration",
+  "settings.timezone": "Timezone",
+  "settings.timezoneDesc": "Select your local timezone",
+  "settings.timeFormat": "Time Format",
+  "settings.timeFormatDesc": "Select 12-hour or 24-hour format"
 }

@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { CHANNEL_CONFIG, LEAD_STATUS_CONFIG, type InternalNote } from '@/lib/types'
-import { LOCALE_MAP, GRADIENT_CLASSES } from '@/lib/const/chat'
+import { GRADIENT_CLASSES } from '@/lib/const/chat'
 import { formatDateTime, formatDateOnly } from '@/lib/format-time'
 import {
   User, Phone, Mail, Building, MapPin, Calendar, MessageCircle,

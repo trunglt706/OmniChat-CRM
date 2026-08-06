@@ -69,6 +69,7 @@ interface CRMState {
   setMessages: (m: Message[]) => void
   prependMessages: (m: Message[]) => void
   addMessage: (m: Message) => void
+  bumpConversation: (conversationId: number, lastMessage: string, updatedAt: string) => void
   isSendingMessage: boolean
   setIsSendingMessage: (v: boolean) => void
 
@@ -252,7 +253,33 @@ export const useCRMStore = create<CRMState>((set, get) => ({
   prependMessages: (newMsgs) => set((s) => ({
     messages: [...newMsgs, ...s.messages],
   })),
-  addMessage: (m) => set((state) => ({ messages: [...state.messages, m] })),
+  addMessage: (m) => set((state) => {
+    let nextConvos = [...state.conversations]
+    const idx = nextConvos.findIndex(c => c.id === m.conversationId)
+    if (idx > -1) {
+      const updated = { 
+        ...nextConvos[idx], 
+        lastMessage: m.content || 'Attachment', 
+        updatedAt: m.createdAt || new Date().toISOString() 
+      }
+      nextConvos.splice(idx, 1)
+      nextConvos.unshift(updated)
+      nextConvos.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+    }
+    return { messages: [...state.messages, m], conversations: nextConvos }
+  }),
+  bumpConversation: (id, msg, time) => set((s) => {
+    let next = [...s.conversations]
+    const idx = next.findIndex(c => c.id === id)
+    if (idx > -1) {
+      const updated = { ...next[idx], lastMessage: msg, updatedAt: time }
+      next.splice(idx, 1)
+      next.unshift(updated)
+      next.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+      return { conversations: next }
+    }
+    return {}
+  }),
   isSendingMessage: false,
   setIsSendingMessage: (v) => set({ isSendingMessage: v }),
 

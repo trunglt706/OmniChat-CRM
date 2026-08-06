@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "mysql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
   relationMode = "prisma"
 }
@@ -256,7 +256,7 @@ model Notification {
 model SystemSetting {
   id        Int      @id @default(autoincrement())
   key       String   @unique
-  value     String   @db.Text
+  value     String   
   updatedAt DateTime @updatedAt
 }
 
@@ -270,4 +270,4 @@ model UserSession {
   device    String?  // Desktop, Mobile, Browser info
   lastActive DateTime @default(now())
   createdAt DateTime @default(now())
-}
+}

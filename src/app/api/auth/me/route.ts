@@ -28,7 +28,7 @@ export async function PUT(req: NextRequest) {
     }
 
     const body = await req.json()
-    const allowed = ['name', 'email', 'phone', 'bio', 'status'] as const
+    const allowed = ['name', 'email', 'phone', 'bio', 'status', 'avatar'] as const
     const data: Record<string, string> = {}
     for (const key of allowed) {
       if (body[key] !== undefined) {

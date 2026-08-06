@@ -20,9 +20,16 @@ export async function POST(request: Request) {
     }
 
     const buffer = Buffer.from(await file.arrayBuffer())
-    const ext = file.name.split('.').pop() || 'png'
+    const originalName = file.name.toLowerCase()
+    const ext = originalName.split('.').pop() || ''
+
+    const allowedExts = ['jpg', 'jpeg', 'png', 'gif', 'webp']
+    if (!ext || !allowedExts.includes(ext)) {
+      return NextResponse.json({ error: 'Loại file không được phép tải lên. Vui lòng chọn ảnh hợp lệ.' }, { status: 400 })
+    }
+
     const fileName = `${uuidv4()}.${ext}`
-    
+
     const uploadsDir = path.join(process.cwd(), 'public', 'uploads')
     try {
       await mkdir(uploadsDir, { recursive: true })
@@ -32,7 +39,7 @@ export async function POST(request: Request) {
 
     const filePath = path.join(uploadsDir, fileName)
     await writeFile(filePath, buffer)
-    
+
     const url = `/uploads/${fileName}`
     return NextResponse.json({ success: true, url })
 

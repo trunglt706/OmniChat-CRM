@@ -24,7 +24,7 @@ import { Switch } from '@/components/ui/switch'
 interface StaffDetailSheetProps {
   userId: number | null
   onClose: () => void
-  onUpdated?: () => void
+  onUpdated?: (updatedUser: any) => void
 }
 
 export function StaffDetailSheet({ userId, onClose, onUpdated }: StaffDetailSheetProps) {
@@ -32,7 +32,7 @@ export function StaffDetailSheet({ userId, onClose, onUpdated }: StaffDetailShee
   const [activeTab, setActiveTab] = useState('overview')
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
-  
+
   const [user, setUser] = useState<any>(null)
   const [stats, setStats] = useState<any>(null)
   const [logs, setLogs] = useState<any[]>([])
@@ -74,7 +74,7 @@ export function StaffDetailSheet({ userId, onClose, onUpdated }: StaffDetailShee
       try {
         const data = await cachedFetch(`/api/staff/${userId}/logs`, {}, true)
         if (data.logs) setLogs(data.logs)
-      } catch (e) {}
+      } catch (e) { }
     }
     loadLogs()
   }, [userId, activeTab])
@@ -85,7 +85,7 @@ export function StaffDetailSheet({ userId, onClose, onUpdated }: StaffDetailShee
       try {
         const data = await cachedFetch(`/api/staff/${userId}/sessions`, {}, true)
         if (data.sessions) setSessions(data.sessions)
-      } catch (e) {}
+      } catch (e) { }
     }
     loadSessions()
   }, [userId, activeTab])
@@ -101,12 +101,12 @@ export function StaffDetailSheet({ userId, onClose, onUpdated }: StaffDetailShee
         status: editForm.status
       }
       if (editForm.password) payload.password = editForm.password
-      
+
       const res = await apiPut(`/api/staff/${userId}`, payload)
       if (res.ok) {
         setUser(res.user)
         setEditForm(prev => ({ ...prev, password: '' }))
-        if (onUpdated) onUpdated()
+        if (onUpdated) onUpdated(res.user)
       }
     } catch (error) {
       console.error(error)
@@ -122,9 +122,9 @@ export function StaffDetailSheet({ userId, onClose, onUpdated }: StaffDetailShee
       const res = await apiPatch(`/api/staff/${userId}`, { isActive: newStatus })
       if (res.ok) {
         setUser(prev => ({ ...prev, isActive: res.user.isActive }))
-        if (onUpdated) onUpdated()
+        if (onUpdated) onUpdated(res.user)
       }
-    } catch (e) {}
+    } catch (e) { }
   }
 
   const handleRevokeSession = async (tokenId: string) => {
@@ -134,7 +134,7 @@ export function StaffDetailSheet({ userId, onClose, onUpdated }: StaffDetailShee
       if (res.ok) {
         setSessions(prev => prev.filter(s => s.token !== tokenId))
       }
-    } catch (e) {}
+    } catch (e) { }
   }
 
   if (!userId) return null
@@ -173,31 +173,31 @@ export function StaffDetailSheet({ userId, onClose, onUpdated }: StaffDetailShee
 
               <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
                 <TabsList className="grid grid-cols-4 bg-foreground/[0.02] p-1 rounded-xl h-12">
-                  <TabsTrigger value="overview" className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm text-xs"><UserCircle className="w-3.5 h-3.5 mr-1.5"/>{t('staff.detail.tabs.overview')}</TabsTrigger>
-                  <TabsTrigger value="performance" className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm text-xs"><Activity className="w-3.5 h-3.5 mr-1.5"/>{t('staff.detail.tabs.performance')}</TabsTrigger>
-                  <TabsTrigger value="sessions" className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm text-xs"><MonitorSmartphone className="w-3.5 h-3.5 mr-1.5"/>{t('staff.detail.tabs.sessions')}</TabsTrigger>
-                  <TabsTrigger value="logs" className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm text-xs"><Shield className="w-3.5 h-3.5 mr-1.5"/>{t('staff.detail.tabs.logs')}</TabsTrigger>
+                  <TabsTrigger value="overview" className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm text-xs"><UserCircle className="w-3.5 h-3.5 mr-1.5" />{t('staff.detail.tabs.overview')}</TabsTrigger>
+                  <TabsTrigger value="performance" className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm text-xs"><Activity className="w-3.5 h-3.5 mr-1.5" />{t('staff.detail.tabs.performance')}</TabsTrigger>
+                  <TabsTrigger value="sessions" className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm text-xs"><MonitorSmartphone className="w-3.5 h-3.5 mr-1.5" />{t('staff.detail.tabs.sessions')}</TabsTrigger>
+                  <TabsTrigger value="logs" className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm text-xs"><Shield className="w-3.5 h-3.5 mr-1.5" />{t('staff.detail.tabs.logs')}</TabsTrigger>
                 </TabsList>
-                
+
                 <TabsContent value="overview" className="mt-6 space-y-6 animate-fade-in">
                   <div className="space-y-4">
                     <h4 className="text-sm font-semibold">{t('staff.detail.basicInfo')}</h4>
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-1.5">
                         <Label className="text-xs text-muted-foreground">{t('staff.detail.fullName')}</Label>
-                        <Input value={editForm.name} onChange={e => setEditForm(f=>({...f, name: e.target.value}))} className="rounded-xl h-9" />
+                        <Input value={editForm.name} onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))} className="rounded-xl h-9" />
                       </div>
                       <div className="space-y-1.5">
                         <Label className="text-xs text-muted-foreground">{t('staff.detail.email')}</Label>
-                        <Input value={editForm.email} onChange={e => setEditForm(f=>({...f, email: e.target.value}))} className="rounded-xl h-9" />
+                        <Input value={editForm.email} onChange={e => setEditForm(f => ({ ...f, email: e.target.value }))} className="rounded-xl h-9" />
                       </div>
                       <div className="space-y-1.5">
                         <Label className="text-xs text-muted-foreground">{t('staff.detail.newPassword')}</Label>
-                        <Input type="password" placeholder="••••••••" value={editForm.password} onChange={e => setEditForm(f=>({...f, password: e.target.value}))} className="rounded-xl h-9" />
+                        <Input type="password" placeholder="••••••••" value={editForm.password} onChange={e => setEditForm(f => ({ ...f, password: e.target.value }))} className="rounded-xl h-9" />
                       </div>
                       <div className="space-y-1.5">
                         <Label className="text-xs text-muted-foreground">{t('staff.detail.role')}</Label>
-                        <Select value={editForm.role} onValueChange={v => setEditForm(f=>({...f, role: v}))}>
+                        <Select value={editForm.role} onValueChange={v => setEditForm(f => ({ ...f, role: v }))}>
                           <SelectTrigger className="rounded-xl h-9"><SelectValue /></SelectTrigger>
                           <SelectContent>
                             <SelectItem value="admin">{t('user.role.admin')}</SelectItem>
@@ -214,9 +214,9 @@ export function StaffDetailSheet({ userId, onClose, onUpdated }: StaffDetailShee
                       </Button>
                     </div>
                   </div>
-                  
+
                   <div className="h-px bg-border/40" />
-                  
+
                   <div className="space-y-4">
                     <h4 className="text-sm font-semibold text-red-500 flex items-center gap-2"><ShieldAlert className="w-4 h-4" /> {t('staff.detail.dangerZone')}</h4>
                     <div className="glass-card border-red-500/20 bg-red-500/5 rounded-xl p-4 flex items-center justify-between">
@@ -226,7 +226,7 @@ export function StaffDetailSheet({ userId, onClose, onUpdated }: StaffDetailShee
                           {user.isActive ? t('staff.detail.lockDesc') : t('staff.detail.unlockDesc')}
                         </p>
                       </div>
-                      <Button 
+                      <Button
                         variant={user.isActive ? 'destructive' : 'default'}
                         className="rounded-lg h-9"
                         onClick={toggleLock}
@@ -283,7 +283,7 @@ export function StaffDetailSheet({ userId, onClose, onUpdated }: StaffDetailShee
                 </TabsContent>
 
                 <TabsContent value="logs" className="mt-6 animate-fade-in">
-                   {logs.length === 0 ? (
+                  {logs.length === 0 ? (
                     <p className="text-sm text-center text-muted-foreground py-10">{t('staff.detail.noLogs')}</p>
                   ) : (
                     <div className="space-y-4 relative before:absolute before:inset-0 before:ml-2 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-border before:to-transparent">

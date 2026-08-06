@@ -580,5 +580,10 @@
   "staff.detail.satisfactionScore": "满意度评分",
   "staff.detail.noSessions": "没有活动会话。",
   "staff.detail.unknownDevice": "未知设备",
-  "staff.detail.noLogs": "暂无活动日志。"
+  "staff.detail.noLogs": "暂无活动日志。",
+  "settings.timeConfig": "时间配置",
+  "settings.timezone": "时区",
+  "settings.timezoneDesc": "选择您当地的时区",
+  "settings.timeFormat": "时间格式",
+  "settings.timeFormatDesc": "选择 12 小时或 24 小时格式"
 }

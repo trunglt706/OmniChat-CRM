@@ -12,6 +12,9 @@ export interface LogEntry {
     message?: string
     stack?: string
   }
+  file?: string
+  line?: string
+  userId?: string | number
 }
 
 export interface LoggerConfig {
@@ -90,6 +93,9 @@ class Logger {
     let context: string | undefined = undefined
     let finalMeta: Record<string, any> | undefined = meta
     let errObj: LogEntry['error'] = undefined
+    let file: string | undefined = undefined
+    let line: string | undefined = undefined
+    let userId: string | number | undefined = undefined
 
     if (typeof contextOrMeta === 'string') {
       context = contextOrMeta
@@ -112,6 +118,32 @@ class Logger {
       }
     }
 
+    // Extract userId from finalMeta
+    if (finalMeta && 'userId' in finalMeta) {
+      userId = finalMeta.userId
+      delete finalMeta.userId
+    }
+
+    // Extract file and line from stack trace
+    const stack = new Error().stack
+    if (stack) {
+      const stackLines = stack.split('\n')
+      // [0]: Error
+      // [1]: at Logger.createEntry
+      // [2]: at Logger.info/error/debug/warn
+      // [3]: actual caller
+      if (stackLines.length >= 4) {
+        const callerLine = stackLines[3]
+        // Match standard Node/V8 stack trace format: "at FunctionName (/path/to/file.ts:line:col)"
+        // or "at /path/to/file.ts:line:col"
+        const match = callerLine.match(/(?:at\s+.*?\s+\()?(.*?):(\d+):(\d+)\)?/)
+        if (match) {
+          file = match[1].replace(process.cwd(), '') // Make path relative
+          line = match[2]
+        }
+      }
+    }
+
     return {
       timestamp,
       level,
@@ -119,6 +151,9 @@ class Logger {
       message,
       meta: finalMeta && Object.keys(finalMeta).length > 0 ? finalMeta : undefined,
       error: errObj,
+      file,
+      line,
+      userId,
     }
   }
 
@@ -181,6 +216,9 @@ class Logger {
         level: entry.level,
         ...(entry.context && { context: entry.context }),
         msg: entry.message,
+        ...(entry.userId && { userId: entry.userId }),
+        ...(entry.file && { file: entry.file }),
+        ...(entry.line && { line: entry.line }),
         ...(entry.meta && { meta: entry.meta }),
         ...(entry.error && { error: entry.error }),
       }

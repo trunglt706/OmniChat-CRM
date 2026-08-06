@@ -211,11 +211,10 @@ export default function StaffTab() {
           setEditingAgent(null)
           setDeleteConfirm(false)
         }}
-        onUpdated={() => {
-          // Re-fetch agents to update the list
-          cachedFetch('/api/agents', {}, true).then(data => {
-            if (Array.isArray(data)) setAgents(data)
-          })
+        onUpdated={(updatedUser) => {
+          if (updatedUser) {
+            setAgents(agents.map(a => a.id === updatedUser.id ? { ...a, ...updatedUser } : a))
+          }
         }}
       />
     </div>

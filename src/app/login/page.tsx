@@ -102,7 +102,7 @@ function LoginForm() {
               <Input
                 id="email"
                 type="email"
-                placeholder="admin@omnichat.vn"
+                placeholder="admin@techvn.vn"
                 value={email}
                 onChange={(e) => { setEmail(e.target.value); setError('') }}
                 className="h-10 text-sm rounded-xl bg-foreground/[0.03] border-border/40 focus:border-primary/40"
@@ -167,7 +167,7 @@ function LoginForm() {
           {/* Quick demo login */}
           <Button
             variant="outline"
-            onClick={() => doLogin('admin@omnichat.vn', 'password123')}
+            onClick={() => doLogin('admin@techvn.vn', 'password123')}
             disabled={loading}
             className="w-full h-11 text-sm font-medium gap-2 rounded-xl border-border/40 hover:border-primary/30 hover:bg-primary/5 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]"
           >
@@ -176,7 +176,7 @@ function LoginForm() {
             ) : (
               <Headphones className="h-4 w-4" />
             )}
-            Demo (admin@omnichat.vn / password123)
+            Demo (admin@techvn.vn / password123)
           </Button>
         </div>
 
