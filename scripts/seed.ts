@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client'
+import bcrypt from 'bcryptjs'
 
 const prisma = new PrismaClient()
 
@@ -27,21 +28,25 @@ async function main() {
   })
 
   // Users (Agents)
+  const defaultPassword = await bcrypt.hash('password123', 10)
   const agents = await Promise.all([
     prisma.user.create({
-      data: { email: 'admin@techvn.vn', name: 'Nguyễn Văn Admin', avatar: null, role: 'admin', status: 'online', organizationId: org.id },
+      data: { email: 'admin@techvn.vn', password: defaultPassword, name: 'Nguyễn Văn Admin', avatar: null, role: 'admin', status: 'online', organizationId: org.id },
     }),
     prisma.user.create({
-      data: { email: 'supervisor@techvn.vn', name: 'Trần Thị Supervisor', avatar: null, role: 'supervisor', status: 'online', organizationId: org.id },
+      data: { email: 'supervisor@techvn.vn', password: defaultPassword, name: 'Trần Thị Supervisor', avatar: null, role: 'supervisor', status: 'online', organizationId: org.id },
     }),
     prisma.user.create({
-      data: { email: 'minh@techvn.vn', name: 'Phạm Minh Tuấn', avatar: null, role: 'agent', status: 'online', organizationId: org.id },
+      data: { email: 'minh@techvn.vn', password: defaultPassword, name: 'Phạm Minh Tuấn', avatar: null, role: 'agent', status: 'online', organizationId: org.id },
     }),
     prisma.user.create({
-      data: { email: 'lan@techvn.vn', name: 'Ngô Thị Lan', avatar: null, role: 'agent', status: 'busy', organizationId: org.id },
+      data: { email: 'lan@techvn.vn', password: defaultPassword, name: 'Ngô Thị Lan', avatar: null, role: 'agent', status: 'busy', organizationId: org.id },
     }),
     prisma.user.create({
-      data: { email: 'hoa@techvn.vn', name: 'Lê Hoàng Hoa', avatar: null, role: 'agent', status: 'offline', organizationId: org.id },
+      data: { email: 'hoa@techvn.vn', password: defaultPassword, name: 'Lê Hoàng Hoa', avatar: null, role: 'agent', status: 'offline', organizationId: org.id },
+    }),
+    prisma.user.create({
+      data: { email: 'demo@omnichat.vn', password: defaultPassword, name: 'Demo User', avatar: null, role: 'agent', status: 'online', organizationId: org.id },
     }),
   ])
 

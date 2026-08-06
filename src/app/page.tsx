@@ -17,7 +17,7 @@ import {
   ResizableHandle, ResizablePanel, ResizablePanelGroup,
 } from '@/components/ui/resizable'
 import {
-  Sheet, SheetContent,
+  Sheet, SheetContent, SheetTitle,
 } from '@/components/ui/sheet'
 import { Button } from '@/components/ui/button'
 import { useT } from '@/i18n/useT'
@@ -64,7 +64,6 @@ function CRMPage() {
   const activeView = useCRMStore((s) => s.activeView)
   const setActiveViewRaw = useCRMStore((s) => s.setActiveView)
   const mobileView = useCRMStore((s) => s.mobileView)
-  const router = useRouter()
   const searchParams = useSearchParams()
   const showRightPanel = useCRMStore((s) => s.showRightPanel)
   const incrementUnread = useCRMStore((s) => s.incrementUnread)
@@ -106,7 +105,11 @@ function CRMPage() {
           status: user.status || 'online', bio: user.bio || '',
         })
         useCRMStore.getState().initSettingsFromDB(user.settings)
+        useCRMStore.getState().loadSystemSettings()
         useCRMStore.getState().loadNotifications()
+        fetch('/api/tags').then(r => r.json()).then(tags => {
+          useCRMStore.getState().setTags(tags)
+        }).catch(() => {})
       })
       .catch(() => { window.location.href = '/login' })
   }, [])
@@ -160,7 +163,12 @@ function CRMPage() {
     const unsub = socket.on('new_messages', (data: { messages: any[] }) => {
       ;(data.messages || []).forEach((msg: any) => {
         if (msg.conversationId !== useCRMStore.getState().selectedConversationId) {
-          incrementUnread(msg.conversationId)
+          useCRMStore.getState().incrementUnread(msg.conversationId)
+          useCRMStore.getState().bumpConversation(
+            msg.conversationId, 
+            msg.content || 'Attachment', 
+            msg.createdAt || new Date().toISOString()
+          )
           addNotification({
             type: 'new_message', title: t('notif.newMessage'), body: t('notif.newMessageBody'),
             conversationId: msg.conversationId,
@@ -217,18 +225,21 @@ function CRMPage() {
 
       <Sheet open={openSheet === 'notifications'} onOpenChange={handleSheetClose}>
         <SheetContent side="right" className="w-full sm:max-w-[400px] p-0 rounded-l-2xl">
+          <SheetTitle className="sr-only">Notifications</SheetTitle>
           <NotificationPanel />
         </SheetContent>
       </Sheet>
 
       <Sheet open={openSheet === 'profile'} onOpenChange={handleSheetClose}>
         <SheetContent side="right" className="w-full sm:max-w-[440px] p-0 rounded-l-2xl">
+          <SheetTitle className="sr-only">Profile</SheetTitle>
           <ProfilePanel />
         </SheetContent>
       </Sheet>
 
       <Sheet open={openSheet === 'settings'} onOpenChange={handleSheetClose}>
         <SheetContent side="right" className="w-full sm:max-w-[440px] p-0 rounded-l-2xl">
+          <SheetTitle className="sr-only">Settings</SheetTitle>
           <SettingsPanel />
         </SheetContent>
       </Sheet>

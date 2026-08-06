@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getToken } from 'next-auth/jwt'
 import { getSecurityEnv } from '@/lib/redis'
 import { db } from '@/lib/db'
+import { logger } from '@/lib/logger'
 
 // PATCH /api/notifications/[id]/read — mark single notification as read
 export async function PATCH(
@@ -28,7 +29,7 @@ export async function PATCH(
 
     return NextResponse.json({ success: true })
   } catch (e: any) {
-    console.error('PATCH /api/notifications/[id]/read error:', e)
+    logger.error('PATCH /api/notifications/[id]/read error', e)
     return NextResponse.json({ error: e.message || 'Failed' }, { status: 500 })
   }
 }

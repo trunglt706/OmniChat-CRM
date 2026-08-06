@@ -4,18 +4,16 @@ import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import { Separator } from '@/components/ui/separator'
 import { Switch } from '@/components/ui/switch'
+import { LoadingBlock } from '@/components/ui/loading'
 import { Label } from '@/components/ui/label'
 import { apiPut, apiPost } from '@/lib/api-client'
 import { cn } from '@/lib/utils'
-import { CHANNEL_CONFIG } from '@/lib/types'
 import { useT } from '@/i18n/useT'
 import {
-  ChevronDown, Check, X, Loader2, Globe,
+  Check, X, Loader2,
   MessageSquare, AlertTriangle, Pencil, Zap,
 } from 'lucide-react'
-import { SettingRow, SectionHeader } from './shared'
 import { cachedFetch } from './cached-fetch'
 import {
   type ChannelData,
@@ -87,11 +85,7 @@ export default function ChannelsTab() {
   }
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground/40" />
-      </div>
-    )
+    return <LoadingBlock className="py-20 text-muted-foreground/40" />
   }
 
   return (

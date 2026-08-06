@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { logger } from '@/lib/logger'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -11,8 +12,7 @@ import {
   PieChart, Pie, Cell, AreaChart, Area, Legend,
 } from 'recharts'
 import {
-  MessageSquare, Users, Clock, AlertTriangle, TrendingUp, CheckCircle,
-  Phone, Globe, Send, BarChart3, Zap, Target, DollarSign,
+  MessageSquare, AlertTriangle, TrendingUp, CheckCircle,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { CHANNEL_CONFIG } from '@/lib/types'
@@ -91,7 +91,7 @@ export default function Dashboard() {
     fetch('/api/dashboard')
       .then((r) => r.json())
       .then(setData)
-      .catch(console.error)
+      .catch((e) => logger.error('Failed to fetch dashboard data', 'Dashboard', e))
       .finally(() => setLoading(false))
   }, [])
 

@@ -4,9 +4,9 @@ import { useState, useCallback, useMemo, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useCRMStore } from '@/store/crm-store'
 import { apiPost } from '@/lib/api-client'
+import logger from '@/lib/logger'
 import { Button } from '@/components/ui/button'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { Badge } from '@/components/ui/badge'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
   Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
 } from '@/components/ui/tooltip'
@@ -89,7 +89,7 @@ export function Header() {
         await apiPost('/api/simulation', { action: 'start_auto' })
         setSimulationRunning(true)
       }
-    } catch (e) { console.error('Simulation error', e) }
+    } catch (e) { logger.error('Simulation error', { context: 'Header', error: e }) }
     finally { setSimLoading(false) }
   }
 
@@ -244,6 +244,7 @@ export function Header() {
             <Button variant="ghost" className="h-8 pl-1 pr-2 gap-2 rounded-xl hover:bg-foreground/[0.04] transition-all duration-200">
               <div className="relative">
                 <Avatar className="h-7 w-7 ring-2 ring-primary/10">
+                  {currentUser?.avatar && <AvatarImage src={currentUser.avatar} alt={currentUser.name} className="object-cover" />}
                   <AvatarFallback className="text-[10px] bg-gradient-to-br from-indigo-500 to-violet-600 text-white font-semibold">
                     {currentUser?.name?.split(' ').slice(-2).map(n => n[0]).join('') || 'U'}
                   </AvatarFallback>

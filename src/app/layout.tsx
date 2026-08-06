@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
+import { Toaster as SonnerToaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "next-themes";
 import { HtmlLangSync } from "@/components/i18n/html-lang";
 
@@ -15,13 +16,44 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-export const metadata: Metadata = {
-  title: "OmniChat CRM - Multi Channel Chat System",
-  description: "Multi-channel customer support CRM system | Hệ thống quản lý hội thoại đa kênh",
-  icons: {
-    icon: "https://z-cdn.chatglm.cn/z-ai/static/logo.svg",
+import { db } from "@/lib/db";
+import { unstable_cache } from "next/cache";
+
+const getSeoSettings = unstable_cache(
+  async () => {
+    const settings = await db.systemSetting.findMany({
+      where: {
+        key: { in: ['seo_title', 'seo_description', 'seo_keywords', 'seo_logo'] }
+      }
+    })
+    
+    const config: Record<string, string> = {}
+    settings.forEach(s => { config[s.key] = s.value })
+    return config
   },
-};
+  ['seo-settings-cache'],
+  { tags: ['seo-settings'] }
+)
+
+export async function generateMetadata(): Promise<Metadata> {
+  try {
+    const config = await getSeoSettings();
+
+    return {
+      title: config.seo_title || "OmniChat CRM - Multi Channel Chat System",
+      description: config.seo_description || "Multi-channel customer support CRM system | Hệ thống quản lý hội thoại đa kênh",
+      keywords: config.seo_keywords || "crm, chat, omnichannel",
+      icons: {
+        icon: config.seo_logo || "https://z-cdn.chatglm.cn/z-ai/static/logo.png",
+      },
+    }
+  } catch (error) {
+    return {
+      title: "OmniChat CRM",
+      description: "Hệ thống quản lý hội thoại đa kênh",
+    }
+  }
+}
 
 export default function RootLayout({
   children,
@@ -42,6 +74,7 @@ export default function RootLayout({
           <HtmlLangSync />
           {children}
           <Toaster />
+          <SonnerToaster />
         </ThemeProvider>
       </body>
     </html>

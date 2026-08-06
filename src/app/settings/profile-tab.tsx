@@ -5,7 +5,7 @@ import { useCRMStore, type UserProfile } from '@/store/crm-store'
 import { apiPut } from '@/lib/api-client'
 import { cn } from '@/lib/utils'
 import { useT } from '@/i18n/useT'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -18,7 +18,7 @@ import {
   Camera, Check, X, Shield, Clock, MessageSquare, User, Pencil, Loader2,
 } from 'lucide-react'
 import { GRADIENT_CLASSES, STATUS_OPTIONS } from '@/lib/const/setting'
-import { SettingRow, SectionHeader } from './shared'
+import { SectionHeader } from './shared'
 import { cachedFetch } from './cached-fetch'
 
 interface AgentStats {
@@ -35,6 +35,7 @@ export default function ProfileTab() {
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
   const savingRef = useRef(false)
+  const [uploadingAvatar, setUploadingAvatar] = useState(false)
   const [form, setForm] = useState({ name: '', email: '', phone: '', bio: '' })
   const fileRef = useRef<HTMLInputElement>(null)
   const [stats, setStats] = useState<AgentStats | null>(null)
@@ -72,6 +73,34 @@ export default function ProfileTab() {
     try { await apiPut('/api/auth/me', { status }) } catch { /* optimistic update already applied */ }
   }
 
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !currentUser) return
+    
+    setUploadingAvatar(true)
+    const formData = new FormData()
+    formData.append('file', file)
+    
+    try {
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      })
+      const data = await res.json()
+      if (data.url) {
+        const updated = await apiPut('/api/auth/me', { avatar: data.url })
+        setCurrentUser({ ...currentUser, ...updated })
+        setStatusModal({ type: 'success', text: t('profile.saveSuccess') || 'Avatar updated successfully' })
+      } else {
+        throw new Error(data.error || 'Upload failed')
+      }
+    } catch {
+      setStatusModal({ type: 'error', text: t('profile.saveFailed') || 'Avatar update failed' })
+    } finally {
+      setUploadingAvatar(false)
+    }
+  }
+
   if (!currentUser) return null
 
   return (
@@ -97,12 +126,13 @@ export default function ProfileTab() {
         <div className="flex flex-col items-center gap-4">
           <div className="relative group">
             <Avatar className={cn('h-24 w-24 ring-4 ring-background shadow-xl', GRADIENT_CLASSES[0])}>
+              {currentUser.avatar && <AvatarImage src={currentUser.avatar} alt={currentUser.name} className="object-cover" />}
               <AvatarFallback className="text-3xl text-white font-bold">{currentUser.name.split(' ').slice(-2).map(n => n[0]).join('')}</AvatarFallback>
             </Avatar>
-            <button onClick={() => fileRef.current?.click()} className="absolute inset-0 rounded-full bg-black/0 group-hover:bg-black/30 transition-all duration-200 flex items-center justify-center opacity-0 group-hover:opacity-100">
-              <Camera className="h-6 w-6 text-white" />
+            <button onClick={() => fileRef.current?.click()} disabled={uploadingAvatar} className="absolute inset-0 rounded-full bg-black/0 group-hover:bg-black/30 transition-all duration-200 flex items-center justify-center opacity-0 group-hover:opacity-100">
+              {uploadingAvatar ? <Loader2 className="h-6 w-6 text-white animate-spin" /> : <Camera className="h-6 w-6 text-white" />}
             </button>
-            <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={() => {}} />
+            <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
           </div>
           {!editing && (
             <div className="text-center">

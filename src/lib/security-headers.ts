@@ -73,7 +73,6 @@ export function buildCsp(options: CspOptions = {}): string {
 export function getSecurityHeaders(
   options: { nonce?: string; csrfToken?: string } = {}
 ): Record<string, string> {
-  const env = getSecurityEnv()
   const headers: Record<string, string> = {}
 
   // 1. Content Security Policy

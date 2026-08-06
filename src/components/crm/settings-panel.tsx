@@ -5,16 +5,15 @@ import { useCRMStore } from '@/store/crm-store'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { Switch } from '@/components/ui/switch'
-import { Label } from '@/components/ui/label'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
 import { useTheme } from 'next-themes'
 import {
-  Volume2, Monitor, Mail, Palette, Maximize2, Eye,
+  Volume2, Monitor, Mail, Maximize2, Eye,
   UserCheck, Globe, Moon, Sun, Trash2, RotateCcw,
-  Wifi, WifiOff, Loader2, CheckCircle, XCircle, AlertTriangle,
+  Wifi, Loader2, CheckCircle, XCircle, AlertTriangle,
   Radio,
 } from 'lucide-react'
 import { useT } from '@/i18n/useT'

@@ -1,7 +1,6 @@
 'use client'
 
 import type { TFn } from '@/lib/const/report'
-import { cn } from '@/lib/utils'
 import { RESPONSE_TIME_STATS } from '@/lib/const/report'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'

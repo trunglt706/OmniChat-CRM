@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getToken } from 'next-auth/jwt'
 import { getSecurityEnv } from '@/lib/redis'
 import { db } from '@/lib/db'
+import { logger } from '@/lib/logger'
 
 // GET /api/notifications — list current user's notifications
 export async function GET(req: NextRequest) {
@@ -47,7 +48,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ data: notifications, total })
   } catch (e: any) {
-    console.error('GET /api/notifications error:', e)
+    logger.error('GET /api/notifications error', e)
     return NextResponse.json({ error: e.message || 'Failed' }, { status: 500 })
   }
 }
@@ -94,7 +95,7 @@ export async function POST(req: NextRequest) {
       },
     }, { status: 201 })
   } catch (e: any) {
-    console.error('POST /api/notifications error:', e)
+    logger.error('POST /api/notifications error', e)
     return NextResponse.json({ error: e.message || 'Failed' }, { status: 500 })
   }
 }
@@ -130,7 +131,7 @@ export async function DELETE(req: NextRequest) {
 
     return NextResponse.json({ success: true })
   } catch (e: any) {
-    console.error('DELETE /api/notifications error:', e)
+    logger.error('DELETE /api/notifications error', e)
     return NextResponse.json({ error: e.message || 'Failed' }, { status: 500 })
   }
 }

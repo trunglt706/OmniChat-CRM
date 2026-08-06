@@ -9,7 +9,6 @@ export async function GET(request: NextRequest) {
   const assigned = searchParams.get('assigned');
   const tag = searchParams.get('tag');
   const search = searchParams.get('search');
-  const unread = searchParams.get('unread');
   const page = parseInt(searchParams.get('page') || '1');
   const limit = parseInt(searchParams.get('limit') || '50');
 

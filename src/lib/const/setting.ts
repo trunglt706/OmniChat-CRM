@@ -13,11 +13,27 @@ export const SETTINGS_TABS = [
   { key: 'system',   labelKey: 'settingsTab.system',   icon: Settings },
   { key: 'channels', labelKey: 'settingsTab.channels', icon: MessageSquare },
   { key: 'staff',    labelKey: 'settingsTab.staff',    icon: Users },
+  { key: 'seo',      labelKey: 'settingsTab.seo',      icon: Globe2 },
   { key: 'security', labelKey: 'settingsTab.security', icon: ShieldAlert },
   { key: 'backup',   labelKey: 'settingsTab.backup',   icon: Database },
 ] as const
 
 export type SettingsTab = (typeof SETTINGS_TABS)[number]['key']
+
+// ── System Time Config ──
+export const TIMEZONE_OPTIONS = [
+  { value: 'Asia/Ho_Chi_Minh', label: 'Asia/Ho_Chi_Minh (UTC+7)' },
+  { value: 'Asia/Tokyo', label: 'Asia/Tokyo (UTC+9)' },
+  { value: 'Europe/London', label: 'Europe/London (UTC+0)' },
+  { value: 'America/New_York', label: 'America/New_York (UTC-5)' },
+  { value: 'UTC', label: 'UTC' },
+] as const
+
+export const TIME_FORMAT_OPTIONS = [
+  { value: 'dd/MM/yyyy HH:mm', label: '24/12/2026 15:30 (24h)' },
+  { value: 'MM/dd/yyyy hh:mm a', label: '12/24/2026 03:30 PM (12h)' },
+  { value: 'yyyy-MM-dd HH:mm', label: '2026-12-24 15:30' },
+] as const
 
 // ── Profile ──
 export const GRADIENT_CLASSES = [

@@ -3,24 +3,17 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useCRMStore } from '@/store/crm-store'
 import { useT } from '@/i18n/useT'
+import { logger } from '@/lib/logger'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-// Native scroll
-import { Separator } from '@/components/ui/separator'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/components/ui/select'
 import { CHANNEL_CONFIG, LEAD_STATUS_CONFIG, type InternalNote } from '@/lib/types'
-import { LOCALE_MAP, GRADIENT_CLASSES } from '@/lib/const/chat'
+import { GRADIENT_CLASSES } from '@/lib/const/chat'
+import { formatDateTime, formatDateOnly } from '@/lib/format-time'
 import {
-  User, Phone, Mail, Building, MapPin, Calendar, MessageCircle, Send,
-  Globe, Pin, Plus, Loader2, X, ChevronRight, ExternalLink,
-  Copy, CheckCircle2, Clock, Sparkles, Target, TrendingUp,
-  Pencil, Trash2, MoreHorizontal, PinOff, Check, Ban,
+  User, Phone, Mail, Building, MapPin, Calendar, MessageCircle,
+  Pin, Plus, Loader2, Target, Pencil, Trash2, PinOff, Check, Ban,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { apiFetch, apiPost, apiPut, generateIdempotencyKey } from '@/lib/api-client'
@@ -79,9 +72,9 @@ function InfoTab() {
           </div>
           <div className="min-w-0 flex-1">
             <h3 className="font-bold text-[15px] truncate tracking-tight">{customer.name}</h3>
-            <p className="text-[11px] text-muted-foreground/50 mt-0.5 font-medium">
-              {t('panel.customerSince', { date: new Date(customer.createdAt).toLocaleDateString(LOCALE_MAP[locale] || 'vi-VN') })}
-            </p>
+            <div className="mt-2 text-[11px] text-muted-foreground/60 font-medium">
+              {t('panel.customerSince', { date: formatDateOnly(customer.createdAt) })}
+            </div>
           </div>
         </div>
       </div>
@@ -168,7 +161,7 @@ function NotesTab() {
       const data = await apiFetch(`/api/conversations/${selectedConversationId}/notes`)
       setNotes(data)
     } catch (e) {
-      console.error(e)
+      logger.error('Failed to fetch notes', 'CustomerPanel', e)
     }
   }
 
@@ -184,7 +177,7 @@ function NotesTab() {
       addNote(note)
       setNewNote('')
     } catch (e) {
-      console.error(e)
+      logger.error('Failed to add note', 'CustomerPanel', e)
     } finally {
       setIsSubmitting(false)
     }
@@ -203,7 +196,7 @@ function NotesTab() {
       updateNote(editingId, updated)
       setEditingId(null)
     } catch (e) {
-      console.error(e)
+      logger.error('Failed to save edit note', 'CustomerPanel', e)
     } finally {
       setActionLoadingId(null)
     }
@@ -221,7 +214,7 @@ function NotesTab() {
       const updated = await apiPut(`/api/conversations/${selectedConversationId}/notes`, { noteId: note.id, isPinned: !note.isPinned })
       updateNote(note.id, updated)
     } catch (e) {
-      console.error(e)
+      logger.error('Failed to toggle pin note', 'CustomerPanel', e)
     } finally {
       setActionLoadingId(null)
     }
@@ -235,7 +228,7 @@ function NotesTab() {
       deleteNote(noteId)
       setDeleteConfirmId(null)
     } catch (e) {
-      console.error(e)
+      logger.error('Failed to delete note', 'CustomerPanel', e)
     } finally {
       setActionLoadingId(null)
     }
@@ -283,7 +276,7 @@ function NotesTab() {
             )}
             <p className="text-[13px] leading-relaxed text-foreground/80 whitespace-pre-wrap">{note.content}</p>
             <div className="flex items-center justify-between mt-2">
-              <p className="text-[10px] text-muted-foreground/50 font-medium">{note.author?.name || 'Unknown'} · {new Date(note.createdAt).toLocaleString(LOCALE_MAP[locale] || 'vi-VN')}</p>
+              <p className="text-[10px] text-muted-foreground/50 font-medium">{note.author?.name || 'Unknown'} · {formatDateTime(note.createdAt)}</p>
               <div className={cn('flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200', deleteConfirmId === note.id && 'opacity-100')}>
                 {deleteConfirmId === note.id ? (
                   <>
@@ -405,7 +398,7 @@ function LeadTab() {
                 <span className="text-[10px] text-muted-foreground/50 font-medium uppercase tracking-wider">{t('lead.followup')}</span>
                 <p className="font-semibold text-xs mt-0.5">
                   {lead.nextFollowup
-                    ? new Date(lead.nextFollowup).toLocaleDateString(LOCALE_MAP[locale] || 'vi-VN')
+                    ? formatDateOnly(lead.nextFollowup)
                     : '-'}
                 </p>
               </div>

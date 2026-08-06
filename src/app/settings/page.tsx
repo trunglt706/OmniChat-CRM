@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useCRMStore } from '@/store/crm-store'
 import { Button } from '@/components/ui/button'
@@ -12,6 +12,7 @@ import ProfileTab from './profile-tab'
 import SystemTab from './system-tab'
 import ChannelsTab from './channels-tab'
 import StaffTab from './staff-tab'
+import SeoTab from './seo-tab'
 import SecurityTab from './security-tab'
 import BackupTab from './backup-tab'
 
@@ -20,6 +21,7 @@ const TAB_COMPONENTS: Record<SettingsTab, React.ComponentType> = {
   system: SystemTab,
   channels: ChannelsTab,
   staff: StaffTab,
+  seo: SeoTab,
   security: SecurityTab,
   backup: BackupTab,
 }
@@ -41,14 +43,14 @@ function SettingsPage() {
 
   const [activeTab, setActiveTab] = useState<SettingsTab>(() => {
     const tabParam = searchParams.get('tab')
-    if (tabParam && ['profile', 'system', 'channels', 'staff', 'security', 'backup'].includes(tabParam)) {
+    if (tabParam && ['profile', 'system', 'channels', 'staff', 'seo', 'security', 'backup'].includes(tabParam)) {
       return tabParam as SettingsTab
     }
     return 'profile'
   })
 
   // Load current user on mount (skip if already loaded)
-  useState(() => {
+  useEffect(() => {
     if (useCRMStore.getState().currentUser) {
       setAuthenticated(true)
       return
@@ -63,12 +65,13 @@ function SettingsPage() {
           status: user.status || 'online', bio: user.bio || '',
         })
         if (user.settings) {
-          const { initSettingsFromDB } = useCRMStore.getState()
+          const { initSettingsFromDB, loadSystemSettings } = useCRMStore.getState()
           initSettingsFromDB(typeof user.settings === 'string' ? user.settings : JSON.stringify(user.settings))
+          loadSystemSettings()
         }
       })
-      .catch(() => { window.location.href = '/login' })
-  })
+      .catch(() => { router.push('/login') })
+  }, [router, setAuthenticated, setCurrentUser])
 
   const ActiveTabComponent = TAB_COMPONENTS[activeTab]
 

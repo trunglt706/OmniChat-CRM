@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, statSync, unlinkSync } from 'fs'
 import { join } from 'path'
-import { execSync } from 'child_process'
 
 const BACKUP_DIR = join(process.cwd(), 'data', 'backups')
 const DB_PATH = join(process.cwd(), 'db', 'custom.db')

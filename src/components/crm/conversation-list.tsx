@@ -5,17 +5,26 @@ import { useCRMStore } from '@/store/crm-store'
 import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Input } from '@/components/ui/input'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { CHANNEL_CONFIG, type Conversation } from '@/lib/types'
 import {
-  Search, Inbox, User, MessageSquareOff, CheckCircle, Archive,
+  Search, Inbox, User, MessageSquareOff, CheckCircle, Archive, Filter,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { socket } from '@/lib/socket'
+import { LOCALE_MAP } from '@/lib/const/chat'
+import { formatDateOnly } from '@/lib/format-time'
 import { useT } from '@/i18n/useT'
-
-const LOCALE_MAP: Record<string, string> = { vi: 'vi-VN', en: 'en-US', zh: 'zh-CN' }
+import { logger } from '@/lib/logger'
 
 const FILTER_TABS = [
+  { key: 'all', labelKey: 'convo.channel.all' as const, icon: Filter },
   { key: 'open', labelKey: 'convo.filter.open' as const, icon: Inbox },
   { key: 'unassigned', labelKey: 'convo.filter.unassigned' as const, icon: User },
   { key: 'resolved', labelKey: 'convo.filter.resolved' as const, icon: CheckCircle },
@@ -26,12 +35,12 @@ const FILTER_TABS = [
 const CHANNEL_FILTERS = [
   { key: 'all', labelKey: 'convo.channel.all' as const },
   { key: 'facebook_messenger', labelKey: 'convo.channel.fb' as const, color: '#1877f2' },
-  { key: 'facebook_comment', labelKey: 'convo.channel.fbc' as const, color: '#1877f2' },
+  // { key: 'facebook_comment', labelKey: 'convo.channel.fbc' as const, color: '#1877f2' },
   { key: 'zalo', labelKey: 'convo.channel.zalo' as const, color: '#0068ff' },
   { key: 'telegram', labelKey: 'convo.channel.tg' as const, color: '#26a5e4' },
   { key: 'chatwork', labelKey: 'convo.channel.cw' as const, color: '#ee2224' },
-  { key: 'website', labelKey: 'convo.channel.web' as const, color: '#10b981' },
-  { key: 'email', labelKey: 'convo.channel.mail' as const, color: '#ea4335' },
+  // { key: 'website', labelKey: 'convo.channel.web' as const, color: '#10b981' },
+  // { key: 'email', labelKey: 'convo.channel.mail' as const, color: '#ea4335' },
 ]
 
 const GRADIENT_CLASSES = ['avatar-gradient-1', 'avatar-gradient-2', 'avatar-gradient-3', 'avatar-gradient-4', 'avatar-gradient-5', 'avatar-gradient-6', 'avatar-gradient-7', 'avatar-gradient-8']
@@ -45,10 +54,10 @@ function formatTime(d: string, t: (key: string, params?: Record<string, string |
   const date = new Date(d), now = new Date(), diff = now.getTime() - date.getTime()
   const m = Math.floor(diff / 60000), h = Math.floor(diff / 3600000), days = Math.floor(diff / 86400000)
   if (m < 1) return t('convo.time.justNow')
-  if (m < 60) return t('convo.time.minutes', { count: m })
-  if (h < 24) return t('convo.time.hours', { count: h })
-  if (days < 7) return t('convo.time.days', { count: days })
-  return date.toLocaleDateString(LOCALE_MAP[locale] || 'vi-VN')
+  if (m < 60) return t('convo.time.minutes', { m })
+  if (h < 24) return t('convo.time.hours', { h })
+  if (days < 7) return t('convo.time.days', { d: days })
+  return formatDateOnly(d)
 }
 
 function getSLA(convo: Conversation) {
@@ -99,67 +108,48 @@ const ConversationItem = memo(function ConversationItem({ convo, index }: ConvoI
             {convo.customer.name.split(' ').slice(-2).map(n => n[0]).join('')}
           </AvatarFallback>
         </Avatar>
-        <div
-          className="absolute -bottom-0.5 -right-0.5 h-[18px] min-w-[18px] rounded-full border-[2.5px] border-background flex items-center justify-center shadow-sm transition-transform duration-200 group-hover:scale-110"
-          style={{ backgroundColor: chCfg?.color || '#6b7280' }}
-        >
-          <span className="text-[7px] text-white font-bold leading-none">{getChannelLetter(convo.channel)}</span>
-        </div>
-        {sla === 'breached' && (
-          <span className="absolute -top-1 -left-1 flex h-3.5 w-3.5">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
-            <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-red-500 border-2 border-background" />
-          </span>
-        )}
+        <span className={cn(
+          'absolute -bottom-0.5 -right-0.5 h-4 w-4 rounded-full flex items-center justify-center text-[9px] font-bold text-white shadow-sm ring-2 ring-background',
+          chCfg?.badgeClass || 'bg-slate-500'
+        )} title={chCfg?.label || convo.channel}>
+          {getChannelLetter(convo.channel)}
+        </span>
       </div>
-      <div className="flex-1 min-w-0 pt-0.5">
-        <div className="flex items-center justify-between gap-2">
-          <span className={cn(
-            'text-[13px] truncate transition-colors duration-200',
-            unread > 0 ? 'font-bold text-foreground' : 'font-medium text-foreground/80 group-hover:text-foreground'
-          )}>{convo.customer.name}</span>
-          <span className={cn(
-            'text-[11px] flex-shrink-0 tabular-nums transition-colors duration-200',
-            unread > 0 ? 'text-primary font-semibold' : 'text-muted-foreground/60'
-          )}>{formatTime(convo.updatedAt, t, locale)}</span>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center justify-between gap-1 mb-1">
+          <span className="text-xs font-bold text-foreground truncate group-hover:text-primary transition-colors">
+            {convo.customer.name}
+          </span>
+          <span className="text-[11px] text-muted-foreground/60 flex-shrink-0 font-medium">
+            {formatTime(convo.updatedAt, t, locale)}
+          </span>
         </div>
-        {convo.subject && (
-          <p className="text-[12px] text-foreground/50 truncate mt-0.5 leading-tight group-hover:text-foreground/65 transition-colors duration-200">{convo.subject}</p>
-        )}
-        <div className="flex items-center gap-1.5 mt-2">
-          {convo.owner && (
-            <span className="text-[10px] text-muted-foreground/70 bg-foreground/[0.04] px-1.5 py-0.5 rounded-md font-medium backdrop-blur-sm">
-              {convo.owner.name.split(' ').slice(-1)[0]}
-            </span>
-          )}
-          {convo.priority !== 'medium' && (
-            <span className={cn(
-              'text-[10px] px-1.5 py-0.5 rounded-md font-semibold transition-all duration-200',
-              convo.priority === 'urgent' ? 'bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400 badge-glow-red' :
-                convo.priority === 'high' ? 'bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400 badge-glow-amber' :
-                  'bg-slate-50 text-slate-500 dark:bg-slate-800/40 dark:text-slate-400'
+        <p className="text-xs text-muted-foreground/80 line-clamp-1 mb-1.5 font-normal">
+          {convo.lastMessage}
+        </p>
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {priorityLabel && (
+            <Badge variant="outline" className={cn(
+              'text-[10px] px-1.5 py-0 h-4 border-0 font-medium rounded-md',
+              convo.priority === 'urgent' && 'bg-rose-500/10 text-rose-600 dark:text-rose-400',
+              convo.priority === 'high' && 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
+              convo.priority === 'low' && 'bg-slate-500/10 text-slate-600 dark:text-slate-400'
             )}>
               {priorityLabel}
-            </span>
+            </Badge>
           )}
-          {convo.tags.slice(0, 2).map((ct) => (
-            <span key={ct.tag.id} className="text-[10px] px-1.5 py-0.5 rounded-md font-medium" style={{ backgroundColor: ct.tag.color + '15', color: ct.tag.color }}>
-              {ct.tag.name}
+          {sla === 'breached' && (
+            <Badge variant="destructive" className="text-[10px] px-1.5 py-0 h-4 rounded-md animate-pulse">
+              SLA
+            </Badge>
+          )}
+          {unread > 0 && (
+            <span className="ml-auto h-4 min-w-4 px-1 rounded-full bg-primary text-primary-foreground text-[10px] font-bold flex items-center justify-center shadow-sm">
+              {unread}
             </span>
-          ))}
-          {convo.tags.length > 2 && (
-            <span className="text-[10px] text-muted-foreground/60 font-medium">+{convo.tags.length - 2}</span>
           )}
         </div>
       </div>
-      {unread > 0 && (
-        <span className={cn(
-          'absolute right-3 top-4 min-w-[20px] h-5 px-1.5 rounded-full text-white text-[10px] font-bold flex items-center justify-center shadow-lg transition-all duration-300',
-          'bg-gradient-to-r from-indigo-500 to-violet-500 shadow-indigo-500/30 badge-glow-indigo'
-        )}>
-          {unread}
-        </span>
-      )}
     </button>
   )
 })
@@ -179,7 +169,6 @@ export default function ConversationList() {
   const setActiveChannel = useCRMStore((s) => s.setActiveChannel)
   const setSearchQuery = useCRMStore((s) => s.setSearchQuery)
   const setIsLoadingConversations = useCRMStore((s) => s.setIsLoadingConversations)
-  const incrementUnread = useCRMStore((s) => s.incrementUnread)
   const storeAgents = useCRMStore((s) => s.agents)
   const setAgents = useCRMStore((s) => s.setAgents)
 
@@ -191,39 +180,11 @@ export default function ConversationList() {
         .then((data) => {
           if (Array.isArray(data)) setAgents(data)
         })
-        .catch(console.error)
+        .catch((e) => logger.error('Fetch agents error', 'ConversationList', e))
     }
   }, [storeAgents.length, setAgents])
 
-  // ── Scroll fade indicator refs ──
-  const statusTabsRef = useRef<HTMLDivElement>(null)
-  const channelTabsRef = useRef<HTMLDivElement>(null)
-
-  // Toggle .is-overflowing class when content overflows
-  useEffect(() => {
-    const update = (el: HTMLDivElement | null) => {
-      if (!el) return
-      if (el.scrollWidth > el.clientWidth + 1) {
-        el.classList.add('is-overflowing')
-      } else {
-        el.classList.remove('is-overflowing')
-      }
-    }
-    update(statusTabsRef.current)
-    update(channelTabsRef.current)
-    const observer = new ResizeObserver(() => {
-      update(statusTabsRef.current)
-      update(channelTabsRef.current)
-    })
-    if (statusTabsRef.current) observer.observe(statusTabsRef.current)
-    if (channelTabsRef.current) observer.observe(channelTabsRef.current)
-    return () => observer.disconnect()
-  }, [])
-
   // ── Debounced search state ──
-  // searchQuery from store = current input value (updates immediately)
-  // debouncedSearch = local state that lags behind by DEBOUNCE_MS
-  // fetchConversations uses debouncedSearch to avoid firing on every keystroke
   const DEBOUNCE_MS = 300
   const [debouncedSearch, setDebouncedSearch] = useState(searchQuery)
   const abortControllerRef = useRef<AbortController | null>(null)
@@ -260,7 +221,7 @@ export default function ConversationList() {
       setConversations(json.data || [])
       setTotalConversations(json.total || 0)
     } catch (e: any) {
-      if (e.name !== 'AbortError') console.error(e)
+      if (e.name !== 'AbortError') logger.error('Fetch conversations error', 'ConversationList', e)
     } finally {
       if (inFlightUrlRef.current === url) {
         inFlightUrlRef.current = null
@@ -281,8 +242,6 @@ export default function ConversationList() {
     return () => { clearTimeout(timer); unsub() }
   }, [fetchConversations])
 
-  // Search input updates store immediately (for responsive typing),
-  // but fetch is debounced via debouncedSearch state above.
   const handleSearch = (v: string) => {
     setSearchQuery(v)
   }
@@ -290,7 +249,7 @@ export default function ConversationList() {
   return (
     <div className="flex flex-col h-full min-h-0">
       {/* Header */}
-      <div className="px-3 md:px-4 pt-3 md:pt-4 pb-2 flex-shrink-0">
+      <div className="px-3 md:px-4 pt-3 md:pt-4 pb-3 border-b border-border/30 flex-shrink-0">
         <div className="flex items-center justify-between mb-3">
           <div>
             <h2 className="text-sm font-bold tracking-tight">{t('convo.title')}</h2>
@@ -307,7 +266,7 @@ export default function ConversationList() {
           )}
         </div>
         {/* Search */}
-        <div className="relative mb-2">
+        <div className="relative mb-2.5">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/40" />
           <Input
             placeholder={t('convo.search')}
@@ -316,46 +275,52 @@ export default function ConversationList() {
             onChange={(e) => handleSearch(e.target.value)}
           />
         </div>
-        {/* Status tabs — scroll X */}
-        <div ref={statusTabsRef} className="flex gap-1 overflow-x-auto scrollbar-none scroll-fade-x min-w-0 max-w-full" role="tablist">
-          {FILTER_TABS.map((tab, idx) => {
-            const Icon = tab.icon
-            const active = activeFilter === tab.key
-            return (
-              <button key={tab.key} onClick={() => setActiveFilter(tab.key)}
-                className={cn(
-                  'flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[11px] font-medium transition-all duration-250 whitespace-nowrap flex-shrink-0',
-                  active
-                    ? 'bg-primary text-primary-foreground shadow-md shadow-primary/20 scale-[1.02]'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-foreground/[0.05]'
-                )} style={{ transitionDelay: `${idx * 20}ms` }}>
-                <Icon className="h-3 w-3" />
-                {t(tab.labelKey)}
-              </button>
-            )
-          })}
+        {/* Status & Channel Filters (Select inputs side-by-side) */}
+        <div className="grid grid-cols-2 gap-2">
+          {/* Status Select */}
+          <Select value={activeFilter} onValueChange={setActiveFilter}>
+            <SelectTrigger className="w-full h-8 md:h-9 text-xs rounded-xl glass-input border-border/30 px-3 focus:ring-0">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {FILTER_TABS.map((tab) => {
+                const Icon = tab.icon
+                return (
+                  <SelectItem key={tab.key} value={tab.key} className="text-xs cursor-pointer">
+                    <div className="flex items-center gap-2">
+                      <Icon className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                      <span className="truncate">{t(tab.labelKey)}</span>
+                    </div>
+                  </SelectItem>
+                )
+              })}
+            </SelectContent>
+          </Select>
+
+          {/* Channel Select */}
+          <Select value={activeChannel} onValueChange={setActiveChannel}>
+            <SelectTrigger className="w-full h-8 md:h-9 text-xs rounded-xl glass-input border-border/30 px-3 focus:ring-0">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {CHANNEL_FILTERS.map((ch) => (
+                <SelectItem key={ch.key} value={ch.key} className="text-xs cursor-pointer">
+                  <div className="flex items-center gap-2">
+                    {ch.key !== 'all' ? (
+                      <span
+                        className="h-2 w-2 rounded-full flex-shrink-0"
+                        style={{ backgroundColor: ch.color }}
+                      />
+                    ) : (
+                      <span className="h-2 w-2 rounded-full flex-shrink-0 bg-muted-foreground/40" />
+                    )}
+                    <span className="truncate">{t(ch.labelKey)}</span>
+                  </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
-      </div>
-      {/* Channels — scroll X */}
-      <div ref={channelTabsRef} className="px-3 md:px-4 py-2 border-b border-border/30 flex gap-1 overflow-x-auto scrollbar-none scroll-fade-x flex-shrink-0 min-w-0 max-w-full" role="tablist">
-        {CHANNEL_FILTERS.map((ch) => {
-          const active = activeChannel === ch.key
-          return (
-            <button key={ch.key} onClick={() => setActiveChannel(ch.key)}
-              className={cn(
-                'flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-medium whitespace-nowrap transition-all duration-250',
-                active
-                  ? 'bg-foreground/[0.07] text-foreground shadow-sm scale-[1.02]'
-                  : 'text-muted-foreground/60 hover:text-foreground hover:bg-foreground/[0.04]'
-              )}>
-              {ch.key !== 'all' && <span className={cn(
-                'h-1.5 w-1.5 rounded-full transition-all duration-300',
-                active && 'shadow-sm'
-              )} style={{ backgroundColor: ch.color, boxShadow: active ? `0 0 6px ${ch.color}40` : 'none' }} />}
-              {t(ch.labelKey)}
-            </button>
-          )
-        })}
       </div>
       {/* List — native scroll */}
       <div className="flex-1 min-h-0 overflow-y-auto">

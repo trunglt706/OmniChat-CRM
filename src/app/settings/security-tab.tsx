@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Separator } from '@/components/ui/separator'
 import { Badge } from '@/components/ui/badge'
@@ -11,8 +10,10 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { apiPut, apiPost, apiFetch } from '@/lib/api-client'
 import { cn } from '@/lib/utils'
 import { useT } from '@/i18n/useT'
-import { ShieldAlert, Shield, Zap, Clock, Eye, Bell, Ban, Trash2, Check, X, AlertTriangle, Loader2, Plus, RotateCcw } from 'lucide-react'
+import { ShieldAlert, Zap, Clock, Ban, Trash2, Check, X, Loader2 } from 'lucide-react'
+import { LoadingBlock } from '@/components/ui/loading'
 import { SettingRow, SectionHeader } from './shared'
+import logger from '@/lib/logger'
 import { cachedFetch } from './cached-fetch'
 import {
   AlertDialog,
@@ -66,7 +67,7 @@ export default function SecurityTab() {
       setConfig(configData)
       setRateLimitInput(String(configData.rateLimitPerMinute))
       setBlacklist(blacklistData.data || [])
-    } catch (e) { console.error('Failed to load security config', e) }
+    } catch (e) { logger.error('Failed to load security config', { context: 'SecurityTab', error: e }) }
     finally { setLoading(false) }
   }
 
@@ -97,7 +98,7 @@ export default function SecurityTab() {
       setBlacklist(prev => [data.data, ...prev])
       setNewValue('')
       setNewReason('')
-    } catch (e) { console.error(e) }
+    } catch (e) { logger.error('Failed to add to blacklist', { context: 'SecurityTab', error: e }) }
     finally { setAdding(false) }
   }
 
@@ -115,18 +116,8 @@ export default function SecurityTab() {
     setConfirmRemove(null)
   }
 
-  const formatSize = (bytes: number) => {
-    if (bytes < 1024) return `${bytes} B`
-    if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`
-    return `${(bytes / 1048576).toFixed(1)} MB`
-  }
-
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground/40" />
-      </div>
-    )
+    return <LoadingBlock spinnerSize="xl" className="py-20 text-muted-foreground/40" />
   }
 
   return (

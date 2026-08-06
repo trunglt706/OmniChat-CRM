@@ -7,11 +7,9 @@ import { Separator } from '@/components/ui/separator'
 import { cn } from '@/lib/utils'
 import {
   MessageSquare, UserCheck, AlertTriangle, AtSign, Info,
-  CheckCheck, Trash2, BellOff, Sparkles, ArrowRight,
+  CheckCheck, Trash2, BellOff, Sparkles,
 } from 'lucide-react'
 import { useT } from '@/i18n/useT'
-
-const LOCALE_MAP: Record<string, string> = { vi: 'vi-VN', en: 'en-US', zh: 'zh-CN' }
 
 const NOTIF_CONFIG: Record<NotificationType, { icon: React.ElementType; color: string; bg: string }> = {
   new_message: { icon: MessageSquare, color: 'text-blue-500', bg: 'bg-blue-500/10' },
@@ -21,14 +19,15 @@ const NOTIF_CONFIG: Record<NotificationType, { icon: React.ElementType; color: s
   system: { icon: Info, color: 'text-slate-500', bg: 'bg-slate-500/10' },
   automation: { icon: Sparkles, color: 'text-violet-500', bg: 'bg-violet-500/10' },
 }
+import { formatDateTime, formatTimeOnly } from '@/lib/format-time'
 
 function formatNotifTime(d: string, t: (key: string, params?: Record<string, string | number>) => string, locale = 'vi') {
   const date = new Date(d), now = new Date(), diff = now.getTime() - date.getTime()
   const m = Math.floor(diff / 60000), h = Math.floor(diff / 3600000)
   if (m < 1) return t('notif.time.justNow')
   if (m < 60) return t('notif.time.minutesAgo', { m })
-  if (h < 24) return t('notif.time.hoursAgo', { h })
-  return date.toLocaleDateString(LOCALE_MAP[locale] || 'vi-VN')
+  if (h < 24) return formatTimeOnly(d)
+  return formatDateTime(d)
 }
 
 function NotifItem({ notif, onGoto, t, locale }: { notif: AppNotification; onGoto: () => void; t: (key: string, params?: Record<string, string | number>) => string; locale: string }) {
@@ -69,7 +68,6 @@ export default function NotificationPanel() {
   const notifications = useCRMStore((s) => s.notifications)
   const markNotificationRead = useCRMStore((s) => s.markNotificationRead)
   const markAllNotificationsRead = useCRMStore((s) => s.markAllNotificationsRead)
-  const clearNotification = useCRMStore((s) => s.clearNotification)
   const clearAllNotifications = useCRMStore((s) => s.clearAllNotifications)
   const setOpenSheet = useCRMStore((s) => s.setOpenSheet)
   const setSelectedConversationId = useCRMStore((s) => s.setSelectedConversationId)

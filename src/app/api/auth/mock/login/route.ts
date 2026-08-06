@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { checkBruteForce } from '@/lib/request-logger'
 import { logBlockedRequest } from '@/lib/api-logger'
+import { logger } from '@/lib/logger'
 
 const SECRET = process.env.NEXTAUTH_SECRET || 'omnichat-dev-secret-change-in-production'
 
@@ -78,7 +79,7 @@ export async function POST(request: Request) {
 
     return response
   } catch (error) {
-    console.error('Mock login error:', error)
+    logger.error('Mock login error', error)
     return NextResponse.json({ error: 'Login failed' }, { status: 500 })
   }
 }

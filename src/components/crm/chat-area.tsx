@@ -3,13 +3,11 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { useCRMStore } from '@/store/crm-store'
 import { socket } from '@/lib/socket'
+import { logger } from '@/lib/logger'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/components/ui/select'
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
@@ -19,16 +17,17 @@ import {
 import { CHANNEL_CONFIG, STATUS_CONFIG, PRIORITY_CONFIG, type Message } from '@/lib/types'
 import {
   Send, Paperclip, MoreVertical, CheckCircle, AlertTriangle,
-  Bot, UserPlus, XCircle, Sparkles,
+  UserPlus, XCircle, Sparkles,
   ArrowLeft, Info, SmilePlus, ImagePlus, X, Upload, ChevronUp, Loader2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { apiFetch, apiPost, generateIdempotencyKey } from '@/lib/api-client'
+import { apiPost, generateIdempotencyKey } from '@/lib/api-client'
 import {
   Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { useT } from '@/i18n/useT'
-import { EMOJI_LIST, GRADIENT_CLASSES, MESSAGES_PER_PAGE, shouldShowDate, formatFullDate, formatFileSize } from '@/lib/const/chat'
+import { EMOJI_LIST, GRADIENT_CLASSES, MESSAGES_PER_PAGE, shouldShowDate, formatFullDate } from '@/lib/const/chat'
+import { formatFileSize } from '@/lib/utils'
 import { TypingIndicator } from './chat/typing-indicator'
 import { MessageBubble } from './chat/message-bubble'
 
@@ -57,12 +56,10 @@ export default function ChatArea() {
   const isLoadingMoreMessages = useCRMStore((s) => s.isLoadingMoreMessages)
   const setIsLoadingMoreMessages = useCRMStore((s) => s.setIsLoadingMoreMessages)
   const agents = useCRMStore((s) => s.agents)
-  const setAgents = useCRMStore((s) => s.setAgents)
   const botEnabled = useCRMStore((s) => s.botEnabled)
   const setBotEnabled = useCRMStore((s) => s.setBotEnabled)
   const isBotTyping = useCRMStore((s) => s.isBotTyping)
   const setMobileView = useCRMStore((s) => s.setMobileView)
-  const showRightPanel = useCRMStore((s) => s.showRightPanel)
 
   const { t, locale } = useT()
 
@@ -93,7 +90,7 @@ export default function ChatArea() {
       const json = await res.json()
       return json // { data: Message[], total, hasMore }
     } catch (e) {
-      console.error('Failed to fetch messages', e)
+      logger.error('Failed to fetch messages', 'ChatArea', e)
       return null
     }
   }, [])
@@ -130,7 +127,7 @@ export default function ChatArea() {
           isInitialLoadRef.current = false
         })
       } catch (e) {
-        console.error('Failed to fetch conversation', e)
+        logger.error('Failed to fetch conversation', 'ChatArea', e)
       }
     }
     loadInitial()
@@ -177,7 +174,7 @@ export default function ChatArea() {
         setHasMoreMessages(false)
       }
     } catch (e) {
-      console.error('Failed to load older messages', e)
+      logger.error('Failed to load older messages', 'ChatArea', e)
     } finally {
       loadingMoreRef.current = false
       setIsLoadingMoreMessages(false)
@@ -281,7 +278,7 @@ export default function ChatArea() {
       setAttachedFiles([])
       textareaRef.current?.focus()
     } catch (e) {
-      console.error('Failed to send message', e)
+      logger.error('Failed to send message', 'ChatArea', e)
     } finally {
       setIsSendingMessage(false)
     }
@@ -341,7 +338,7 @@ export default function ChatArea() {
       const detail = await detailRes.json()
       setConversationDetail(detail)
     } catch (e) {
-      console.error('Failed to change status', e)
+      logger.error('Failed to change status', 'ChatArea', e)
     }
   }
 
@@ -356,7 +353,7 @@ export default function ChatArea() {
       setConversationDetail(detail)
       setAssignOpen(false)
     } catch (e) {
-      console.error('Failed to assign', e)
+      logger.error('Failed to assign', 'ChatArea', e)
     } finally {
       setAssignLoading(false)
     }
@@ -368,8 +365,6 @@ export default function ChatArea() {
       handleSend()
     }
   }
-
-
 
   const handleImageClick = useCallback((url: string) => setImagePreviewUrl(url), [])
 

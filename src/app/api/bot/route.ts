@@ -1,5 +1,6 @@
 import { db } from '@/lib/db';
 import { NextRequest, NextResponse } from 'next/server';
+import { logger } from '@/lib/logger';
 
 export async function POST(request: NextRequest) {
   const { message, conversationId: conversationIdStr, customerName } = await request.json();
@@ -70,7 +71,7 @@ ${recentMessages}`;
 
     return NextResponse.json({ reply: aiReply });
   } catch (error) {
-    console.error('Bot API error:', error);
+    logger.error('Bot API error', error);
     // Fallback: check automation rules
     const rules = await db.automationRule.findMany({ where: { enabled: true } });
     const matchedRule = rules.find((r) =>

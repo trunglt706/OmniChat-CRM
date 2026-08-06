@@ -1,7 +1,6 @@
 'use client'
 
 import type { TFn } from '@/lib/const/report'
-import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { SatisfactionStar } from '../shared'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
@@ -13,7 +12,7 @@ interface Props {
   onRowClick: (type: string, id: string | number, label: string) => void
 }
 
-export function ChannelsTab({ data, t, channelNames, onRowClick }: Props) {
+export function ChannelsTab({ data, t, onRowClick }: Props) {
   return (
     <div className="space-y-4 animate-slide-up">
       {/* Top Chart */}

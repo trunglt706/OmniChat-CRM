@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthUser } from '@/lib/session'
+import { logger } from '@/lib/logger'
 
 export async function GET(req: NextRequest) {
   try {
@@ -15,7 +16,7 @@ export async function GET(req: NextRequest) {
       role: user.role,
     })
   } catch (error) {
-    console.error('Userinfo error:', error)
+    logger.error('Userinfo error', error)
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })
   }
 }

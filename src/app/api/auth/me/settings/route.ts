@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthUser } from '@/lib/session'
 import { db } from '@/lib/db'
+import { logger } from '@/lib/logger'
 
 /**
  * PUT /api/auth/me/settings — Persist user settings to DB.
@@ -31,7 +32,7 @@ export async function PUT(req: NextRequest) {
 
     return NextResponse.json({ success: true, settings: merged })
   } catch (error) {
-    console.error('Settings update error:', error)
+    logger.error('Settings update error', error)
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })
   }
 }

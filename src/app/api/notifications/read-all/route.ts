@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getToken } from 'next-auth/jwt'
 import { getSecurityEnv } from '@/lib/redis'
 import { db } from '@/lib/db'
+import { logger } from '@/lib/logger'
 
 // PATCH /api/notifications/read-all — mark all notifications as read
 export async function PATCH(req: NextRequest) {
@@ -23,7 +24,7 @@ export async function PATCH(req: NextRequest) {
 
     return NextResponse.json({ success: true })
   } catch (e: any) {
-    console.error('PATCH /api/notifications/read-all error:', e)
+    logger.error('PATCH /api/notifications/read-all error', e)
     return NextResponse.json({ error: e.message || 'Failed' }, { status: 500 })
   }
 }

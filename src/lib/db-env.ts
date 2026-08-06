@@ -13,6 +13,8 @@
 
 export type DatabaseProvider = 'sqlite' | 'mysql'
 
+import logger from '@/lib/logger'
+
 export interface DatabaseConfig {
   /** Database provider: sqlite or mysql */
   provider: DatabaseProvider
@@ -49,9 +51,10 @@ function parseProvider(): DatabaseProvider {
   const raw = (process.env.DATABASE_PROVIDER || 'sqlite').toLowerCase().trim()
   if (raw === 'mysql') return 'mysql'
   if (raw === 'sqlite') return 'sqlite'
-  console.warn(
-    `[db-env] DATABASE_PROVIDER="${raw}" không hợp lệ. Sử dụng mặc định: sqlite. ` +
-    `Giá trị hợp lệ: sqlite, mysql`
+  logger.warn(
+    `DATABASE_PROVIDER="${raw}" không hợp lệ. Sử dụng mặc định: sqlite. ` +
+    `Giá trị hợp lệ: sqlite, mysql`,
+    { context: 'db-env' }
   )
   return 'sqlite'
 }

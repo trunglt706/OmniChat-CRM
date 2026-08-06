@@ -1,7 +1,5 @@
 'use client'
 
-import { cn } from '@/lib/utils'
-
 export function SettingRow({
   icon: Icon, label, description, children,
 }: {
