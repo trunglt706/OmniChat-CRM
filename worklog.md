@@ -2,178 +2,112 @@
 
 ---
 Task ID: 1
-Agent: Main Agent
-Task: Kiểm tra và fix toàn bộ lỗi trong dự án OmniChat CRM
+Agent: Main
+Task: Performance optimization — fix excessive re-rendering & redundant API calls
 
 Work Log:
-- Phát hiện `middleware.ts` gây crash server sau mỗi request (Next.js 16 deprecate middleware, dùng proxy.ts)
-- Chuyển `src/middleware.ts` sang `src/proxy.ts` (Next.js 16 convention), loại bỏ `setInterval` gây crash
-- Fix TypeScript errors: `auth.ts` (token.id unknown type), `conversation-list.tsx` (NodeJS.Timeout), `simulation/route.ts` & `messages/route.ts` (automationResult type), `bot/route.ts` (z-ai-web-dev-sdk API)
-- Phát hiện NextAuth v4 OAuth callback không tương thích với Next.js 16 (body parsing error)
-- Tạo mock login API trực tiếp (`/api/auth/mock/login`) dùng `next-auth/jwt.encode` để set JWT cookie, bỏ qua NextAuth OAuth flow
-- Update login page dùng `fetch` trực tiếp thay vì `signIn()` từ next-auth/react
-- Tạo logout API (`/api/auth/mock/logout`) xóa session cookie
-- Bỏ import `signOut` từ `next-auth/react` trong page.tsx
-- Phát hiện OOM (3.9GB RAM, next-server dùng quá 2.2GB bị kill)
-- Thêm `--max-old-space-size=2560` vào dev script
+- Audited all components for broad Zustand subscriptions (no selectors)
+- Fixed ProfileTab: `useCRMStore()` → individual selectors for `currentUser`, `setCurrentUser`
+- Fixed SystemTab: broad sub → individual selectors + `notifCount` derived selector instead of full `notifications` array
+- Fixed StaffTab: removed duplicated `staffList` local state, now uses global `agents` directly with fetch-if-empty guard
+- Fixed Header: `unreadNotifCount` now computed via optimized for-loop selector (no array allocation)
+- Fixed AutomationPanel: removed local `agents` state, reads from global store; added `useMemo` for `filteredRules`/`enabledCount`/`disabledCount`
+- Eliminated redundant `/api/agents` fetch in AutomationPanel (now checks store first)
+- Eliminated redundant `/api/auth/me` fetch in settings page (checks store first)
+- Removed dead `useEffect` in settings page
+- Added `useMemo` for `pinnedNotes`/`regularNotes` filtering in customer-panel
+- Removed unused `index` prop from `PlatformBadge`
+- Added `useCallback` for `handleSheetClose` in CRMPage (stable ref for 3 Sheet components)
+- Fixed Suspense boundary issues on `/` and `/settings` pages (Next.js 16 requirement for `useSearchParams`)
 
 Stage Summary:
-- Server chạy ổn định, không còn crash
-- Login flow hoạt động: `/login` → POST `/api/auth/mock/login` → redirect tới app với JWT cookie
-- Proxy.ts (Next.js 16) thay thế middleware.ts: auth guard + rate limiting
-- 0 TypeScript errors trong src/
-- Tất cả trang (/, /reports, /settings) trả về 200
-- API endpoints hoạt động bình thường
+- ~8 components optimized with proper Zustand selectors
+- 3 redundant API calls eliminated (agents x2, auth/me x1)
+- Build passes successfully
+
+---
+Task ID: 2
+Agent: Main
+Task: Security monitoring, logging, brute-force protection, auto-blacklist
+
+Work Log:
+- Created `src/lib/request-logger.ts`: request logging with memory ring buffer + Redis analytics
+- Created `src/lib/api-logger.ts`: `withLogging` wrapper + `logBlockedRequest` for middleware
+- Integrated logging into proxy.ts for all blocked requests (blacklist, rate-limit, CSRF)
+- Created `src/app/api/monitoring/route.ts`: admin-only endpoint (summary/logs/alerts/memory views)
+- Added brute-force detection to login route (`checkBruteForce` — 10 attempts per 15min per IP+email)
+- Added auto-blacklist: IPs with 5+ rate-limit violations in 10min get auto-blacklisted
+- Added `addToBlacklist()` function to security.ts
+- Added slow-query logging to Prisma client (`SLOW_QUERY_MS` env var, default 1000ms)
+- Added `/api/monitoring` to rate-limited API prefixes
+
+Stage Summary:
+- Full request logging pipeline operational (memory buffer + Redis analytics)
+- Monitoring API: GET /api/monitoring?view=summary|logs|alerts|memory
+- Brute-force protection active on login endpoint
+- Auto-blacklist protects against sustained DDoS attacks
+- Slow query warnings in server console
 ---
 Task ID: 1
-Agent: Main Agent
-Task: Audit và fix toàn bộ hardcoded data → API calls
-
-Work Log:
-- Audit toàn bộ 39 files trong src/app/, src/components/, src/store/, src/lib/
-- Tìm 7 vị trí hardcoded data cần sửa
-- Tạo helper session.ts (getAuthUser) dùng chung cho mọi API route
-- Tạo API /api/auth/me trả về user thật từ DB qua JWT decode
-- Fix /api/auth/mock/login: lookup user từ DB theo email, auto-provision nếu chưa có
-- Fix /api/auth/mock/userinfo: đọc JWT → trả về user từ DB
-- Fix crm-store.ts: xóa DEFAULT_USER, currentUser = null, isAuthenticated = false
-- Fix page.tsx: thêm useEffect fetch /api/auth/me để load user vào store
-- Fix settings/page.tsx: thêm useEffect fetch /api/auth/me (separate route)
-- Fix conversations/route.ts: thay 'mock_current_user' bằng session user ID
-- Fix messages/route.ts: thay 'mock_current_user' bằng session user ID + senderName từ auth
-- Tạo API /api/agents/me/stats: tính thống kê thật từ DB (conversationsToday, avgResponse, totalConversations)
-- Fix profile-panel.tsx: fetch stats từ /api/agents/me/stats thay vì hardcode '12', '2m 30s', '4.8/5', '1,247'
-- Fix settings/page.tsx ProfileTab: fetch stats từ /api/agents/me/stats
-
-Stage Summary:
-- Tất cả 7 vị trí hardcoded data đã được sửa
-- Tất cả data giờ đến từ API → DB, không còn hardcode
-- Verified: login → tạo user từ DB, /api/auth/me trả về user thật, stats tính từ DB
-- Conversations filter 'assigned=me' dùng đúng user ID từ session
-- Agent messages ghi đúng senderId từ session
----
-Task ID: 2
-Agent: Main Agent
-Task: Kiểm tra cấu hình kênh chat, thêm ChatWork, thêm Test Connection
-
-Work Log:
-- Audit toàn bộ hệ thống kênh: phát hiện 7 kênh nhưng chỉ 5 có UI, không có persistence, không có test connection
-- Thêm model ChannelConfig vào Prisma schema (channel, enabled, config JSON, lastTestAt/Ok/Msg)
-- Chạy prisma db push thành công
-- Tạo API GET/PUT /api/channels với metadata fields cho từng kênh (7 kênh đầy đủ)
-- Tạo API POST /api/channels/test với test thật cho Telegram (gọi getMe API) và ChatWork (gọi /me API)
-- Validate config cho tất cả kênh: Facebook (graph API), Zalo (format check), Email (IMAP validation), Website (URL parse)
-- Rewrite hoàn toàn ChannelsTab component: load từ API, dynamic forms từ API fields, không còn hardcode
-- Thêm 2 kênh mới vào UI: Facebook Comment + Chatwork
-- Sửa bug email IMAP input chết (không có value/onChange)
-- Thêm i18n cho ChatWork, FB Comment, test connection (3 ngôn ngữ: vi, en, zh)
-- Bổ sung channel filters: thêm facebook_comment + chatwork vào conversation-list
-- Thêm facebook_comment vào dashboard CHANNEL_COLORS
-- Thêm mock messages cho chatwork + facebook_comment trong simulation
-- Sửa bug JSX comment thiếu `}` gây crash
-- Thêm /api/channels vào rate limit list trong proxy.ts
-
-Stage Summary:
-- 7 kênh đầy đủ: FB Messenger, FB Comment, Zalo, Telegram, ChatWork, Website, Email
-- Config persistence qua DB (ChannelConfig model)
-- Test Connection hoạt động thật cho Telegram + ChatWork, validate cho các kênh khác
-- UI ChannelsTab hoàn toàn dynamic, load từ API, không hardcode
----
-Task ID: 2
 Agent: main
-Task: Kiểm tra cấu hình kênh chat production readiness, thêm Chatwork, thêm test connection
+Task: Fix CSRF 403 on POST /api/security/blacklist and audit all raw fetch() calls
 
 Work Log:
-- Fixed chunk loading error by clearing .next cache
-- Updated /api/channels CHANNEL_META with production-ready fields:
-  - Facebook Messenger: added appId, appSecret, renamed token→pageAccessToken, verifyToken→Webhook Verify Token
-  - Facebook Comment: added appId, appSecret, renamed token→pageAccessToken
-  - Zalo: added appId, appSecret, renamed token→accessToken, added webhookUrl
-  - Telegram: renamed token→botToken, added webhookUrl
-  - Chatwork: already existed with apiToken + roomId (unchanged)
-  - Website: renamed webhook→webhookUrl, added allowedDomains, used skipConfigCheck for widgetId
-  - Email: added smtpUser, smtpPass fields
-- Created /api/channels/test/route.ts with real API verification for all 7 channels:
-  - Facebook: calls graph.facebook.com/v21.0/me with token
-  - Zalo: calls openapi.zalo.me/v2.0/oa/getoa with Bearer token
-  - Telegram: calls api.telegram.org/bot{token}/getMe
-  - Chatwork: calls api.chatwork.com/v2/me + optional room check
-  - Website: validates webhook URL format + HTTPS requirement
-  - Email: validates IMAP/SMTP host format and port numbers
-  - All external fetch calls use 10s AbortController timeout
-  - Test results persisted to DB (lastTestAt, lastTestOk, lastTestMsg)
-- Updated isConfigured logic to use skipConfigCheck array instead of hardcoded widgetId check
-- Verified all endpoints via curl: GET /api/channels, POST /api/channels/test for all channels
-- Confirmed test results persist across server restarts via DB
+- Investigated CSRF 403 error: SecurityTab, ChannelsTab, BackupTab in settings/page.tsx all used raw fetch() without CSRF token
+- Improved api-client.ts: replaced window.location.reload() with automatic retry (refreshes token via lightweight GET, then retries once)
+- Fixed SecurityTab: saveConfig (PUT /api/security/config) → apiPut, addToBlacklist (POST /api/security/blacklist) → apiPost, removeFromBlacklist (DELETE) → apiFetch
+- Fixed ChannelsTab: toggleChannel (PUT /api/channels) → apiPut, saveChannel (PUT /api/channels) → apiPut, testConnection (POST /api/channels/test) → apiPost
+- Fixed BackupTab: createBackup (POST /api/backup) → apiPost, restoreBackup (POST /api/backup/restore) → apiPost, deleteBackup (DELETE) → apiFetch
+- Fixed page.tsx: toggleSimulation (POST /api/simulation) → apiPost
+- Audited all components: only remaining raw fetch with mutating method is settings-panel.tsx PUT /api/auth/me/settings which is CSRF-exempt
+- Investigated ChatArea hooks order error (line 543): all 28 hooks are called unconditionally before conditional return at line 559; error is stale/HMR artifact
+- Build passes successfully
 
 Stage Summary:
-- 7 channels with production-ready credential fields
-- Test connection API working for all channels with proper timeout handling
-- Chatwork was already present in the codebase (types, icons, colors, i18n, API meta)
-- All changes are API-driven, no hardcoded data
+- Root cause: raw fetch() calls bypassing api-client CSRF token injection
+- 11 raw fetch() calls replaced with apiFetch/apiPost/apiPut across 3 files
+- api-client.ts now auto-retries on CSRF failure instead of reloading page
+- ChatArea hooks order verified correct — no code changes needed
 ---
-Task ID: 3
+Task ID: 2-a
 Agent: main
-Task: Security hardening - CSP, CSRF, Rate Limit (Redis), Idempotency, Webhook, Upload, XSS, WS Auth
+Task: Persist notifications to database + fix channel filter horizontal scroll
 
 Work Log:
-- Installed ioredis package
-- Created src/lib/redis.ts: Redis client with in-memory fallback, all security env config (SecurityEnv)
-- Created src/lib/csrf.ts: Double-submit cookie CSRF protection (generate/validate/extract)
-- Created src/lib/rate-limit.ts: Multi-dimensional rate limiting (IP + User + Tenant + Burst) via Redis
-- Created src/lib/idempotency.ts: Idempotency key support for POST/PUT (24h cache)
-- Created src/lib/webhook-verify.ts: HMAC-SHA256 webhook verification for FB/Zalo/Telegram/Chatwork/Website
-- Created src/lib/upload-guard.ts: File upload validation (MIME type + Magic Bytes + size + SVG XSS check)
-- Created src/lib/security-headers.ts: CSP builder + security headers + XSS output encoding helpers
-- Created src/lib/ws-auth.ts: WebSocket private channel auth (JWT + channel-level authorization + presence)
-- Created src/lib/api-client.ts: Client-side secure fetch (auto CSRF + idempotency key)
-- Created src/lib/middleware-helpers.ts: withIdempotency + withBusinessRateLimit wrappers for API routes
-- Created src/app/api/upload/route.ts: Secure upload endpoint with validation
-- Created src/app/api/webhook/[channel]/route.ts: Universal webhook receiver with signature verification
-- Rewrote src/proxy.ts: Integrated all security layers (blacklist → auth → rate limit → CSRF → idempotency → CSP headers)
-- Updated .env with all security configuration variables and comments
-- Updated next.config.ts with backup security headers
-- Build verified: all code compiles successfully
+- Added `Notification` model to Prisma schema (id, userId, type, title, body, conversationId, read, createdAt, updatedAt) with index on [userId, read, createdAt]
+- Added `notifications Notification[]` relation to User model
+- Created 3 API routes: GET/POST/DELETE /api/notifications, PATCH /api/notifications/[id]/read, PATCH /api/notifications/read-all
+- Updated Zustand store: added `setNotifications`, `loadNotifications` actions
+- Implemented background flush queue (`_notifPersistQueue` + `flushNotifToDB`) that batches notification changes and syncs to DB with 300ms debounce
+- `addNotification` now persists to DB optimistically (UI updates immediately, DB write in background)
+- `markNotificationRead` and `clearNotification` skip DB write for client-generated IDs (starting with `notif_`)
+- `markAllNotificationsRead` and `clearAllNotifications` always persist to DB
+- Added `loadNotifications()` call in page.tsx after login (loads from DB and merges with any local-only notifications)
+- Ran `prisma db push` to sync schema
+- Fixed channel filter horizontal scroll: added `max-w-full` to scroll containers, `scroll-fade-x` CSS class with gradient fade indicator via `ResizeObserver`
+- Removed unused `addNotification` import from conversation-list.tsx
 
 Stage Summary:
-- 12 new security files created
-- proxy.ts rewritten with 6-layer security pipeline
-- All config via .env (Redis URL, rate limits, CSRF, upload, CSP, webhook secret)
-- Fallback to in-memory when Redis not available (dev mode)
+- Notifications now persist to SQLite via 3 new API routes
+- Optimistic UI with 300ms batched background sync
+- Notifications loaded on login and survive page refresh
+- Channel/status filter tabs scroll horizontally with fade indicator when sidebar is resized narrow
+- Build passes successfully
 ---
-Task ID: 4
+Task ID: 1
 Agent: main
-Task: Database config từ env (SQLite/MySQL) + Channel Adapter Interface Pattern
+Task: Fix duplicate API call on /settings?tab=profile save
 
 Work Log:
-- Tạo src/lib/db-env.ts: DatabaseConfig interface + getDbConfig() singleton, đọc DATABASE_PROVIDER, DATABASE_URL, DATABASE_POOL_* từ .env
-- Cập nhật .env: thêm DATABASE_PROVIDER=sqlite, DATABASE_POOL_MIN/MAX, DATABASE_CONNECTION_TIMEOUT với hướng dẫn MySQL
-- Tạo .env.example: file mẫu cấu hình đầy đủ
-- Cập nhật prisma/schema.prisma: thêm relationMode="prisma" (cho MySQL tương thích), thêm @@index cho Conversation (channel, status, ownerId, customerId, createdAt), Message (conversationId+createdAt, platformMessageId), AuditLog (userId, action, createdAt)
-- Rewrite src/lib/db.ts: singleton với hỗ trợ MySQL lazy-load qua Function constructor (tránh Turbopack static analysis),getDb() async cho MySQL adapter, db sync cho SQLite
-- Thiết kế Channel Adapter Interface system:
-  - src/lib/channels/types.ts: IChannelAdapter interface, BaseChannelAdapter abstract class, ChannelMeta, TestResult, WebhookVerifyResult, WebhookHandleResult, ParsedWebhookMessage types
-  - src/lib/channels/registry.ts: ChannelRegistry class (register/get/getAll/getAllMeta/testConnection/verifyWebhook/handleWebhook/preprocessConfig)
-  - src/lib/channels/index.ts: Public API barrel export
-- Tạo 7 channel adapters trong src/lib/channels/adapters/:
-  - facebook-messenger.ts: testConnection (graph API), verifyWebhook (HMAC-SHA256), handleWebhook (messaging payload)
-  - facebook-comment.ts: extends FacebookMessengerAdapter, override handleWebhook (changes payload)
-  - zalo.ts: testConnection (OA API), verifyWebhook (HMAC-SHA256), handleWebhook
-  - telegram.ts: testConnection (getMe API), verifyWebhook (secret_token), handleWebhook
-  - chatwork.ts: testConnection (/me + room check), verifyWebhook (HMAC-SHA256), handleWebhook
-  - website.ts: preprocessConfig (auto widgetId), testConnection (URL validate), verifyWebhook (timestamp+HMAC)
-  - email.ts: testConnection (IMAP/SMTP validate), verifyWebhook (pass-through), handleWebhook
-- Refactor 3 API routes dùng channelRegistry:
-  - src/app/api/channels/route.ts: GET dùng channelRegistry.getAllMeta(), PUT dùng channelRegistry.preprocessConfig()
-  - src/app/api/channels/test/route.ts: POST dùng channelRegistry.testConnection() (từ 252 dòng → 42 dòng)
-  - src/app/api/webhook/[channel]/route.ts: POST dùng channelRegistry.verifyWebhook() + handleWebhook() (từ 145 dòng → 58 dòng)
-- Cập nhật src/lib/types.ts: thêm comment hướng dẫn SINGLE SOURCE OF TRUTH cho ChannelType
-- Cập nhật .zscripts/database-runtime-build.sh: hỗ trợ cả SQLite và MySQL
-- Verified: 0 TypeScript errors, dev server chạy sạch (no warnings), 7 channels từ registry hoạt động đúng
+- Investigated root cause: two issues found
+  1. Dual component mount: `renderContent()` was called in BOTH desktop (`hidden md:flex`) and mobile (`md:hidden`) wrapper divs, creating 2 instances of each tab component. Each instance had its own `useEffect` hooks, causing double API calls on mount.
+  2. Race condition on double-click: `setSaving(true)` is async (React batches state updates), so rapid double-clicks could trigger `handleSave` twice before `disabled={saving}` takes effect.
+- Fix 1: Refactored responsive layout from 2 wrapper divs (each with `{renderContent()}`) to a single flex container with desktop nav (`hidden md:flex`) + mobile nav (`md:hidden`) + shared `<main>` with `{renderContent()}` rendered ONCE.
+- Fix 2: Added `savingRef = useRef(false)` guard to `ProfileTab.handleSave` — checked synchronously before any async work, preventing concurrent executions.
+- Note: `SystemTab` already had success/failure modal from previous session. ProfileTab also already had it.
+- Build verified: passes cleanly.
 
 Stage Summary:
-- Database: chuyển đổi SQLite↔MySQL chỉ cần đổi DATABASE_PROVIDER + DATABASE_URL trong .env
-- Channel Architecture: Interface pattern (IChannelAdapter) + Registry Pattern + Inheritance (FB Comment extends FB Messenger)
-- Thêm kênh mới chỉ cần: tạo 1 file adapter + đăng ký vào registry.ts (thay vì sửa 7+ file)
-- Code giảm: test/route.ts 252→42 dòng, webhook route 145→58 dòng
-- webhook-verify.ts giữ nguyên (được adapter gọi trực tiếp)
+- /settings page now renders tab content only once (was twice before)
+- Profile save button has double-click protection via ref guard
+- All useEffect API calls in tabs (stats, channels, agents, security config, backups) no longer duplicate

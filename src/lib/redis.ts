@@ -6,7 +6,8 @@ import Redis from 'ioredis'
  * In production, always use a real Redis instance.
  */
 
-let _redis: Redis | null = null
+let _redisInstance: Redis | null = null
+let _redisClient: RedisClient | null = null
 let _memoryStore = new Map<string, { value: string; expireAt: number }>()
 let _memoryTimer: ReturnType<typeof setInterval> | null = null
 
@@ -38,6 +39,9 @@ export interface RedisClient {
 /** In-memory fallback when Redis is not available */
 class MemoryRedis implements RedisClient {
   isMemory = true
+  constructor() {
+    startMemoryCleanup()
+  }
 
   async get(key: string): Promise<string | null> {
     const entry = _memoryStore.get(key)
@@ -50,10 +54,8 @@ class MemoryRedis implements RedisClient {
   }
 
   async set(key: string, value: string, ex?: number): Promise<void> {
-    _memoryStore.set(key, {
-      value,
-      expireAt: ex ? Date.now() + ex * 1000 : 0,
-    })
+    const expireAt = ex ? Date.now() + ex * 1000 : 0
+    _memoryStore.set(key, { value, expireAt })
   }
 
   async del(key: string): Promise<number> {
@@ -61,13 +63,11 @@ class MemoryRedis implements RedisClient {
   }
 
   async incr(key: string): Promise<number> {
-    const entry = _memoryStore.get(key)
-    const val = (entry && !(entry.expireAt > 0 && entry.expireAt < Date.now()))
-      ? parseInt(entry.value, 10) || 0
-      : 0
-    const newVal = val + 1
-    _memoryStore.set(key, { value: String(newVal), expireAt: entry?.expireAt || 0 })
-    return newVal
+    const entry = await this.get(key)
+    const val = (entry ? parseInt(entry, 10) : 0) + 1
+    const expireAt = _memoryStore.get(key)?.expireAt || 0
+    _memoryStore.set(key, { value: String(val), expireAt })
+    return val
   }
 
   async expire(key: string, seconds: number): Promise<number> {
@@ -78,19 +78,19 @@ class MemoryRedis implements RedisClient {
   }
 
   async exists(key: string): Promise<number> {
-    const entry = _memoryStore.get(key)
-    if (!entry) return 0
-    if (entry.expireAt > 0 && entry.expireAt < Date.now()) {
-      _memoryStore.delete(key)
-      return 0
-    }
-    return 1
+    const val = await this.get(key)
+    return val !== null ? 1 : 0
   }
 
   async keys(pattern: string): Promise<string[]> {
-    if (pattern === '*') return [..._memoryStore.keys()]
-    const regex = new RegExp('^' + pattern.replace(/\*/g, '.*').replace(/\?/g, '.') + '$')
-    return [..._memoryStore.keys()].filter(k => regex.test(k))
+    const regex = new RegExp('^' + pattern.replace(/\*/g, '.*') + '$')
+    const result: string[] = []
+    const now = Date.now()
+    for (const [key, entry] of _memoryStore) {
+      if (entry.expireAt > 0 && entry.expireAt < now) continue
+      if (regex.test(key)) result.push(key)
+    }
+    return result
   }
 
   async ping(): Promise<string> {
@@ -103,11 +103,11 @@ class MemoryRedis implements RedisClient {
  * If REDIS_URL is not set, returns an in-memory fallback.
  */
 export function getRedis(): RedisClient {
-  if (_redis) return _redis
+  if (_redisClient) return _redisClient
 
   const redisUrl = process.env.REDIS_URL
   if (redisUrl) {
-    _redis = new Redis(redisUrl, {
+    _redisInstance = new Redis(redisUrl, {
       maxRetriesPerRequest: 3,
       retryStrategy(times) {
         if (times > 3) return null // stop retrying
@@ -116,32 +116,31 @@ export function getRedis(): RedisClient {
       lazyConnect: true,
     })
 
-    _redis.on('error', (err) => {
+    _redisInstance.on('error', (err) => {
       console.error('[Redis] Connection error:', err.message)
     })
 
     // Wrap Redis to match RedisClient interface
-    const wrapped: RedisClient = {
+    _redisClient = {
       isMemory: false,
-      get: (key) => _redis!.get(key),
+      get: (key) => _redisInstance!.get(key),
       set: (key, value, ex) => {
-        if (ex) return _redis!.set(key, value, 'EX', ex).then(() => {})
-        return _redis!.set(key, value).then(() => {})
+        if (ex) return _redisInstance!.set(key, value, 'EX', ex).then(() => {})
+        return _redisInstance!.set(key, value).then(() => {})
       },
-      del: (key) => _redis!.del(key),
-      incr: (key) => _redis!.incr(key),
-      expire: (key, seconds) => _redis!.expire(key, seconds),
-      exists: (key) => _redis!.exists(key),
-      keys: (pattern) => _redis!.keys(pattern),
-      ping: () => _redis!.ping(),
+      del: (key) => _redisInstance!.del(key),
+      incr: (key) => _redisInstance!.incr(key),
+      expire: (key, seconds) => _redisInstance!.expire(key, seconds),
+      exists: (key) => _redisInstance!.exists(key),
+      keys: (pattern) => _redisInstance!.keys(pattern),
+      ping: () => _redisInstance!.ping(),
     }
 
-    return wrapped
+    return _redisClient
   }
 
-  // No Redis URL — use in-memory fallback
-  startMemoryCleanup()
-  return new MemoryRedis()
+  _redisClient = new MemoryRedis()
+  return _redisClient
 }
 
 /**

@@ -5,15 +5,16 @@ import { randomBytes } from 'crypto'
 
 // ─── Security imports ───
 import { getRedis, getSecurityEnv } from '@/lib/redis'
-import { checkApiRateLimit, rateLimitResponse, checkBotRateLimit } from '@/lib/rate-limit'
+import { checkApiRateLimit, rateLimitResponse, checkBotRateLimit, checkAutoBlacklist } from '@/lib/rate-limit'
 import { generateCsrfToken, csrfCookieValue, validateCsrfToken, CSRF_HEADER } from '@/lib/csrf'
 import { extractIdempotencyKey, getIdempotencyResult, idempotencyResponse } from '@/lib/idempotency'
 import { getSecurityHeaders } from '@/lib/security-headers'
 import { isBlacklisted } from '@/lib/security'
+import { logBlockedRequest } from '@/lib/api-logger'
 
 // ─── Route configuration ───
-const PUBLIC_PATHS = ['/login', '/api/auth', '/api/webhook']
-const CSRF_EXEMPT_PATHS = ['/api/auth', '/api/webhook'] // Auth & webhooks don't need CSRF
+const PUBLIC_PATHS = ['/login', '/api/auth', '/api/webhook', '/api/ws/test', '/api/realtime/test']
+const CSRF_EXEMPT_PATHS = ['/api/auth', '/api/webhook', '/api/ws/test', '/api/realtime/test'] // Auth, webhooks & tests don't need CSRF
 const IDEMPOTENCY_METHODS = ['POST', 'PUT', 'PATCH']
 
 // API prefixes that need rate limiting
@@ -21,7 +22,7 @@ const RATE_LIMITED_API_PREFIXES = [
   '/api/conversations', '/api/customers', '/api/dashboard',
   '/api/reports', '/api/bot', '/api/simulation', '/api/agents',
   '/api/tags', '/api/automation', '/api/channels', '/api/backup',
-  '/api/security',
+  '/api/security', '/api/monitoring',
 ]
 
 export async function proxy(request: NextRequest) {
@@ -35,6 +36,7 @@ export async function proxy(request: NextRequest) {
 
   // ─── 0. Blacklist check (before everything) ───
   if (isBlacklisted(ip)) {
+    logBlockedRequest({ method, path: pathname, ip, reason: 'blacklisted', status: 403 })
     return new NextResponse(
       JSON.stringify({ error: 'Forbidden', message: 'IP đã bị chặn' }),
       { status: 403, headers: { 'Content-Type': 'application/json' } }
@@ -83,6 +85,9 @@ export async function proxy(request: NextRequest) {
   if (RATE_LIMITED_API_PREFIXES.some(p => pathname.startsWith(p))) {
     const result = await checkApiRateLimit(ip, userId, tenantId)
     if (!result.allowed) {
+      logBlockedRequest({ method, path: pathname, ip, userId, reason: 'rate_limited', status: 429 })
+      // Auto-blacklist IPs that repeatedly violate rate limits
+      await checkAutoBlacklist(ip)
       return rateLimitResponse(result)
     }
 
@@ -105,6 +110,7 @@ export async function proxy(request: NextRequest) {
   if (needsCsrf && userId) {
     const csrfToken = request.headers.get(CSRF_HEADER)
     if (!csrfToken || !(await validateCsrfToken(ip, csrfToken))) {
+      logBlockedRequest({ method, path: pathname, ip, userId, reason: 'csrf_failed', status: 403 })
       return new NextResponse(
         JSON.stringify({ error: 'Forbidden', message: 'CSRF token không hợp lệ hoặc đã hết hạn' }),
         {
@@ -139,8 +145,9 @@ export async function proxy(request: NextRequest) {
     response.headers.set(key, value)
   }
 
-  // Set CSRF cookie for page loads (GET requests)
-  if (method === 'GET' && userId && env.CSRF_ENABLED) {
+  // Set CSRF cookie on every authenticated response
+  // (token is one-time-use, so client needs a fresh one after each request)
+  if (userId && env.CSRF_ENABLED) {
     const csrfToken = await generateCsrfToken(ip)
     response.headers.append('Set-Cookie', csrfCookieValue(csrfToken))
   }

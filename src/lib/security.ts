@@ -84,10 +84,27 @@ export function invalidateBlacklistCache() {
 }
 
 export function isBlacklisted(ip: string, email?: string): boolean {
+  // Never block loopback/localhost IPs
+  if (ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1' || ip === 'localhost') {
+    return false
+  }
   const list = getCachedBlacklist()
   return list.some(entry => {
     if (entry.type === 'ip' && (entry.value === ip || entry.value === '*')) return true
     if (entry.type === 'email' && email && entry.value.toLowerCase() === email.toLowerCase()) return true
     return false
   })
+}
+
+/**
+ * Add an entry to the blacklist (used by auto-blacklist & manual admin actions).
+ */
+export function addToBlacklist(entry: BlacklistEntry): void {
+  const list = loadBlacklist()
+  // Prevent duplicates
+  if (!list.some(e => e.type === entry.type && e.value === entry.value)) {
+    list.push(entry)
+    saveBlacklist(list)
+    invalidateBlacklistCache()
+  }
 }

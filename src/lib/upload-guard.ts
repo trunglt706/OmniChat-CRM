@@ -6,7 +6,7 @@
 import { getSecurityEnv } from './redis'
 
 // Magic bytes (file signatures) for common file types
-const MAGIC_BYTES: Record<string, number[]> = {
+const MAGIC_BYTES: Record<string, (number | undefined)[]> = {
   // Images
   'image/jpeg': [0xFF, 0xD8, 0xFF],
   'image/png': [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A],
@@ -22,7 +22,7 @@ const MAGIC_BYTES: Record<string, number[]> = {
   'application/vnd.ms-excel': [0xD0, 0xCF, 0x11, 0xE0],
   'application/msword': [0xD0, 0xCF, 0x11, 0xE0],
   // Audio
-  'audio/mpeg': [0xFF, 0xFB] || [0x49, 0x44, 0x33], // ID3
+  'audio/mpeg': [0x49, 0x44, 0x33], // ID3
   'audio/wav': [0x52, 0x49, 0x46, 0x46, undefined, undefined, undefined, 0x57, 0x41, 0x56, 0x45],
   'audio/ogg': [0x4F, 0x67, 0x67, 0x53],
   // Video

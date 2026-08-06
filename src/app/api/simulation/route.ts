@@ -163,12 +163,16 @@ export async function GET(request: NextRequest) {
 // POST: Start or control simulation
 export async function POST(request: NextRequest) {
   const body = await request.json();
-  const { action, channel, conversationId, message: customMessage } = body;
+  const { action, channel, conversationId: conversationIdStr, message: customMessage } = body;
 
   if (action === 'send_once') {
     // Send a single mock message to a specific conversation
-    if (!conversationId) {
+    if (!conversationIdStr) {
       return NextResponse.json({ error: 'conversationId is required' }, { status: 400 });
+    }
+    const conversationId = Number(conversationIdStr);
+    if (isNaN(conversationId)) {
+      return NextResponse.json({ error: 'Invalid conversationId' }, { status: 400 });
     }
 
     const convo = await db.conversation.findUnique({

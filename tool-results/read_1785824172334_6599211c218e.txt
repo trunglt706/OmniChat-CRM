@@ -1,0 +1,941 @@
+     1→'use client'
+     2→
+     3→import { useEffect, useRef, useState, useCallback, useMemo, memo } from 'react'
+     4→import { useCRMStore } from '@/store/crm-store'
+     5→import { socket } from '@/lib/socket'
+     6→import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+     7→import { Badge } from '@/components/ui/badge'
+     8→import { Button } from '@/components/ui/button'
+     9→import { Textarea } from '@/components/ui/textarea'
+    10→import {
+    11→  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+    12→} from '@/components/ui/select'
+    13→import {
+    14→  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
+    15→} from '@/components/ui/dropdown-menu'
+    16→import {
+    17→  Popover, PopoverContent, PopoverTrigger,
+    18→} from '@/components/ui/popover'
+    19→import { CHANNEL_CONFIG, STATUS_CONFIG, PRIORITY_CONFIG, type Message } from '@/lib/types'
+    20→import {
+    21→  Send, Paperclip, MoreVertical, CheckCircle, Clock, AlertTriangle,
+    22→  Bot, User, Shield, Settings, UserPlus, Tag, Archive, XCircle, Sparkles,
+    23→  ArrowLeft, Info, SmilePlus, ImagePlus, Mic, X, Upload, ChevronUp, Loader2,
+    24→} from 'lucide-react'
+    25→import { cn } from '@/lib/utils'
+    26→import { apiFetch, apiPost, generateIdempotencyKey } from '@/lib/api-client'
+    27→import {
+    28→  Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
+    29→} from '@/components/ui/tooltip'
+    30→import { useT } from '@/i18n/useT'
+    31→
+    32→const LOCALE_MAP: Record<string, string> = { vi: 'vi-VN', en: 'en-US', zh: 'zh-CN' }
+    33→
+    34→const EMOJI_LIST = [
+    35→  '😀','😂','🥰','😍','🤩','😎','🤔','😮','😢','😤',
+    36→  '👍','👋','🙌','👏','🙏','✅','❤️','🔥','💯','🎉',
+    37→  '📧','📎','🖼️','🛒','💰','⭐','🔔','💬','🤝','👋',
+    38→]
+    39→
+    40→const GRADIENT_CLASSES = ['avatar-gradient-1', 'avatar-gradient-2', 'avatar-gradient-3', 'avatar-gradient-4', 'avatar-gradient-5', 'avatar-gradient-6', 'avatar-gradient-7', 'avatar-gradient-8']
+    41→
+    42→const MESSAGES_PER_PAGE = 15
+    43→
+    44→function formatMessageTime(dateStr: string, locale = 'vi') {
+    45→  const date = new Date(dateStr)
+    46→  return date.toLocaleTimeString(LOCALE_MAP[locale] || 'vi-VN', { hour: '2-digit', minute: '2-digit' })
+    47→}
+    48→
+    49→function formatFullDate(dateStr: string, locale = 'vi') {
+    50→  const date = new Date(dateStr)
+    51→  return date.toLocaleDateString(LOCALE_MAP[locale] || 'vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' })
+    52→}
+    53→
+    54→function shouldShowDate(messages: Message[], idx: number) {
+    55→  if (idx === 0) return true
+    56→  const prev = new Date(messages[idx - 1].createdAt).toDateString()
+    57→  const curr = new Date(messages[idx].createdAt).toDateString()
+    58→  return prev !== curr
+    59→}
+    60→
+    61→function TypingIndicator() {
+    62→  return (
+    63→    <div className="flex items-end gap-2.5 px-1 py-2">
+    64→      <div className="h-7 w-7 rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center shadow-sm">
+    65→        <Bot className="h-3.5 w-3.5 text-white" />
+    66→      </div>
+    67→      <div className="bubble-bot rounded-2xl px-4 py-3 shadow-lg shadow-violet-500/15">
+    68→        <div className="flex items-center gap-1.5">
+    69→          <span className="typing-dot" style={{ animationDelay: '0s' }} />
+    70→          <span className="typing-dot" style={{ animationDelay: '0.2s' }} />
+    71→          <span className="typing-dot" style={{ animationDelay: '0.4s' }} />
+    72→        </div>
+    73→      </div>
+    74→    </div>
+    75→  )
+    76→}
+    77→
+    78→// ─── Memoized Message Bubble ───
+    79→interface BubbleProps {
+    80→  message: Message
+    81→  isLastInGroup: boolean
+    82→  showAvatar: boolean
+    83→  gradientIdx: number
+    84→  customerInit: string
+    85→  agentInit: string
+    86→  onImageClick?: (url: string) => void
+    87→  t: (key: string) => string
+    88→  locale: string
+    89→}
+    90→
+    91→const MessageBubble = memo(function MessageBubble({ message, isLastInGroup, showAvatar, gradientIdx, customerInit, agentInit, onImageClick, t, locale }: BubbleProps) {
+    92→  const isCustomer = message.senderType === 'customer'
+    93→  const gradient = GRADIENT_CLASSES[gradientIdx % GRADIENT_CLASSES.length]
+    94→  const isImage = message.messageType === 'image'
+    95→
+    96→  return (
+    97→    <div className={cn('flex gap-2.5 px-1 animate-message-in', isCustomer ? 'justify-start' : 'justify-end')}>
+    98→      {showAvatar && (
+    99→        <Avatar className={cn(
+   100→          'h-7 w-7 flex-shrink-0 shadow-sm',
+   101→          message.senderType === 'bot'
+   102→            ? 'bg-gradient-to-br from-violet-500 to-indigo-600'
+   103→            : isCustomer
+   104→              ? gradient
+   105→              : 'bg-gradient-to-br from-indigo-500 to-violet-600'
+   106→        )}>
+   107→          <AvatarFallback className="text-[10px] text-white font-semibold">
+   108→            {message.senderType === 'bot' ? <Bot className="h-3.5 w-3.5" /> : isCustomer ? (message.senderName || customerInit).split(' ').slice(-2).map(n => n[0]).join('') : agentInit}
+   109→          </AvatarFallback>
+   110→        </Avatar>
+   111→      )}
+   112→      {!showAvatar && <div className="w-7 flex-shrink-0" />}
+   113→      <div className={cn('max-w-[72%] group', isCustomer ? 'items-start' : 'items-end')}>
+   114→        <div
+   115→          className={cn(
+   116→            'px-3.5 py-2.5 text-[13px] leading-relaxed break-words transition-all duration-200',
+   117→            isCustomer
+   118→              ? cn('bubble-customer rounded-2xl', isLastInGroup && 'rounded-bl-lg', showAvatar && 'rounded-tl-sm')
+   119→              : message.senderType === 'bot'
+   120→                ? cn('bubble-bot rounded-2xl shadow-lg shadow-violet-500/15', isLastInGroup && 'rounded-br-lg', showAvatar && 'rounded-tr-sm')
+   121→                : cn('bubble-agent rounded-2xl', isLastInGroup && 'rounded-br-lg', showAvatar && 'rounded-tr-sm'),
+   122→          )}
+   123→        >
+   124→          {message.senderType === 'bot' && (
+   125→            <div className="flex items-center gap-1.5 mb-1.5 opacity-80">
+   126→              <Sparkles className="h-3 w-3" />
+   127→              <span className="text-[10px] font-semibold tracking-wide uppercase">{t('common.aiBot')}</span>
+   128→            </div>
+   129→          )}
+   130→          {/* Image content */}
+   131→          {isImage && message.attachmentUrl && (
+   132→            <div className="mb-1">
+   133→              <img
+   134→                src={message.attachmentUrl}
+   135→                alt={message.attachmentName || t('common.image')}
+   136→                className="rounded-xl max-w-full max-h-[300px] object-cover cursor-pointer hover:opacity-90 transition-opacity"
+   137→                loading="lazy"
+   138→                onClick={() => onImageClick?.(message.attachmentUrl!)}
+   139→              />
+   140→              {message.content && (
+   141→                <p className="mt-1.5">{message.content}</p>
+   142→              )}
+   143→            </div>
+   144→          )}
+   145→          {/* File attachment */}
+   146→          {!isImage && message.attachmentUrl && (
+   147→            <div className="flex items-center gap-2 bg-black/10 dark:bg-white/10 rounded-lg px-3 py-2 mb-1">
+   148→              <Upload className="h-4 w-4 opacity-70 flex-shrink-0" />
+   149→              <div className="min-w-0">
+   150→                <p className="text-xs font-medium truncate">{message.attachmentName || t('common.file')}</p>
+   151→                <p className="text-[10px] opacity-60">{message.attachmentType || t('common.file').toLowerCase()}</p>
+   152→              </div>
+   153→            </div>
+   154→          )}
+   155→          {/* Text content */}
+   156→          {message.content && !isImage && (
+   157→            <>
+   158→              {message.content.split('\n').map((line, i) => (
+   159→                <p key={i} className={line ? 'mb-1' : 'mb-1'}>{line || '\u00a0'}</p>
+   160→              ))}
+   161→            </>
+   162→          )}
+   163→        </div>
+   164→        <div className={cn('flex items-center gap-1.5 mt-1 px-1', isCustomer ? '' : 'flex-row-reverse')}>
+   165→          <span className="text-[10px] text-muted-foreground/50 tabular-nums">
+   166→            {formatMessageTime(message.createdAt, locale)}
+   167→          </span>
+   168→          {!isCustomer && isLastInGroup && (
+   169→            <svg className="h-3.5 w-3.5 text-blue-500/70" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+   170→              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+   171→            </svg>
+   172→          )}
+   173→        </div>
+   174→      </div>
+   175→    </div>
+   176→  )
+   177→})
+   178→
+   179→// ─── Attached File with image preview ───
+   180→interface AttachedFile {
+   181→  name: string
+   182→  size: number
+   183→  type: 'image' | 'file'
+   184→  dataUrl?: string
+   185→  file?: File
+   186→}
+   187→
+   188→export default function ChatArea() {
+   189→  // Granular selectors to minimize re-renders
+   190→  const selectedConversationId = useCRMStore((s) => s.selectedConversationId)
+   191→  const conversationDetail = useCRMStore((s) => s.conversationDetail)
+   192→  const setConversationDetail = useCRMStore((s) => s.setConversationDetail)
+   193→  const messages = useCRMStore((s) => s.messages)
+   194→  const setMessages = useCRMStore((s) => s.setMessages)
+   195→  const prependMessages = useCRMStore((s) => s.prependMessages)
+   196→  const addMessage = useCRMStore((s) => s.addMessage)
+   197→  const isSendingMessage = useCRMStore((s) => s.isSendingMessage)
+   198→  const setIsSendingMessage = useCRMStore((s) => s.setIsSendingMessage)
+   199→  const hasMoreMessages = useCRMStore((s) => s.hasMoreMessages)
+   200→  const setHasMoreMessages = useCRMStore((s) => s.setHasMoreMessages)
+   201→  const isLoadingMoreMessages = useCRMStore((s) => s.isLoadingMoreMessages)
+   202→  const setIsLoadingMoreMessages = useCRMStore((s) => s.setIsLoadingMoreMessages)
+   203→  const agents = useCRMStore((s) => s.agents)
+   204→  const setAgents = useCRMStore((s) => s.setAgents)
+   205→  const botEnabled = useCRMStore((s) => s.botEnabled)
+   206→  const setBotEnabled = useCRMStore((s) => s.setBotEnabled)
+   207→  const isBotTyping = useCRMStore((s) => s.isBotTyping)
+   208→  const setMobileView = useCRMStore((s) => s.setMobileView)
+   209→  const showRightPanel = useCRMStore((s) => s.showRightPanel)
+   210→
+   211→  const { t, locale } = useT()
+   212→
+   213→  const [replyText, setReplyText] = useState('')
+   214→  const [isFocused, setIsFocused] = useState(false)
+   215→  const [emojiOpen, setEmojiOpen] = useState(false)
+   216→  const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([])
+   217→  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null)
+   218→  const [assignOpen, setAssignOpen] = useState(false)
+   219→  const [assignLoading, setAssignLoading] = useState(false)
+   220→  const bottomRef = useRef<HTMLDivElement>(null)
+   221→  const topSentinelRef = useRef<HTMLDivElement>(null)
+   222→  const textareaRef = useRef<HTMLTextAreaElement>(null)
+   223→  const fileInputRef = useRef<HTMLInputElement>(null)
+   224→  const imageInputRef = useRef<HTMLInputElement>(null)
+   225→  const scrollContainerRef = useRef<HTMLDivElement>(null)
+   226→  const prevMessageCountRef = useRef(0)
+   227→  const isInitialLoadRef = useRef(true)
+   228→  const loadingMoreRef = useRef(false)
+   229→
+   230→  // ─── Fetch messages with pagination ───
+   231→  const fetchMessages = useCallback(async (conversationId: string, before?: string) => {
+   232→    if (!conversationId) return
+   233→    const params = new URLSearchParams({ limit: String(MESSAGES_PER_PAGE) })
+   234→    if (before) params.set('before', before)
+   235→    try {
+   236→      const res = await fetch(`/api/conversations/${conversationId}/messages?${params}`)
+   237→      const json = await res.json()
+   238→      return json // { data: Message[], total, hasMore }
+   239→    } catch (e) {
+   240→      console.error('Failed to fetch messages', e)
+   241→      return null
+   242→    }
+   243→  }, [])
+   244→
+   245→  // Initial load: fetch conversation detail + last 15 messages
+   246→  useEffect(() => {
+   247→    if (!selectedConversationId) return
+   248→    isInitialLoadRef.current = true
+   249→    prevMessageCountRef.current = 0
+   250→
+   251→    const loadInitial = async () => {
+   252→      try {
+   253→        const [detailRes, msgsRes] = await Promise.all([
+   254→          fetch(`/api/conversations/${selectedConversationId}`),
+   255→          fetch(`/api/conversations/${selectedConversationId}/messages?limit=${MESSAGES_PER_PAGE}`),
+   256→        ])
+   257→        const detail = await detailRes.json()
+   258→        const msgsJson = await msgsRes.json()
+   259→
+   260→        setConversationDetail(detail)
+   261→        setMessages(msgsJson.data || [])
+   262→        setHasMoreMessages(msgsJson.hasMore || false)
+   263→
+   264→        // Load agents once into global store
+   265→        if (useCRMStore.getState().agents.length === 0) {
+   266→          fetch('/api/agents').then(r => r.json()).then(data => {
+   267→            if (data.length) useCRMStore.getState().setAgents(data)
+   268→          }).catch(() => {})
+   269→        }
+   270→
+   271→        // Scroll to bottom after render
+   272→        requestAnimationFrame(() => {
+   273→          bottomRef.current?.scrollIntoView()
+   274→          isInitialLoadRef.current = false
+   275→        })
+   276→      } catch (e) {
+   277→        console.error('Failed to fetch conversation', e)
+   278→      }
+   279→    }
+   280→    loadInitial()
+   281→  }, [selectedConversationId, setConversationDetail, setMessages, setHasMoreMessages, fetchMessages])
+   282→
+   283→  // Auto scroll to bottom on NEW messages (not on initial load or prepend)
+   284→  useEffect(() => {
+   285→    if (isInitialLoadRef.current) return
+   286→    if (messages.length > prevMessageCountRef.current) {
+   287→      bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+   288→    }
+   289→    prevMessageCountRef.current = messages.length
+   290→  }, [messages.length])
+   291→
+   292→  // ─── Load older messages on scroll up ───
+   293→  const loadOlderMessages = useCallback(async () => {
+   294→    if (!selectedConversationId || !hasMoreMessages || isLoadingMoreMessages || loadingMoreRef.current) return
+   295→    if (messages.length === 0) return
+   296→
+   297→    loadingMoreRef.current = true
+   298→    setIsLoadingMoreMessages(true)
+   299→
+   300→    try {
+   301→      // Save current scroll position
+   302→      const container = scrollContainerRef.current
+   303→      const prevScrollHeight = container?.scrollHeight || 0
+   304→      const prevScrollTop = container?.scrollTop || 0
+   305→
+   306→      const oldestMsg = messages[0]
+   307→      const result = await fetchMessages(selectedConversationId, oldestMsg.createdAt)
+   308→
+   309→      if (result && result.data && result.data.length > 0) {
+   310→        prependMessages(result.data)
+   311→        setHasMoreMessages(result.hasMore || false)
+   312→
+   313→        // Restore scroll position after prepend
+   314→        requestAnimationFrame(() => {
+   315→          if (container) {
+   316→            const newScrollHeight = container.scrollHeight
+   317→            container.scrollTop = newScrollHeight - prevScrollHeight + prevScrollTop
+   318→          }
+   319→        })
+   320→      } else {
+   321→        setHasMoreMessages(false)
+   322→      }
+   323→    } catch (e) {
+   324→      console.error('Failed to load older messages', e)
+   325→    } finally {
+   326→      loadingMoreRef.current = false
+   327→      setIsLoadingMoreMessages(false)
+   328→    }
+   329→  }, [selectedConversationId, hasMoreMessages, isLoadingMoreMessages, messages, fetchMessages, prependMessages, setHasMoreMessages, setIsLoadingMoreMessages])
+   330→
+   331→  // Intersection observer for scroll-to-top loading
+   332→  useEffect(() => {
+   333→    const sentinel = topSentinelRef.current
+   334→    if (!sentinel) return
+   335→
+   336→    const observer = new IntersectionObserver(
+   337→      (entries) => {
+   338→        if (entries[0].isIntersecting && hasMoreMessages && !isLoadingMoreMessages) {
+   339→          loadOlderMessages()
+   340→        }
+   341→      },
+   342→      { root: scrollContainerRef.current, threshold: 0.1 }
+   343→    )
+   344→
+   345→    observer.observe(sentinel)
+   346→    return () => observer.disconnect()
+   347→  }, [hasMoreMessages, isLoadingMoreMessages, loadOlderMessages])
+   348→
+   349→  // ─── Socket: realtime messages for current conversation ───
+   350→  useEffect(() => {
+   351→    if (!selectedConversationId) return
+   352→
+   353→    const handleNewMessage = (data: { message: any }) => {
+   354→      if (data.message?.conversationId === selectedConversationId) {
+   355→        const exists = useCRMStore.getState().messages.some(m => m.id === data.message.id)
+   356→        if (!exists) {
+   357→          addMessage(data.message) // Use socket data directly, no re-fetch
+   358→        }
+   359→      }
+   360→    }
+   361→
+   362→    const unsub = socket.on(`message:${selectedConversationId}`, handleNewMessage)
+   363→    return unsub
+   364→  }, [selectedConversationId, addMessage])
+   365→
+   366→  // Auto-resize textarea
+   367→  useEffect(() => {
+   368→    const el = textareaRef.current
+   369→    if (!el) return
+   370→    el.style.height = 'auto'
+   371→    el.style.height = Math.min(el.scrollHeight, 120) + 'px'
+   372→  }, [replyText])
+   373→
+   374→  // ─── Send message (text + images/files) ───
+   375→  const handleSend = async () => {
+   376→    if (!selectedConversationId) return
+   377→    const hasText = replyText.trim().length > 0
+   378→    const hasFiles = attachedFiles.length > 0
+   379→    if (!hasText && !hasFiles) return
+   380→
+   381→    setIsSendingMessage(true)
+   382→    try {
+   383→      // Send text message if there's text
+   384→      if (hasText) {
+   385→        const content = replyText.trim()
+   386→        const data = await apiPost(`/api/conversations/${selectedConversationId}/messages`, { content }, { idempotencyKey: generateIdempotencyKey() })
+   387→        const newMsg = data.message || data
+   388→        addMessage(newMsg)
+   389→
+   390→        if (data.automationResult) {
+   391→          setTimeout(async () => {
+   392→            const msgs = await fetch(`/api/conversations/${selectedConversationId}/messages?limit=5`).then(r => r.json())
+   393→            const current = useCRMStore.getState().messages
+   394→            const newIds = new Set((msgs.data || []).map((m: Message) => m.id))
+   395→            const missing = (msgs.data || []).filter((m: Message) => !current.some(c => c.id === m.id))
+   396→            missing.forEach((m: Message) => addMessage(m))
+   397→          }, 500)
+   398→        }
+   399→      }
+   400→
+   401→      // Send image messages
+   402→      for (const file of attachedFiles) {
+   403→        if (file.type === 'image' && file.dataUrl) {
+   404→          const data = await apiPost(`/api/conversations/${selectedConversationId}/messages`, {
+   405→              messageType: 'image',
+   406→              content: null,
+   407→              attachmentUrl: file.dataUrl,
+   408→              attachmentName: file.name,
+   409→              attachmentType: file.file?.type || 'image/*',
+   410→            }, { idempotencyKey: generateIdempotencyKey() })
+   411→          addMessage(data.message || data)
+   412→        } else {
+   413→          // File attachment as text reference
+   414→          const data = await apiPost(`/api/conversations/${selectedConversationId}/messages`, {
+   415→              content: `\u{1F4CE} ${file.name}`,
+   416→              messageType: 'file',
+   417→              attachmentName: file.name,
+   418→              attachmentType: file.file?.type || 'application/octet-stream',
+   419→            }, { idempotencyKey: generateIdempotencyKey() })
+   420→          addMessage(data.message || data)
+   421→        }
+   422→      }
+   423→
+   424→      setReplyText('')
+   425→      setAttachedFiles([])
+   426→      textareaRef.current?.focus()
+   427→    } catch (e) {
+   428→      console.error('Failed to send message', e)
+   429→    } finally {
+   430→      setIsSendingMessage(false)
+   431→    }
+   432→  }
+   433→
+   434→  // ─── File / Image handling ───
+   435→  const readFileAsDataUrl = (file: File): Promise<string> => {
+   436→    return new Promise((resolve, reject) => {
+   437→      const reader = new FileReader()
+   438→      reader.onload = () => resolve(reader.result as string)
+   439→      reader.onerror = reject
+   440→      reader.readAsDataURL(file)
+   441→    })
+   442→  }
+   443→
+   444→  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>, forceType?: 'image' | 'file') => {
+   445→    const files = Array.from(e.target.files || [])
+   446→    if (files.length === 0) return
+   447→
+   448→    const newFiles: AttachedFile[] = []
+   449→    for (const f of files) {
+   450→      const isImage = forceType === 'image' || f.type.startsWith('image/')
+   451→      const entry: AttachedFile = {
+   452→        name: f.name,
+   453→        size: f.size,
+   454→        type: isImage ? 'image' : 'file',
+   455→        file: f,
+   456→      }
+   457→      if (isImage) {
+   458→        entry.dataUrl = await readFileAsDataUrl(f)
+   459→      }
+   460→      newFiles.push(entry)
+   461→    }
+   462→
+   463→    setAttachedFiles(prev => [...prev, ...newFiles])
+   464→    e.target.value = ''
+   465→    textareaRef.current?.focus()
+   466→  }
+   467→
+   468→  const removeFile = (index: number) => {
+   469→    setAttachedFiles(prev => prev.filter((_, i) => i !== index))
+   470→  }
+   471→
+   472→  const insertEmoji = (emoji: string) => {
+   473→    setReplyText(prev => prev + emoji)
+   474→    setEmojiOpen(false)
+   475→    textareaRef.current?.focus()
+   476→  }
+   477→
+   478→  // Change status
+   479→  const handleStatusChange = async (status: string) => {
+   480→    if (!selectedConversationId) return
+   481→    try {
+   482→      await apiPost(`/api/conversations/${selectedConversationId}/status`, { status })
+   483→      // Re-fetch detail
+   484→      const detailRes = await fetch(`/api/conversations/${selectedConversationId}`)
+   485→      const detail = await detailRes.json()
+   486→      setConversationDetail(detail)
+   487→    } catch (e) {
+   488→      console.error('Failed to change status', e)
+   489→    }
+   490→  }
+   491→
+   492→  // Assign agent
+   493→  const handleAssign = async (agentId: string) => {
+   494→    if (!selectedConversationId) return
+   495→    setAssignLoading(true)
+   496→    try {
+   497→      await apiPost(`/api/conversations/${selectedConversationId}/assign`, { ownerId: agentId || null })
+   498→      const detailRes = await fetch(`/api/conversations/${selectedConversationId}`)
+   499→      const detail = await detailRes.json()
+   500→      setConversationDetail(detail)
+   501→      setAssignOpen(false)
+   502→    } catch (e) {
+   503→      console.error('Failed to assign', e)
+   504→    } finally {
+   505→      setAssignLoading(false)
+   506→    }
+   507→  }
+   508→
+   509→  const handleKeyDown = (e: React.KeyboardEvent) => {
+   510→    if (e.key === 'Enter' && !e.shiftKey) {
+   511→      e.preventDefault()
+   512→      handleSend()
+   513→    }
+   514→  }
+   515→
+   516→  function formatFileSize(bytes: number) {
+   517→    if (bytes < 1024) return bytes + ' B'
+   518→    if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB'
+   519→    return (bytes / 1048576).toFixed(1) + ' MB'
+   520→  }
+   521→
+   522→  const handleImageClick = useCallback((url: string) => setImagePreviewUrl(url), [])
+   523→
+   524→  // ─── All hooks MUST be called before any conditional return (Rules of Hooks) ───
+   525→  const convo = conversationDetail
+   526→  const channelCfg = convo ? CHANNEL_CONFIG[convo.channel as keyof typeof CHANNEL_CONFIG] : undefined
+   527→  const statusCfg = convo ? STATUS_CONFIG[convo.status] : undefined
+   528→  const priorityCfg = convo ? PRIORITY_CONFIG[convo.priority] : undefined
+   529→  const slaBreached = useMemo(() => {
+   530→    if (!convo?.slaFirstResponse || convo?.status !== 'open') return false
+   531→    return new Date(convo.slaFirstResponse) < new Date()
+   532→  }, [convo?.slaFirstResponse, convo?.status])
+   533→
+   534→  // Pre-compute message grouping metadata (O(n) instead of O(n²) per render)
+   535→  const messageGroups = useMemo(() => {
+   536→    const groups: { showDate: boolean; isLastInGroup: boolean; showAvatar: boolean; gradientIdx: number }[] = []
+   537→    let customerCount = 0
+   538→    for (let i = 0; i < messages.length; i++) {
+   539→      const msg = messages[i]
+   540→      const prev = i > 0 ? messages[i - 1] : null
+   541→      const next = messages[i + 1]
+   542→      const showDate = shouldShowDate(messages, i)
+   543→      const isLastInGroup = !next ||
+   544→        next.senderType !== msg.senderType ||
+   545→        new Date(next.createdAt).getTime() - new Date(msg.createdAt).getTime() > 60000
+   546→      const showAvatar = !prev ||
+   547→        prev.senderType !== msg.senderType ||
+   548→        new Date(msg.createdAt).getTime() - new Date(prev.createdAt).getTime() > 60000
+   549→      if (msg.senderType === 'customer') customerCount++
+   550→      groups.push({ showDate, isLastInGroup, showAvatar, gradientIdx: msg.senderType === 'customer' ? customerCount : 0 })
+   551→    }
+   552→    return groups
+   553→  }, [messages])
+   554→
+   555→  const customerInit = t('chat.customerInit')
+   556→  const agentInit = t('chat.agentInit')
+   557→
+   558→  // ─── Empty state (AFTER all hooks) ───
+   559→  if (!selectedConversationId || !conversationDetail) {
+   560→    return (
+   561→      <div className="flex-1 h-full flex items-center justify-center bg-muted/20">
+   562→        <div className="text-center text-muted-foreground/50 animate-float">
+   563→          <div className="h-20 w-20 mx-auto mb-5 rounded-3xl bg-gradient-to-br from-primary/10 to-primary/5 flex items-center justify-center shadow-lg shadow-primary/5">
+   564→            <Send className="h-9 w-9 text-primary/30" />
+   565→          </div>
+   566→          <p className="text-sm font-semibold text-foreground/40">{t('chat.empty')}</p>
+   567→          <p className="text-xs mt-1.5 text-muted-foreground/35">{t('chat.emptyDesc')}</p>
+   568→        </div>
+   569→      </div>
+   570→    )
+   571→  }
+   572→
+   573→  return (
+   574→    <div className="flex flex-col h-full min-h-0">
+   575→      {/* Chat Header */}
+   576→      <div className="px-4 py-3 border-b border-border/40 glass flex items-center justify-between gap-3 flex-shrink-0">
+   577→        <div className="flex items-center gap-3 min-w-0">
+   578→          <Button
+   579→            variant="ghost" size="icon" className="h-8 w-8 flex-shrink-0 md:hidden rounded-xl hover:bg-foreground/5"
+   580→            onClick={() => setMobileView('list')}
+   581→          >
+   582→            <ArrowLeft className="h-4 w-4" />
+   583→          </Button>
+   584→          <div className="relative">
+   585→            <Avatar className={cn(
+   586→              'h-10 w-10 transition-all duration-300',
+   587→              convo.status === 'open' && 'avatar-ring-online'
+   588→            )}>
+   589→              <AvatarFallback className={cn('text-sm text-white font-semibold', GRADIENT_CLASSES[0])}>
+   590→                {convo.customer.name.split(' ').slice(-2).map((n) => n[0]).join('')}
+   591→              </AvatarFallback>
+   592→            </Avatar>
+   593→            <div className={cn(
+   594→              'absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-background transition-all duration-300',
+   595→              convo.status === 'open' ? 'bg-emerald-500 shadow-sm shadow-emerald-500/50' : 'bg-gray-400'
+   596→            )} />
+   597→          </div>
+   598→          <div className="min-w-0">
+   599→            <div className="flex items-center gap-2 flex-wrap">
+   600→              <span className="font-semibold text-sm truncate">{convo.customer.name}</span>
+   601→              <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-[18px] gap-1 rounded-lg font-medium" style={{ borderColor: channelCfg?.color + '50', color: channelCfg?.color, backgroundColor: channelCfg?.color + '10' }}>
+   602→                <div className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: channelCfg?.color }} />
+   603→                {channelCfg?.label}
+   604→              </Badge>
+   605→              {slaBreached && (
+   606→                <Badge className="bg-red-100 text-red-700 text-[10px] px-1.5 py-0 h-[18px] gap-1 animate-glow-pulse rounded-lg dark:bg-red-950/50 dark:text-red-400">
+   607→                  <AlertTriangle className="h-3 w-3" /> {t('common.slaBreached')}
+   608→                </Badge>
+   609→              )}
+   610→            </div>
+   611→            <div className="flex items-center gap-2 mt-0.5">
+   612→              {convo.subject && <span className="text-xs text-muted-foreground/60 truncate">{convo.subject}</span>}
+   613→            </div>
+   614→          </div>
+   615→        </div>
+   616→        <div className="flex items-center gap-1.5 flex-shrink-0">
+   617→          <Badge className={cn('text-[11px] px-2.5 py-0.5 h-[22px] cursor-pointer rounded-lg font-medium transition-all duration-200 hover:scale-105', statusCfg?.color)}>
+   618→            {statusCfg?.label}
+   619→          </Badge>
+   620→          <Badge variant="outline" className={cn('text-[11px] px-2 py-0.5 h-[22px] rounded-lg font-medium', priorityCfg?.color)}>
+   621→            {priorityCfg?.label}
+   622→          </Badge>
+   623→          {convo.owner && (
+   624→            <div className="hidden sm:flex items-center gap-1.5 text-xs text-muted-foreground/70 bg-foreground/[0.03] px-2 py-1 rounded-lg">
+   625→              <div className={cn('h-2 w-2 rounded-full', convo.owner.status === 'online' ? 'bg-emerald-500' : convo.owner.status === 'busy' ? 'bg-amber-500' : 'bg-gray-400')} />
+   626→              <span className="font-medium">{convo.owner.name.split(' ').slice(-1)[0]}</span>
+   627→            </div>
+   628→          )}
+   629→          <Button
+   630→            variant="ghost" size="icon" className="h-8 w-8 md:hidden rounded-xl hover:bg-foreground/5"
+   631→            onClick={() => setMobileView('panel')}
+   632→          >
+   633→            <Info className="h-4 w-4" />
+   634→          </Button>
+   635→          <Popover open={assignOpen} onOpenChange={setAssignOpen}>
+   636→            <PopoverTrigger asChild>
+   637→              <Button
+   638→                variant="outline" size="sm"
+   639→                className={cn(
+   640→                  'h-7 gap-1 text-[11px] px-2.5 rounded-lg font-medium transition-all duration-200',
+   641→                  convo.owner ? 'border-primary/20 text-primary hover:bg-primary/5' : 'hover:bg-foreground/5'
+   642→                )}
+   643→              >
+   644→                <UserPlus className="h-3 w-3" />
+   645→                <span className="hidden sm:inline max-w-[80px] truncate">
+   646→                  {convo.owner ? convo.owner.name.split(' ').slice(-1)[0] : t('chat.assignTo')}
+   647→                </span>
+   648→                {convo.owner && (
+   649→                  <span className={cn(
+   650→                    'ml-0.5 h-2 w-2 rounded-full flex-shrink-0',
+   651→                    convo.owner.status === 'online' ? 'bg-emerald-500' : convo.owner.status === 'busy' ? 'bg-amber-500' : 'bg-gray-400'
+   652→                  )} />
+   653→                )}
+   654→              </Button>
+   655→            </PopoverTrigger>
+   656→            <PopoverContent align="end" className="w-[220px] p-1.5 rounded-xl">
+   657→              <div className="px-2 py-1.5 mb-1">
+   658→                <p className="text-[11px] font-bold text-muted-foreground/60 uppercase tracking-wider">{t('chat.assignTo')}</p>
+   659→              </div>
+   660→              <div className="space-y-0.5 max-h-[240px] overflow-y-auto">
+   661→                <button
+   662→                  onClick={() => handleAssign('')}
+   663→                  disabled={assignLoading}
+   664→                  className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs hover:bg-foreground/[0.04] transition-colors text-left"
+   665→                >
+   666→                  <div className="h-6 w-6 rounded-full bg-muted flex items-center justify-center flex-shrink-0">
+   667→                    <XCircle className="h-3 w-3 text-muted-foreground/50" />
+   668→                  </div>
+   669→                  <div className="min-w-0">
+   670→                    <p className="font-medium">{t('chat.unassign')}</p>
+   671→                    <p className="text-[10px] text-muted-foreground/50">{t('chat.returnToQueue')}</p>
+   672→                  </div>
+   673→                </button>
+   674→                {assignLoading && <div className="flex justify-center py-2"><Loader2 className="h-4 w-4 animate-spin text-primary" /></div>}
+   675→                {agents.map((a) => {
+   676→                  const isCurrentOwner = convo.owner?.id === a.id
+   677→                  return (
+   678→                    <button
+   679→                      key={a.id}
+   680→                      onClick={() => handleAssign(a.id)}
+   681→                      disabled={assignLoading}
+   682→                      className={cn(
+   683→                        'w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs hover:bg-foreground/[0.04] transition-colors text-left',
+   684→                        isCurrentOwner && 'bg-primary/5'
+   685→                      )}
+   686→                    >
+   687→                      <div className="relative">
+   688→                        <div className={cn('h-6 w-6 rounded-full flex items-center justify-center flex-shrink-0 text-white text-[10px] font-semibold', GRADIENT_CLASSES[agents.indexOf(a) % GRADIENT_CLASSES.length])}>
+   689→                          {a.name.split(' ').slice(-2).map(n => n[0]).join('')}
+   690→                        </div>
+   691→                        <span className={cn(
+   692→                          'absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full border-2 border-popover',
+   693→                          a.status === 'online' ? 'bg-emerald-500' : a.status === 'busy' ? 'bg-amber-500' : 'bg-gray-400'
+   694→                        )} />
+   695→                      </div>
+   696→                      <div className="min-w-0 flex-1">
+   697→                        <p className="font-medium truncate">{a.name}</p>
+   698→                        <p className="text-[10px] text-muted-foreground/50 truncate">{a.email}</p>
+   699→                      </div>
+   700→                      {isCurrentOwner && <CheckCircle className="h-3.5 w-3.5 text-primary flex-shrink-0" />}
+   701→                    </button>
+   702→                  )
+   703→                })}
+   704→              </div>
+   705→            </PopoverContent>
+   706→          </Popover>
+   707→          <Button
+   708→            variant={botEnabled ? 'default' : 'outline'}
+   709→            size="sm"
+   710→            className={cn('h-7 gap-1 text-[11px] px-2.5 rounded-lg transition-all duration-300',
+   711→              botEnabled
+   712→                ? 'bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white shadow-md shadow-violet-500/25'
+   713→                : 'hover:bg-foreground/5'
+   714→            )}
+   715→            onClick={() => setBotEnabled(!botEnabled)}
+   716→            title={botEnabled ? t('common.aiOn') : t('common.aiOff')}
+   717→          >
+   718→            <Sparkles className="h-3 w-3" />
+   719→            <span className="hidden sm:inline">AI</span>
+   720→          </Button>
+   721→          <DropdownMenu>
+   722→            <DropdownMenuTrigger asChild>
+   723→              <Button variant="ghost" size="icon" className="h-8 w-8 rounded-xl hover:bg-foreground/5 transition-colors">
+   724→                <MoreVertical className="h-4 w-4" />
+   725→              </Button>
+   726→            </DropdownMenuTrigger>
+   727→            <DropdownMenuContent align="end" className="w-52 rounded-xl p-1">
+   728→              <DropdownMenuSeparator />
+   729→              <DropdownMenuLabel className="text-xs px-2 py-1.5">{t('chat.changeStatus')}</DropdownMenuLabel>
+   730→              {Object.entries(STATUS_CONFIG).map(([key, cfg]) => (
+   731→                <DropdownMenuItem key={key} onClick={() => handleStatusChange(key)} className="rounded-lg text-xs py-2">
+   732→                  <CheckCircle className="h-3.5 w-3.5 mr-2" /> {cfg.label}
+   733→                </DropdownMenuItem>
+   734→              ))}
+   735→            </DropdownMenuContent>
+   736→          </DropdownMenu>
+   737→        </div>
+   738→      </div>
+   739→
+   740→      {/* Messages area — native scroll with lazy load */}
+   741→      <div ref={scrollContainerRef} className="flex-1 min-h-0 overflow-y-auto">
+   742→        {/* Top sentinel for infinite scroll */}
+   743→        <div ref={topSentinelRef} className="h-1 w-full" />
+   744→
+   745→        {/* Load more indicator */}
+   746→        {isLoadingMoreMessages && (
+   747→          <div className="flex items-center justify-center py-3">
+   748→            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground/50" />
+   749→            <span className="text-[11px] text-muted-foreground/50 ml-2">{t('chat.loadingMore')}</span>
+   750→          </div>
+   751→        )}
+   752→
+   753→        <div className="max-w-3xl mx-auto px-4 py-4 space-y-1">
+   754→          {hasMoreMessages && !isLoadingMoreMessages && (
+   755→            <button
+   756→              onClick={loadOlderMessages}
+   757→              className="w-full flex items-center justify-center gap-1.5 py-2 text-[11px] text-muted-foreground/50 hover:text-muted-foreground/70 transition-colors"
+   758→            >
+   759→              <ChevronUp className="h-3.5 w-3.5" />
+   760→              {t('chat.loadMore')}
+   761→            </button>
+   762→          )}
+   763→          {messages.map((msg, idx) => {
+   764→            const group = messageGroups[idx]
+   765→            if (!group) return null
+   766→
+   767→            return (
+   768→              <div key={msg.id}>
+   769→                {group.showDate && (
+   770→                  <div className="flex justify-center my-4">
+   771→                    <span className="date-separator text-[11px] text-muted-foreground/70 px-4 py-1.5 rounded-full font-medium">
+   772→                      {formatFullDate(msg.createdAt, locale)}
+   773→                    </span>
+   774→                  </div>
+   775→                )}
+   776→                <MessageBubble message={msg} isLastInGroup={group.isLastInGroup} showAvatar={group.showAvatar} gradientIdx={group.gradientIdx} customerInit={customerInit} agentInit={agentInit} onImageClick={handleImageClick} t={t} locale={locale} />
+   777→              </div>
+   778→            )
+   779→          })}
+   780→          {isBotTyping && <TypingIndicator />}
+   781→          <div ref={bottomRef} className="h-1" />
+   782→        </div>
+   783→      </div>
+   784→
+   785→      {/* Image preview modal */}
+   786→      {imagePreviewUrl && (
+   787→        <div
+   788→          className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in"
+   789→          onClick={() => setImagePreviewUrl(null)}
+   790→        >
+   791→          <img
+   792→            src={imagePreviewUrl}
+   793→            alt="Preview"
+   794→            className="max-w-full max-h-full object-contain rounded-lg"
+   795→          />
+   796→          <button
+   797→            className="absolute top-4 right-4 h-8 w-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
+   798→            onClick={() => setImagePreviewUrl(null)}
+   799→          >
+   800→            <X className="h-4 w-4 text-white" />
+   801→          </button>
+   802→        </div>
+   803→      )}
+   804→
+   805→      {/* Attached files preview */}
+   806→      {attachedFiles.length > 0 && (
+   807→        <div className="px-3 pt-2 flex gap-2 flex-wrap flex-shrink-0">
+   808→          {attachedFiles.map((file, i) => (
+   809→            <div key={i} className="relative group animate-fade-in">
+   810→              {file.type === 'image' && file.dataUrl ? (
+   811→                <div className="relative w-16 h-16 rounded-lg overflow-hidden border border-border/30">
+   812→                  <img src={file.dataUrl} alt={file.name} className="w-full h-full object-cover" />
+   813→                  <button
+   814→                    onClick={() => removeFile(i)}
+   815→                    className="absolute top-0.5 right-0.5 h-4 w-4 rounded-full bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+   816→                  >
+   817→                    <X className="h-2.5 w-2.5 text-white" />
+   818→                  </button>
+   819→                </div>
+   820→              ) : (
+   821→                <div className="flex items-center gap-1.5 bg-muted/80 rounded-lg px-2.5 py-1.5 text-xs">
+   822→                  <Upload className="h-3.5 w-3.5 text-muted-foreground/60" />
+   823→                  <span className="max-w-[120px] truncate">{file.name}</span>
+   824→                  <span className="text-muted-foreground/50">{formatFileSize(file.size)}</span>
+   825→                  <button onClick={() => removeFile(i)} className="ml-0.5 text-muted-foreground/40 hover:text-foreground transition-colors">
+   826→                    <X className="h-3 w-3" />
+   827→                  </button>
+   828→                </div>
+   829→              )}
+   830→            </div>
+   831→          ))}
+   832→        </div>
+   833→      )}
+   834→
+   835→      {/* Message input composer */}
+   836→      {convo.status !== 'resolved' && convo.status !== 'closed' && convo.status !== 'spam' ? (
+   837→        <div className={cn(
+   838→          'composer-area p-3 flex-shrink-0 transition-all duration-300',
+   839→          isFocused && 'shadow-[0_-8px_32px_oklch(0.49_0.2_265/0.06)]'
+   840→        )}>
+   841→          <div className="max-w-3xl mx-auto">
+   842→            <div className={cn(
+   843→              'flex gap-2 items-end rounded-2xl p-1.5 transition-all duration-300',
+   844→              'bg-muted/50 border border-border/40',
+   845→              isFocused && 'bg-background border-primary/20 shadow-lg shadow-primary/5'
+   846→            )}>
+   847→              <div className="flex gap-0.5 pl-1 pb-0.5">
+   848→                <TooltipProvider>
+   849→                  <Tooltip>
+   850→                    <TooltipTrigger asChild>
+   851→                      <Button variant="ghost" size="icon" className="h-8 w-8 rounded-xl text-muted-foreground/60 hover:text-muted-foreground hover:bg-foreground/5 transition-all duration-200"
+   852→                        onClick={() => fileInputRef.current?.click()}>
+   853→                        <Paperclip className="h-4 w-4" />
+   854→                      </Button>
+   855→                    </TooltipTrigger>
+   856→                    <TooltipContent>{t('chat.attachFile')}</TooltipContent>
+   857→                  </Tooltip>
+   858→                </TooltipProvider>
+   859→                <TooltipProvider>
+   860→                  <Tooltip>
+   861→                    <TooltipTrigger asChild>
+   862→                      <Button variant="ghost" size="icon" className="h-8 w-8 rounded-xl text-muted-foreground/60 hover:text-muted-foreground hover:bg-foreground/5 transition-all duration-200"
+   863→                        onClick={() => imageInputRef.current?.click()}>
+   864→                        <ImagePlus className="h-4 w-4" />
+   865→                      </Button>
+   866→                    </TooltipTrigger>
+   867→                    <TooltipContent>{t('chat.sendImage')}</TooltipContent>
+   868→                  </Tooltip>
+   869→                </TooltipProvider>
+   870→                <input ref={fileInputRef} type="file" className="hidden" multiple onChange={(e) => handleFileSelect(e, 'file')} />
+   871→                <input ref={imageInputRef} type="file" className="hidden" accept="image/*" multiple onChange={(e) => handleFileSelect(e, 'image')} />
+   872→              </div>
+   873→              <Textarea
+   874→                ref={textareaRef}
+   875→                value={replyText}
+   876→                onChange={(e) => setReplyText(e.target.value)}
+   877→                onKeyDown={handleKeyDown}
+   878→                onFocus={() => setIsFocused(true)}
+   879→                onBlur={() => setIsFocused(false)}
+   880→                placeholder={t('chat.placeholder')}
+   881→                className="min-h-[40px] max-h-[120px] resize-none text-[13px] border-0 bg-transparent shadow-none focus-visible:ring-0 focus-visible:border-0 p-2"
+   882→                rows={1}
+   883→              />
+   884→              <div className="flex gap-0.5 pr-0.5 pb-0.5">
+   885→                <Popover open={emojiOpen} onOpenChange={setEmojiOpen}>
+   886→                  <PopoverTrigger asChild>
+   887→                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-xl text-muted-foreground/60 hover:text-muted-foreground hover:bg-foreground/5 transition-all duration-200">
+   888→                      <SmilePlus className="h-4 w-4" />
+   889→                    </Button>
+   890→                  </PopoverTrigger>
+   891→                  <PopoverContent side="top" align="end" className="w-[280px] p-2 rounded-xl">
+   892→                    <div className="grid grid-cols-8 gap-0.5">
+   893→                      {EMOJI_LIST.map((emoji) => (
+   894→                        <button
+   895→                          key={emoji}
+   896→                          onClick={() => insertEmoji(emoji)}
+   897→                          className="h-8 w-8 flex items-center justify-center rounded-lg text-base hover:bg-foreground/[0.06] transition-colors"
+   898→                        >
+   899→                          {emoji}
+   900→                        </button>
+   901→                      ))}
+   902→                    </div>
+   903→                  </PopoverContent>
+   904→                </Popover>
+   905→                <Button
+   906→                  onClick={handleSend}
+   907→                  disabled={(!replyText.trim() && attachedFiles.length === 0) || isSendingMessage}
+   908→                  size="icon" className={cn(
+   909→                    'h-9 w-9 flex-shrink-0 rounded-xl send-btn',
+   910→                    (replyText.trim() || attachedFiles.length > 0) && 'bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600'
+   911→                  )}
+   912→                >
+   913→                  {isSendingMessage ? (
+   914→                    <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+   915→                  ) : (
+   916→                    <Send className="h-4 w-4" />
+   917→                  )}
+   918→                </Button>
+   919→              </div>
+   920→            </div>
+   921→            <p className="text-[10px] text-muted-foreground/30 text-center mt-1.5 font-medium">
+   922→              {t('chat.sendHint')}
+   923→            </p>
+   924→          </div>
+   925→        </div>
+   926→      ) : (
+   927→        <div className="composer-area p-4 flex-shrink-0">
+   928→          <div className="max-w-3xl mx-auto flex items-center justify-between">
+   929→            <span className="text-xs text-muted-foreground/60">
+   930→              {convo.status === 'resolved' ? t('chat.resolved') : convo.status === 'closed' ? t('chat.closed') : t('chat.spam')}
+   931→            </span>
+   932→            <Button variant="outline" size="sm" className="text-xs h-8 rounded-xl font-medium hover:bg-primary hover:text-primary-foreground transition-all duration-200" onClick={() => handleStatusChange('open')}>
+   933→              {t('chat.reopen')}
+   934→            </Button>
+   935→          </div>
+   936→        </div>
+   937→      )}
+   938→    </div>
+   939→  )
+   940→}
+   941→

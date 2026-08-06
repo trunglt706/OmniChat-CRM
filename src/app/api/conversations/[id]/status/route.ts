@@ -5,7 +5,10 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await params;
+  const { id: idStr } = await params;
+  const id = Number(idStr);
+  if (isNaN(id)) return NextResponse.json({ error: 'Invalid ID' }, { status: 400 });
+
   const { status } = await request.json();
 
   const conversation = await db.conversation.update({

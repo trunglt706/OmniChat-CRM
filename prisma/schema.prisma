@@ -13,7 +13,8 @@ datasource db {
 // ═══════════════════════════════════════════════════════════════════
 
 model Organization {
-  id        String   @id @default(cuid())
+  id        Int      @id @default(autoincrement())
+  uuid      String   @unique @default(cuid())
   name      String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -21,17 +22,22 @@ model Organization {
 }
 
 model User {
-  id             String         @id @default(cuid())
+  id             Int            @id @default(autoincrement())
+  uuid           String         @unique @default(cuid())
   email          String         @unique
   name           String
   avatar         String?
+  phone          String?
+  bio            String?
   role           String         @default("agent") // admin, supervisor, agent, viewer
-  status         String         @default("online") // online, offline, busy
-  organizationId String?
+  status         String         @default("online") // online, offline, busy, away
+  settings       String         @default("{}") // JSON: user preferences (sound, notifications, language, etc.)
+  organizationId Int?
   organization   Organization?  @relation(fields: [organizationId], references: [id])
   assignedConvos Conversation[]  @relation("Owner")
   followedConvos Conversation[]  @relation("Follower")
   notes          InternalNote[]
+  notifications   Notification[]
   ownedLeads     Lead[]          @relation("LeadOwner")
   autoAssignRules AutomationRule[] @relation("AutoAssign")
   createdAt      DateTime       @default(now())
@@ -39,7 +45,8 @@ model User {
 }
 
 model Customer {
-  id        String             @id @default(cuid())
+  id        Int               @id @default(autoincrement())
+  uuid      String            @unique @default(cuid())
   name      String
   phone     String?
   email     String?
@@ -58,8 +65,9 @@ model Customer {
 }
 
 model CustomerIdentity {
-  id                String   @id @default(cuid())
-  customerId        String
+  id                Int      @id @default(autoincrement())
+  uuid              String   @unique @default(cuid())
+  customerId        Int
   customer          Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
   platform          String   // facebook, zalo, telegram, chatwork, website, email
   platformUserId    String?  // facebook_psid, zalo_user_id, telegram_chat_id, etc.
@@ -73,22 +81,23 @@ model CustomerIdentity {
 }
 
 model Conversation {
-  id          String    @id @default(cuid())
-  customerId  String
-  customer    Customer  @relation(fields: [customerId], references: [id])
-  channel     String    // website, facebook_messenger, facebook_comment, zalo, telegram, chatwork, email
-  status      String    @default("open") // open, pending, resolved, closed, spam, archived
-  priority    String    @default("medium") // low, medium, high, urgent
+  id          Int           @id @default(autoincrement())
+  uuid        String        @unique @default(cuid())
+  customerId  Int
+  customer    Customer      @relation(fields: [customerId], references: [id])
+  channel     String        // website, facebook_messenger, facebook_comment, zalo, telegram, chatwork, email
+  status      String        @default("open") // open, pending, resolved, closed, spam, archived
+  priority    String        @default("medium") // low, medium, high, urgent
   subject     String?
   slaFirstResponse DateTime?
   slaResolve      DateTime?
-  ownerId    String?
-  owner      User?    @relation("Owner", fields: [ownerId], references: [id], onDelete: SetNull)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  ownerId    Int?
+  owner      User?        @relation("Owner", fields: [ownerId], references: [id], onDelete: SetNull)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
   messages    Message[]
   tags       ConversationTag[]
-  followers  User[]   @relation("Follower")
+  followers  User[]       @relation("Follower")
   notes      InternalNote[]
   leads      Lead[]
 
@@ -100,42 +109,45 @@ model Conversation {
 }
 
 model Message {
-  id                String       @id @default(cuid())
-  conversationId    String
+  id                Int           @id @default(autoincrement())
+  uuid              String        @unique @default(cuid())
+  conversationId    Int
   conversation      Conversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  senderType        String       // customer, agent, bot, system
-  senderId          String?
+  senderType        String        // customer, agent, bot, system
+  senderId          Int?          // user id for agent messages
   senderName        String?
-  messageType       String       @default("text") // text, image, video, audio, file, sticker, location, system, event
+  messageType       String        @default("text") // text, image, video, audio, file, sticker, location, system, event
   content           String?
   attachmentUrl     String?
   attachmentName    String?
   attachmentType    String?
   platformMessageId String?
-  isRead            Boolean      @default(false)
-  createdAt         DateTime     @default(now())
-  updatedAt         DateTime     @updatedAt
+  isRead            Boolean       @default(false)
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
 
   @@index([conversationId, createdAt])
   @@index([platformMessageId])
 }
 
 model Tag {
-  id          String             @id @default(cuid())
-  name        String             @unique
-  color       String             @default("#6b7280")
+  id          Int             @id @default(autoincrement())
+  uuid        String          @unique @default(cuid())
+  name        String          @unique
+  color       String          @default("#6b7280")
   description String?
-  createdAt   DateTime           @default(now())
-  updatedAt   DateTime           @updatedAt
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
   conversations ConversationTag[]
   autoTagRules  AutomationRule[]  @relation("AutoTag")
 }
 
 model ConversationTag {
-  id             String       @id @default(cuid())
-  conversationId String
+  id             Int          @id @default(autoincrement())
+  uuid           String       @unique @default(cuid())
+  conversationId Int
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  tagId          String
+  tagId          Int
   tag            Tag          @relation(fields: [tagId], references: [id], onDelete: Cascade)
   createdAt      DateTime     @default(now())
 
@@ -143,46 +155,49 @@ model ConversationTag {
 }
 
 model InternalNote {
-  id             String       @id @default(cuid())
-  conversationId String?
+  id             Int           @id @default(autoincrement())
+  uuid           String        @unique @default(cuid())
+  conversationId Int?
   conversation   Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
-  customerId     String?
+  customerId     Int?
   customer       Customer?     @relation(fields: [customerId], references: [id], onDelete: SetNull)
-  authorId       String
+  authorId       Int
   author         User          @relation(fields: [authorId], references: [id])
   content        String
   isPinned       Boolean       @default(false)
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
 }
 
 model Lead {
-  id              String       @id @default(cuid())
-  customerId      String?
-  customer        Customer?    @relation(fields: [customerId], references: [id], onDelete: SetNull)
-  conversationId  String?
+  id              Int           @id @default(autoincrement())
+  uuid            String        @unique @default(cuid())
+  customerId      Int?
+  customer        Customer?     @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  conversationId  Int?
   conversation    Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
-  source          String?      // facebook_ads, google_ads, website, referral, organic
+  source          String?       // facebook_ads, google_ads, website, referral, organic
   campaign        String?
-  status          String       @default("new") // new, contacted, qualified, proposal, negotiation, won, lost
+  status          String        @default("new") // new, contacted, qualified, proposal, negotiation, won, lost
   value           Float?
-  ownerId         String?
-  owner           User?        @relation("LeadOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  ownerId         Int?
+  owner           User?         @relation("LeadOwner", fields: [ownerId], references: [id], onDelete: SetNull)
   nextFollowup    DateTime?
-  probability     Int?         // 0-100
+  probability     Int?          // 0-100
   notes           String?
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
 }
 
 model AutomationRule {
-  id          String   @id @default(cuid())
+  id          Int     @id @default(autoincrement())
+  uuid        String  @unique @default(cuid())
   name        String
   keyword     String
   replyMessage String?
-  assignToId  String?
+  assignToId  Int?
   assignTo    User?   @relation("AutoAssign", fields: [assignToId], references: [id], onDelete: SetNull)
-  tagId       String?
+  tagId       Int?
   tag         Tag?    @relation("AutoTag", fields: [tagId], references: [id], onDelete: SetNull)
   enabled     Boolean @default(true)
   createdAt   DateTime @default(now())
@@ -190,11 +205,12 @@ model AutomationRule {
 }
 
 model AuditLog {
-  id            String   @id @default(cuid())
-  userId        String?
+  id            Int      @id @default(autoincrement())
+  uuid          String   @unique @default(cuid())
+  userId        Int?
   action        String   // assign, transfer, reply, delete, merge, tag, status_change, login
   entityType    String?  // conversation, customer, message, tag, lead
-  entityId      String?
+  entityId      Int?
   details       String?  // JSON string
   ipAddress     String?
   userAgent     String?
@@ -206,13 +222,30 @@ model AuditLog {
 }
 
 model ChannelConfig {
-  id         String    @id @default(cuid())
-  channel    String    @unique // website, facebook_messenger, facebook_comment, zalo, telegram, chatwork, email
-  enabled    Boolean   @default(false)
-  config     String    @default("{}") // JSON: credentials & settings
+  id         Int      @id @default(autoincrement())
+  uuid       String   @unique @default(cuid())
+  channel    String   @unique // website, facebook_messenger, facebook_comment, zalo, telegram, chatwork, email
+  enabled    Boolean  @default(false)
+  config     String   @default("{}") // JSON: credentials & settings
   lastTestAt DateTime?
   lastTestOk Boolean?
   lastTestMsg String?
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model Notification {
+  id             Int      @id @default(autoincrement())
+  uuid           String   @unique @default(cuid())
+  userId         Int
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type           String   // new_message, assignment, sla_breach, mention, system, automation
+  title          String
+  body           String
+  conversationId Int?
+  read           Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([userId, read, createdAt])
 }

@@ -90,28 +90,28 @@ function avg(arr: number[]): number {
 // ═══════════════════════════════════════════
 
 interface ConvRow {
-  id: string
+  id: number
   createdAt: Date
   updatedAt: Date
   status: string
   channel: string
-  customerId: string
-  ownerId: string | null
+  customerId: number
+  ownerId: number | null
 }
 
 interface MsgRow {
-  conversationId: string
+  conversationId: number
   senderType: string
-  senderId: string | null
+  senderId: number | null
   createdAt: Date
 }
 
 interface ConvDataBundle {
   convs: ConvRow[]
-  msgsByConv: Map<string, MsgRow[]>
-  responseTimes: Map<string, number>
-  resolutionTimes: Map<string, number>
-  msgCounts: Map<string, number>
+  msgsByConv: Map<number, MsgRow[]>
+  responseTimes: Map<number, number>
+  resolutionTimes: Map<number, number>
+  msgCounts: Map<number, number>
 }
 
 async function fetchConvData(start: Date, end: Date): Promise<ConvDataBundle> {
@@ -149,7 +149,7 @@ async function fetchConvData(start: Date, end: Date): Promise<ConvDataBundle> {
       })
     : []
 
-  const msgsByConv = new Map<string, MsgRow[]>()
+  const msgsByConv = new Map<number, MsgRow[]>()
   for (const msg of nonSysMsgs) {
     const list = msgsByConv.get(msg.conversationId) || []
     list.push(msg)
@@ -158,8 +158,8 @@ async function fetchConvData(start: Date, end: Date): Promise<ConvDataBundle> {
 
   const msgCounts = new Map(msgCountRows.map(r => [r.conversationId, r._count.id]))
 
-  const responseTimes = new Map<string, number>()
-  const resolutionTimes = new Map<string, number>()
+  const responseTimes = new Map<number, number>()
+  const resolutionTimes = new Map<number, number>()
 
   for (const conv of convs) {
     const cMsgs = msgsByConv.get(conv.id) || []
@@ -299,7 +299,7 @@ async function getAgentsReport(start: Date, end: Date) {
     },
     select: { senderId: true, createdAt: true },
   })
-  const hourSets = new Map<string, Set<string>>()
+  const hourSets = new Map<number, Set<string>>()
   for (const m of agentMsgTimestamps) {
     if (!m.senderId) continue
     const set = hourSets.get(m.senderId) || new Set()
@@ -475,7 +475,7 @@ async function getCustomersReport(start: Date, end: Date) {
   // (reuse leadSums since we already have all leads for these customers)
 
   // Group conversations by customer
-  const byCustomer = new Map<string, { name: string; convs: typeof convs; totalMsgs: number; lastActive: Date; channels: Map<string, number> }>()
+  const byCustomer = new Map<number, { name: string; convs: typeof convs; totalMsgs: number; lastActive: Date; channels: Map<string, number> }>()
   for (const c of convs) {
     const existing = byCustomer.get(c.customerId)
     if (existing) {
@@ -498,7 +498,7 @@ async function getCustomersReport(start: Date, end: Date) {
   }
 
   // Get the latest message time across ALL conversations for each customer
-  const custLastActive = new Map<string, Date>()
+  const custLastActive = new Map<number, Date>()
   for (const c of convs) {
     const msgTime = convLastMsg.get(c.id) || c.createdAt
     const existing = custLastActive.get(c.customerId)
@@ -618,8 +618,8 @@ async function getBotPerformanceReport(start: Date, end: Date) {
   })
 
   // Conversations with bot activity
-  const botConvIds = new Set<string>()
-  const agentConvIds = new Set<string>()
+  const botConvIds = new Set<number>()
+  const agentConvIds = new Set<number>()
   for (const [convId, msgs] of msgsByConv) {
     const hasBot = msgs.some(m => m.senderType === 'bot')
     const hasAgent = msgs.some(m => m.senderType === 'agent')
@@ -683,9 +683,9 @@ async function getTagsReport(start: Date, end: Date) {
   const { responseTimes, resolutionTimes } = await fetchConvData(start, end)
 
   // Group by tag
-  const byTag = new Map<string, {
-    tagId: string; tagName: string; count: number;
-    convIds: Set<string>; resTimes: number[];
+  const byTag = new Map<number, {
+    tagId: number; tagName: string; count: number;
+    convIds: Set<number>; resTimes: number[];
   }>()
 
   for (const ct of convTags) {
@@ -798,7 +798,7 @@ async function handleDetail(
 
 // Helper: build a conversation row for detail views
 async function buildConvDetailRow(c: {
-  id: string; createdAt: Date; updatedAt: Date; status: string; channel: string; customerId: string; ownerId: string | null
+  id: number; createdAt: Date; updatedAt: Date; status: string; channel: string; customerId: number; ownerId: number | null
 }) {
   const customer = await db.customer.findUnique({
     where: { id: c.customerId },
@@ -870,14 +870,15 @@ async function getConversationDetail(dateStr: string) {
 
 // ─── Agents Detail ───
 async function getAgentDetail(agentId: string, start: Date, end: Date) {
+  const numAgentId = Number(agentId)
   const agent = await db.user.findUnique({
-    where: { id: agentId },
+    where: { id: numAgentId },
     select: { id: true, name: true },
   })
   if (!agent) return { error: 'Agent not found' }
 
   const agentConvs = await db.conversation.findMany({
-    where: { ownerId: agentId, createdAt: { gte: start, lt: end } },
+    where: { ownerId: numAgentId, createdAt: { gte: start, lt: end } },
     select: {
       id: true, createdAt: true, updatedAt: true, status: true,
       channel: true, customerId: true, ownerId: true,
@@ -887,18 +888,18 @@ async function getAgentDetail(agentId: string, start: Date, end: Date) {
   })
 
   const convCount = await db.conversation.count({
-    where: { ownerId: agentId, createdAt: { gte: start, lt: end } },
+    where: { ownerId: numAgentId, createdAt: { gte: start, lt: end } },
   })
   const resolvedCount = await db.conversation.count({
-    where: { ownerId: agentId, createdAt: { gte: start, lt: end }, status: 'resolved' },
+    where: { ownerId: numAgentId, createdAt: { gte: start, lt: end }, status: 'resolved' },
   })
   const msgCount = await db.message.count({
-    where: { senderId: agentId, senderType: 'agent', createdAt: { gte: start, lt: end } },
+    where: { senderId: numAgentId, senderType: 'agent', createdAt: { gte: start, lt: end } },
   })
 
   // Active hours
   const agentMsgs = await db.message.findMany({
-    where: { senderId: agentId, senderType: 'agent', createdAt: { gte: start, lt: end } },
+    where: { senderId: numAgentId, senderType: 'agent', createdAt: { gte: start, lt: end } },
     select: { createdAt: true },
   })
   const hourSet = new Set(agentMsgs.map(m => {
@@ -908,7 +909,7 @@ async function getAgentDetail(agentId: string, start: Date, end: Date) {
 
   // Avg response time
   const allConvs = await db.conversation.findMany({
-    where: { ownerId: agentId, createdAt: { gte: start, lt: end } },
+    where: { ownerId: numAgentId, createdAt: { gte: start, lt: end } },
     select: { id: true },
   })
   const allConvIds = allConvs.map(c => c.id)
@@ -922,7 +923,7 @@ async function getAgentDetail(agentId: string, start: Date, end: Date) {
         select: { conversationId: true, senderType: true, createdAt: true },
       })
     : []
-  const msgsByConv = new Map<string, typeof agentMsgsForRt>()
+  const msgsByConv = new Map<number, typeof agentMsgsForRt>()
   for (const m of agentMsgsForRt) {
     const list = msgsByConv.get(m.conversationId) || []
     list.push(m)
@@ -1000,7 +1001,7 @@ async function getChannelDetail(channelKey: string, start: Date, end: Date) {
         select: { conversationId: true, senderType: true, createdAt: true },
       })
     : []
-  const byC = new Map<string, typeof rtMsgs>()
+  const byC = new Map<number, typeof rtMsgs>()
   for (const m of rtMsgs) {
     if (!byC.has(m.conversationId)) byC.set(m.conversationId, [])
     byC.get(m.conversationId)!.push(m)
@@ -1070,15 +1071,16 @@ async function getChannelDetail(channelKey: string, start: Date, end: Date) {
 
 // ─── Customers Detail ───
 async function getCustomerDetail(customerId: string, start: Date, end: Date) {
+  const custId = Number(customerId)
   const customer = await db.customer.findUnique({
-    where: { id: customerId },
+    where: { id: custId },
     select: { id: true, name: true },
   })
   if (!customer) return { error: 'Customer not found' }
 
   // Get ALL conversations for this customer (not just date range, for full history)
   const allConvs = await db.conversation.findMany({
-    where: { customerId },
+    where: { customerId: custId },
     select: { id: true, createdAt: true, updatedAt: true, status: true, channel: true, ownerId: true },
     orderBy: { createdAt: 'desc' },
   })
@@ -1110,7 +1112,7 @@ async function getCustomerDetail(customerId: string, start: Date, end: Date) {
 
   // Value from leads
   const leadSum = await db.lead.aggregate({
-    where: { customerId },
+    where: { customerId: custId },
     _sum: { value: true },
   })
 
@@ -1163,14 +1165,15 @@ async function getCustomerDetail(customerId: string, start: Date, end: Date) {
 
 // ─── Tags Detail ───
 async function getTagDetail(tagId: string, start: Date, end: Date) {
+  const numTagId = Number(tagId)
   const tag = await db.tag.findUnique({
-    where: { id: tagId },
+    where: { id: numTagId },
     select: { id: true, name: true },
   })
   if (!tag) return { error: 'Tag not found' }
 
   const convTags = await db.conversationTag.findMany({
-    where: { tagId },
+    where: { tagId: numTagId },
     select: {
       conversation: {
         select: {

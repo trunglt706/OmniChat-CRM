@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { useCRMStore } from '@/store/crm-store'
 import { useT } from '@/i18n/useT'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
@@ -15,7 +15,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import { CHANNEL_CONFIG, LEAD_STATUS_CONFIG, type InternalNote } from '@/lib/types'
-import type { Lead } from '@/lib/types'
+import { LOCALE_MAP, GRADIENT_CLASSES } from '@/lib/const/chat'
 import {
   User, Phone, Mail, Building, MapPin, Calendar, MessageCircle, Send,
   Globe, Pin, Plus, Loader2, X, ChevronRight, ExternalLink,
@@ -23,10 +23,9 @@ import {
   Pencil, Trash2, MoreHorizontal, PinOff, Check, Ban,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { apiFetch, apiPost, apiPut, generateIdempotencyKey } from '@/lib/api-client'
 
-const GRADIENT_CLASSES = ['avatar-gradient-1', 'avatar-gradient-2', 'avatar-gradient-3', 'avatar-gradient-4', 'avatar-gradient-5', 'avatar-gradient-6', 'avatar-gradient-7', 'avatar-gradient-8']
-
-function PlatformBadge({ platform, userName, index }: { platform: string; userName?: string | null; index: number }) {
+function PlatformBadge({ platform, userName }: { platform: string; userName?: string | null }) {
   const cfg = CHANNEL_CONFIG[platform as keyof typeof CHANNEL_CONFIG]
   return (
     <div className={cn(
@@ -59,20 +58,20 @@ function InfoRow({ icon: Icon, label, value }: { icon: React.ElementType; label:
 }
 
 function InfoTab() {
-  const { conversationDetail } = useCRMStore()
-  const { t } = useT()
+  const conversationDetail = useCRMStore((s) => s.conversationDetail)
+  const { t, locale } = useT()
   if (!conversationDetail) return null
 
   const customer = conversationDetail.customer
   const identities = customer.identities || []
 
   return (
-    <div className="space-y-5 animate-fade-in">
+    <div className="space-y-5 animate-slide-up">
       {/* Customer name & avatar - premium card */}
-      <div className="glass-card rounded-2xl p-4">
+      <div className="glass-card card-lift rounded-2xl p-4 transition-all duration-300 hover:shadow-xl hover:shadow-primary/5">
         <div className="flex items-center gap-3.5">
           <div className="relative">
-            <Avatar className="h-14 w-14 ring-2 ring-background shadow-lg">
+            <Avatar className="h-14 w-14 ring-2 ring-primary/30 shadow-lg transition-transform duration-300 hover:scale-105">
               <AvatarFallback className={cn('text-lg text-white font-bold', GRADIENT_CLASSES[0])}>
                 {customer.name.split(' ').slice(-2).map((n) => n[0]).join('')}
               </AvatarFallback>
@@ -81,7 +80,7 @@ function InfoTab() {
           <div className="min-w-0 flex-1">
             <h3 className="font-bold text-[15px] truncate tracking-tight">{customer.name}</h3>
             <p className="text-[11px] text-muted-foreground/50 mt-0.5 font-medium">
-              {t('panel.customerSince', { date: new Date(customer.createdAt).toLocaleDateString('vi-VN') })}
+              {t('panel.customerSince', { date: new Date(customer.createdAt).toLocaleDateString(LOCALE_MAP[locale] || 'vi-VN') })}
             </p>
           </div>
         </div>
@@ -104,12 +103,11 @@ function InfoTab() {
         <div className="space-y-2">
           <h4 className="text-[10px] font-bold text-muted-foreground/40 uppercase tracking-[0.15em] px-1">{t('panel.linkedAccounts')}</h4>
           <div className="space-y-1.5">
-            {identities.map((identity, idx) => (
+            {identities.map((identity) => (
               <PlatformBadge
                 key={identity.id}
                 platform={identity.platform}
                 userName={identity.platformUserName}
-                index={idx}
               />
             ))}
           </div>
@@ -149,20 +147,25 @@ function InfoTab() {
 }
 
 function NotesTab() {
-  const { selectedConversationId, conversationDetail, notes, setNotes, addNote, updateNote, deleteNote } = useCRMStore()
-  const { t } = useT()
+  const selectedConversationId = useCRMStore((s) => s.selectedConversationId)
+  const conversationDetail = useCRMStore((s) => s.conversationDetail)
+  const notes = useCRMStore((s) => s.notes)
+  const setNotes = useCRMStore((s) => s.setNotes)
+  const addNote = useCRMStore((s) => s.addNote)
+  const updateNote = useCRMStore((s) => s.updateNote)
+  const deleteNote = useCRMStore((s) => s.deleteNote)
+  const { t, locale } = useT()
   const [newNote, setNewNote] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editingId, setEditingId] = useState<number | null>(null)
   const [editContent, setEditContent] = useState('')
-  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
-  const [actionLoadingId, setActionLoadingId] = useState<string | null>(null)
+  const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null)
+  const [actionLoadingId, setActionLoadingId] = useState<number | null>(null)
 
   const fetchNotes = async () => {
     if (!selectedConversationId) return
     try {
-      const res = await fetch(`/api/conversations/${selectedConversationId}/notes`)
-      const data = await res.json()
+      const data = await apiFetch(`/api/conversations/${selectedConversationId}/notes`)
       setNotes(data)
     } catch (e) {
       console.error(e)
@@ -177,12 +180,7 @@ function NotesTab() {
     if (!newNote.trim() || !selectedConversationId || !conversationDetail) return
     setIsSubmitting(true)
     try {
-      const res = await fetch(`/api/conversations/${selectedConversationId}/notes`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: newNote.trim(), customerId: conversationDetail.customerId }),
-      })
-      const note = await res.json()
+      const note = await apiPost(`/api/conversations/${selectedConversationId}/notes`, { content: newNote.trim(), customerId: conversationDetail.customerId }, { idempotencyKey: generateIdempotencyKey() })
       addNote(note)
       setNewNote('')
     } catch (e) {
@@ -201,12 +199,7 @@ function NotesTab() {
     if (!editingId || !editContent.trim() || !selectedConversationId) return
     setActionLoadingId(editingId)
     try {
-      const res = await fetch(`/api/conversations/${selectedConversationId}/notes`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ noteId: editingId, content: editContent.trim() }),
-      })
-      const updated = await res.json()
+      const updated = await apiPut(`/api/conversations/${selectedConversationId}/notes`, { noteId: editingId, content: editContent.trim() })
       updateNote(editingId, updated)
       setEditingId(null)
     } catch (e) {
@@ -225,12 +218,7 @@ function NotesTab() {
     if (!selectedConversationId) return
     setActionLoadingId(note.id)
     try {
-      const res = await fetch(`/api/conversations/${selectedConversationId}/notes`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ noteId: note.id, isPinned: !note.isPinned }),
-      })
-      const updated = await res.json()
+      const updated = await apiPut(`/api/conversations/${selectedConversationId}/notes`, { noteId: note.id, isPinned: !note.isPinned })
       updateNote(note.id, updated)
     } catch (e) {
       console.error(e)
@@ -239,11 +227,11 @@ function NotesTab() {
     }
   }
 
-  const handleDelete = async (noteId: string) => {
+  const handleDelete = async (noteId: number) => {
     if (!selectedConversationId) return
     setActionLoadingId(noteId)
     try {
-      await fetch(`/api/conversations/${selectedConversationId}/notes?noteId=${noteId}`, { method: 'DELETE' })
+      await apiFetch(`/api/conversations/${selectedConversationId}/notes?noteId=${noteId}`, { method: 'DELETE' })
       deleteNote(noteId)
       setDeleteConfirmId(null)
     } catch (e) {
@@ -295,7 +283,7 @@ function NotesTab() {
             )}
             <p className="text-[13px] leading-relaxed text-foreground/80 whitespace-pre-wrap">{note.content}</p>
             <div className="flex items-center justify-between mt-2">
-              <p className="text-[10px] text-muted-foreground/50 font-medium">{note.author.name} · {new Date(note.createdAt).toLocaleString('vi-VN')}</p>
+              <p className="text-[10px] text-muted-foreground/50 font-medium">{note.author?.name || 'Unknown'} · {new Date(note.createdAt).toLocaleString(LOCALE_MAP[locale] || 'vi-VN')}</p>
               <div className={cn('flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200', deleteConfirmId === note.id && 'opacity-100')}>
                 {deleteConfirmId === note.id ? (
                   <>
@@ -328,8 +316,8 @@ function NotesTab() {
     )
   }
 
-  const pinnedNotes = notes.filter(n => n.isPinned)
-  const regularNotes = notes.filter(n => !n.isPinned)
+  const pinnedNotes = useMemo(() => notes.filter(n => n.isPinned), [notes])
+  const regularNotes = useMemo(() => notes.filter(n => !n.isPinned), [notes])
 
   return (
     <div className="space-y-3 animate-fade-in">
@@ -365,8 +353,8 @@ function NotesTab() {
 }
 
 function LeadTab() {
-  const { conversationDetail } = useCRMStore()
-  const { t } = useT()
+  const conversationDetail = useCRMStore((s) => s.conversationDetail)
+  const { t, locale } = useT()
   if (!conversationDetail) return null
 
   const leads = conversationDetail.leads || []
@@ -417,7 +405,7 @@ function LeadTab() {
                 <span className="text-[10px] text-muted-foreground/50 font-medium uppercase tracking-wider">{t('lead.followup')}</span>
                 <p className="font-semibold text-xs mt-0.5">
                   {lead.nextFollowup
-                    ? new Date(lead.nextFollowup).toLocaleDateString('vi-VN')
+                    ? new Date(lead.nextFollowup).toLocaleDateString(LOCALE_MAP[locale] || 'vi-VN')
                     : '-'}
                 </p>
               </div>
@@ -445,7 +433,10 @@ function LeadTab() {
 }
 
 export default function CustomerPanel() {
-  const { selectedConversationId, conversationDetail, rightPanelTab, setRightPanelTab } = useCRMStore()
+  const selectedConversationId = useCRMStore((s) => s.selectedConversationId)
+  const conversationDetail = useCRMStore((s) => s.conversationDetail)
+  const rightPanelTab = useCRMStore((s) => s.rightPanelTab)
+  const setRightPanelTab = useCRMStore((s) => s.setRightPanelTab)
   const { t } = useT()
 
   if (!selectedConversationId || !conversationDetail) {

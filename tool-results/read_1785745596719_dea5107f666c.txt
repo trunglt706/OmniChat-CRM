@@ -1,0 +1,1237 @@
+     1→import { NextResponse } from 'next/server'
+     2→import { db } from '@/lib/db'
+     3→
+     4→// ═══════════════════════════════════════════
+     5→// ─── Helper Functions ───
+     6→// ═══════════════════════════════════════════
+     7→
+     8→const CHANNEL_DISPLAY: Record<string, string> = {
+     9→  facebook_messenger: 'Facebook Messenger',
+    10→  facebook_comment: 'Facebook Comment',
+    11→  zalo: 'Zalo',
+    12→  telegram: 'Telegram',
+    13→  website: 'Website',
+    14→  email: 'Email',
+    15→  chatwork: 'Chatwork',
+    16→}
+    17→
+    18→function getChannelName(channel: string): string {
+    19→  return CHANNEL_DISPLAY[channel] || channel
+    20→}
+    21→
+    22→function formatDuration(ms: number): string {
+    23→  if (ms <= 0 || !isFinite(ms)) return '0s'
+    24→  const totalSec = Math.floor(ms / 1000)
+    25→  const h = Math.floor(totalSec / 3600)
+    26→  const m = Math.floor((totalSec % 3600) / 60)
+    27→  const s = totalSec % 60
+    28→  if (h > 0) return m > 0 ? `${h}h ${m}m` : `${h}h`
+    29→  if (m > 0) return s > 0 ? `${m}m ${s}s` : `${m}m`
+    30→  return `${s}s`
+    31→}
+    32→
+    33→function getDateRange(
+    34→  startDate: string | null,
+    35→  endDate: string | null,
+    36→  days: number
+    37→): { start: Date; end: Date } {
+    38→  if (startDate && endDate) {
+    39→    const s = new Date(startDate + 'T00:00:00')
+    40→    const e = new Date(endDate + 'T00:00:00')
+    41→    e.setDate(e.getDate() + 1)
+    42→    return { start: s, end: e }
+    43→  }
+    44→  const now = new Date()
+    45→  const end = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1)
+    46→  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - (days - 1))
+    47→  return { start, end }
+    48→}
+    49→
+    50→function getDateKey(d: Date): string {
+    51→  const y = d.getFullYear()
+    52→  const m = String(d.getMonth() + 1).padStart(2, '0')
+    53→  const day = String(d.getDate()).padStart(2, '0')
+    54→  return `${y}-${m}-${day}`
+    55→}
+    56→
+    57→function timeAgo(date: Date): string {
+    58→  const diffMs = Date.now() - date.getTime()
+    59→  if (diffMs <= 0) return 'just now'
+    60→  const diffMin = Math.floor(diffMs / 60000)
+    61→  const diffHr = Math.floor(diffMin / 60)
+    62→  const diffDay = Math.floor(diffHr / 24)
+    63→  if (diffDay > 0) return `${diffDay}d ago`
+    64→  if (diffHr > 0) return `${diffHr}h ago`
+    65→  if (diffMin > 0) return `${diffMin}m ago`
+    66→  return 'just now'
+    67→}
+    68→
+    69→function percentile(arr: number[], p: number): number {
+    70→  if (arr.length === 0) return 0
+    71→  const sorted = [...arr].sort((a, b) => a - b)
+    72→  const idx = Math.ceil((p / 100) * sorted.length) - 1
+    73→  return sorted[Math.max(0, idx)]
+    74→}
+    75→
+    76→function formatValue(val: number | null | undefined): string {
+    77→  if (val == null || val === 0) return '$0'
+    78→  if (val >= 1_000_000) return `~${(val / 1_000_000).toFixed(1)}M`
+    79→  if (val >= 1_000) return `~${(val / 1_000).toFixed(1)}K`
+    80→  return `~${val.toFixed(0)}`
+    81→}
+    82→
+    83→function avg(arr: number[]): number {
+    84→  if (arr.length === 0) return 0
+    85→  return arr.reduce((a, b) => a + b, 0) / arr.length
+    86→}
+    87→
+    88→// ═══════════════════════════════════════════
+    89→// ─── Shared Data Fetcher ───
+    90→// ═══════════════════════════════════════════
+    91→
+    92→interface ConvRow {
+    93→  id: string
+    94→  createdAt: Date
+    95→  updatedAt: Date
+    96→  status: string
+    97→  channel: string
+    98→  customerId: string
+    99→  ownerId: string | null
+   100→}
+   101→
+   102→interface MsgRow {
+   103→  conversationId: string
+   104→  senderType: string
+   105→  senderId: string | null
+   106→  createdAt: Date
+   107→}
+   108→
+   109→interface ConvDataBundle {
+   110→  convs: ConvRow[]
+   111→  msgsByConv: Map<string, MsgRow[]>
+   112→  responseTimes: Map<string, number>
+   113→  resolutionTimes: Map<string, number>
+   114→  msgCounts: Map<string, number>
+   115→}
+   116→
+   117→async function fetchConvData(start: Date, end: Date): Promise<ConvDataBundle> {
+   118→  const convs = await db.conversation.findMany({
+   119→    where: { createdAt: { gte: start, lt: end } },
+   120→    select: {
+   121→      id: true, createdAt: true, updatedAt: true,
+   122→      status: true, channel: true, customerId: true, ownerId: true,
+   123→    },
+   124→    orderBy: { createdAt: 'asc' },
+   125→  })
+   126→
+   127→  const convIds = convs.map(c => c.id)
+   128→
+   129→  // Non-system messages for response time calculations
+   130→  const nonSysMsgs = convIds.length > 0
+   131→    ? await db.message.findMany({
+   132→        where: {
+   133→          conversationId: { in: convIds },
+   134→          senderType: { in: ['customer', 'agent', 'bot'] },
+   135→        },
+   136→        orderBy: { createdAt: 'asc' },
+   137→        select: {
+   138→          conversationId: true, senderType: true, senderId: true, createdAt: true,
+   139→        },
+   140→      })
+   141→    : []
+   142→
+   143→  // Total message counts per conversation (all types)
+   144→  const msgCountRows = convIds.length > 0
+   145→    ? await db.message.groupBy({
+   146→        by: ['conversationId'],
+   147→        where: { conversationId: { in: convIds } },
+   148→        _count: { id: true },
+   149→      })
+   150→    : []
+   151→
+   152→  const msgsByConv = new Map<string, MsgRow[]>()
+   153→  for (const msg of nonSysMsgs) {
+   154→    const list = msgsByConv.get(msg.conversationId) || []
+   155→    list.push(msg)
+   156→    msgsByConv.set(msg.conversationId, list)
+   157→  }
+   158→
+   159→  const msgCounts = new Map(msgCountRows.map(r => [r.conversationId, r._count.id]))
+   160→
+   161→  const responseTimes = new Map<string, number>()
+   162→  const resolutionTimes = new Map<string, number>()
+   163→
+   164→  for (const conv of convs) {
+   165→    const cMsgs = msgsByConv.get(conv.id) || []
+   166→
+   167→    // First response time: first customer → first agent/bot after it
+   168→    let firstCustTime: Date | null = null
+   169→    for (const m of cMsgs) {
+   170→      if (m.senderType === 'customer') { firstCustTime = m.createdAt; break }
+   171→    }
+   172→    if (firstCustTime) {
+   173→      for (const m of cMsgs) {
+   174→        if ((m.senderType === 'agent' || m.senderType === 'bot') && m.createdAt > firstCustTime) {
+   175→          responseTimes.set(conv.id, m.createdAt.getTime() - firstCustTime.getTime())
+   176→          break
+   177→        }
+   178→      }
+   179→    }
+   180→
+   181→    // Resolution time for resolved/closed conversations
+   182→    if (conv.status === 'resolved' || conv.status === 'closed') {
+   183→      resolutionTimes.set(conv.id, conv.updatedAt.getTime() - conv.createdAt.getTime())
+   184→    }
+   185→  }
+   186→
+   187→  return { convs, msgsByConv, responseTimes, resolutionTimes, msgCounts }
+   188→}
+   189→
+   190→// ═══════════════════════════════════════════
+   191→// ─── 1. Conversations Report ───
+   192→// ═══════════════════════════════════════════
+   193→
+   194→async function getConversationsReport(start: Date, end: Date) {
+   195→  const { convs, responseTimes, resolutionTimes } = await fetchConvData(start, end)
+   196→
+   197→  // Group by date
+   198→  const byDate = new Map<string, ConvRow[]>()
+   199→  for (const c of convs) {
+   200→    const key = getDateKey(c.createdAt)
+   201→    const list = byDate.get(key) || []
+   202→    list.push(c)
+   203→    byDate.set(key, list)
+   204→  }
+   205→
+   206→  // Build date range array
+   207→  const dates: string[] = []
+   208→  const cur = new Date(start)
+   209→  while (cur < end) {
+   210→    dates.push(getDateKey(cur))
+   211→    cur.setDate(cur.getDate() + 1)
+   212→  }
+   213→
+   214→  return dates.map(date => {
+   215→    const dayConvos = byDate.get(date) || []
+   216→    const total = dayConvos.length
+   217→    const open = dayConvos.filter(c => c.status === 'open' || c.status === 'pending').length
+   218→    const resolved = dayConvos.filter(c => c.status === 'resolved').length
+   219→    const closed = dayConvos.filter(c => c.status === 'closed').length
+   220→
+   221→    const rtList: number[] = []
+   222→    const resList: number[] = []
+   223→    for (const c of dayConvos) {
+   224→      const rt = responseTimes.get(c.id)
+   225→      if (rt != null) rtList.push(rt)
+   226→      const res = resolutionTimes.get(c.id)
+   227→      if (res != null) resList.push(res)
+   228→    }
+   229→
+   230→    return {
+   231→      date,
+   232→      total,
+   233→      open,
+   234→      resolved,
+   235→      closed,
+   236→      avgResponseTime: formatDuration(avg(rtList)),
+   237→      avgResolutionTime: formatDuration(avg(resList)),
+   238→    }
+   239→  })
+   240→}
+   241→
+   242→// ═══════════════════════════════════════════
+   243→// ─── 2. Agents Report ───
+   244→// ═══════════════════════════════════════════
+   245→
+   246→async function getAgentsReport(start: Date, end: Date) {
+   247→  // Get users who own conversations in range
+   248→  const agents = await db.user.findMany({
+   249→    where: {
+   250→      role: { in: ['admin', 'supervisor', 'agent'] },
+   251→      assignedConvos: { some: { createdAt: { gte: start, lt: end } } },
+   252→    },
+   253→    select: { id: true, name: true, status: true },
+   254→    orderBy: { name: 'asc' },
+   255→  })
+   256→
+   257→  if (agents.length === 0) return []
+   258→
+   259→  const agentIds = agents.map(a => a.id)
+   260→
+   261→  // Conversation counts per agent
+   262→  const convCounts = await db.conversation.groupBy({
+   263→    by: ['ownerId'],
+   264→    where: { ownerId: { in: agentIds }, createdAt: { gte: start, lt: end } },
+   265→    _count: { id: true },
+   266→  })
+   267→  const convCountMap = new Map(convCounts.map(r => [r.ownerId!, r._count.id]))
+   268→
+   269→  // Resolved counts per agent
+   270→  const resolvedCounts = await db.conversation.groupBy({
+   271→    by: ['ownerId'],
+   272→    where: {
+   273→      ownerId: { in: agentIds },
+   274→      createdAt: { gte: start, lt: end },
+   275→      status: 'resolved',
+   276→    },
+   277→    _count: { id: true },
+   278→  })
+   279→  const resolvedCountMap = new Map(resolvedCounts.map(r => [r.ownerId!, r._count.id]))
+   280→
+   281→  // Message counts per agent
+   282→  const agentMsgCounts = await db.message.groupBy({
+   283→    by: ['senderId'],
+   284→    where: {
+   285→      senderId: { in: agentIds },
+   286→      senderType: 'agent',
+   287→      createdAt: { gte: start, lt: end },
+   288→    },
+   289→    _count: { id: true },
+   290→  })
+   291→  const agentMsgCountMap = new Map(agentMsgCounts.map(r => [r.senderId!, r._count.id]))
+   292→
+   293→  // Active hours: fetch message timestamps per agent
+   294→  const agentMsgTimestamps = await db.message.findMany({
+   295→    where: {
+   296→      senderId: { in: agentIds },
+   297→      senderType: 'agent',
+   298→      createdAt: { gte: start, lt: end },
+   299→    },
+   300→    select: { senderId: true, createdAt: true },
+   301→  })
+   302→  const hourSets = new Map<string, Set<string>>()
+   303→  for (const m of agentMsgTimestamps) {
+   304→    if (!m.senderId) continue
+   305→    const set = hourSets.get(m.senderId) || new Set()
+   306→    const d = m.createdAt
+   307→    set.add(`${d.getFullYear()}-${d.getMonth()}-${d.getDate()}-${d.getHours()}`)
+   308→    hourSets.set(m.senderId, set)
+   309→  }
+   310→
+   311→  // Response times for agent conversations: use fetchConvData
+   312→  const { convs, responseTimes } = await fetchConvData(start, end)
+   313→  const agentConvIds = convs.filter(c => c.ownerId && agentIds.includes(c.ownerId)).map(c => c.id)
+   314→  const agentRts = agentConvIds.map(id => responseTimes.get(id)).filter((v): v is number => v != null)
+   315→  const overallAvgRt = avg(agentRts)
+   316→
+   317→  return agents.map(agent => {
+   318→    const agentConvs = convs.filter(c => c.ownerId === agent.id)
+   319→    const rts = agentConvs.map(c => responseTimes.get(c.id)).filter((v): v is number => v != null)
+   320→
+   321→    return {
+   322→      id: agent.id,
+   323→      name: agent.name,
+   324→      conversations: convCountMap.get(agent.id) || 0,
+   325→      messages: agentMsgCountMap.get(agent.id) || 0,
+   326→      avgResponseTime: formatDuration(avg(rts) || overallAvgRt),
+   327→      resolved: resolvedCountMap.get(agent.id) || 0,
+   328→      satisfaction: '0.0',
+   329→      activeHours: `${(hourSets.get(agent.id)?.size || 0)}h`,
+   330→      status: agent.status || 'offline',
+   331→    }
+   332→  })
+   333→}
+   334→
+   335→// ═══════════════════════════════════════════
+   336→// ─── 3. SLA Report ───
+   337→// ═══════════════════════════════════════════
+   338→
+   339→async function getSlaReport(start: Date, end: Date) {
+   340→  const { convs, responseTimes, resolutionTimes } = await fetchConvData(start, end)
+   341→
+   342→  // Metric 1: First Response < 5min
+   343→  const rtValues = Array.from(responseTimes.values())
+   344→  const fiveMin = 5 * 60 * 1000
+   345→  const rtCompliant = rtValues.filter(rt => rt < fiveMin).length
+   346→  const rtTotal = rtValues.length
+   347→  const rtAvg = avg(rtValues)
+   348→
+   349→  // Metric 2: Resolution < 2h
+   350→  const resValues = Array.from(resolutionTimes.values())
+   351→  const twoHr = 2 * 60 * 60 * 1000
+   352→  const resCompliant = resValues.filter(r => r < twoHr).length
+   353→  const resTotal = resValues.length
+   354→  const resAvg = avg(resValues)
+   355→
+   356→  // Metric 3: Satisfaction >= 4.0 (no satisfaction data in schema)
+   357→  const satCompliant = 0
+   358→  const satTotal = convs.length
+   359→
+   360→  return [
+   361→    {
+   362→      metric: 'First Response (< 5min)',
+   363→      target: '< 5 min',
+   364→      actual: formatDuration(rtAvg),
+   365→      compliance: rtTotal > 0 ? `${Math.round((rtCompliant / rtTotal) * 100)}%` : '0%',
+   366→    },
+   367→    {
+   368→      metric: 'Resolution (< 2h)',
+   369→      target: '< 2h',
+   370→      actual: formatDuration(resAvg),
+   371→      compliance: resTotal > 0 ? `${Math.round((resCompliant / resTotal) * 100)}%` : '0%',
+   372→    },
+   373→    {
+   374→      metric: 'Customer Satisfaction (≥ 4.0)',
+   375→      target: '≥ 4.0',
+   376→      actual: '0.0',
+   377→      compliance: satTotal > 0 ? `${Math.round((satCompliant / satTotal) * 100)}%` : '0%',
+   378→    },
+   379→  ]
+   380→}
+   381→
+   382→// ═══════════════════════════════════════════
+   383→// ─── 4. Channels Report ───
+   384→// ═══════════════════════════════════════════
+   385→
+   386→async function getChannelsReport(start: Date, end: Date) {
+   387→  const { convs, responseTimes, resolutionTimes, msgCounts } = await fetchConvData(start, end)
+   388→
+   389→  // Group by channel
+   390→  const byChannel = new Map<string, ConvRow[]>()
+   391→  for (const c of convs) {
+   392→    const list = byChannel.get(c.channel) || []
+   393→    list.push(c)
+   394→    byChannel.set(c.channel, list)
+   395→  }
+   396→
+   397→  return Array.from(byChannel.entries()).map(([channel, channelConvs]) => {
+   398→    const rts = channelConvs.map(c => responseTimes.get(c.id)).filter((v): v is number => v != null)
+   399→    const resolved = channelConvs.filter(c => c.status === 'resolved' || c.status === 'closed').length
+   400→    const totalMsgs = channelConvs.reduce((sum, c) => sum + (msgCounts.get(c.id) || 0), 0)
+   401→
+   402→    return {
+   403→      id: channel,
+   404→      key: channel,
+   405→      channel: getChannelName(channel),
+   406→      conversations: channelConvs.length,
+   407→      messages: totalMsgs,
+   408→      avgResponseTime: formatDuration(avg(rts)),
+   409→      resolutionRate: channelConvs.length > 0
+   410→        ? `${Math.round((resolved / channelConvs.length) * 100)}%`
+   411→        : '0%',
+   412→      satisfaction: '0.0',
+   413→    }
+   414→  })
+   415→}
+   416→
+   417→// ═══════════════════════════════════════════
+   418→// ─── 5. Customers Report ───
+   419→// ═══════════════════════════════════════════
+   420→
+   421→async function getCustomersReport(start: Date, end: Date) {
+   422→  // Get conversations in range with customer info
+   423→  const convs = await db.conversation.findMany({
+   424→    where: { createdAt: { gte: start, lt: end } },
+   425→    select: {
+   426→      id: true, createdAt: true, channel: true, customerId: true,
+   427→      customer: { select: { id: true, name: true } },
+   428→    },
+   429→    orderBy: { createdAt: 'desc' },
+   430→  })
+   431→
+   432→  const convIds = convs.map(c => c.id)
+   433→  const customerIds = [...new Set(convs.map(c => c.customerId))]
+   434→
+   435→  // Message counts per conversation
+   436→  const msgCountRows = convIds.length > 0
+   437→    ? await db.message.groupBy({
+   438→        by: ['conversationId'],
+   439→        where: { conversationId: { in: convIds } },
+   440→        _count: { id: true },
+   441→      })
+   442→    : []
+   443→  const msgCountMap = new Map(msgCountRows.map(r => [r.conversationId, r._count.id]))
+   444→
+   445→  // Last active per customer: latest message timestamp
+   446→  const lastActiveRows = convIds.length > 0
+   447→    ? await db.message.findMany({
+   448→        where: { conversationId: { in: convIds } },
+   449→        select: { conversationId: true, createdAt: true },
+   450→        orderBy: { createdAt: 'desc' },
+   451→        distinct: ['conversationId'],
+   452→      })
+   453→    : []
+   454→  // Build convId→createdAt map
+   455→  const convLastMsg = new Map(lastActiveRows.map(r => [r.conversationId, r.createdAt]))
+   456→
+   457→  // Lead values per customer
+   458→  const leadSums = customerIds.length > 0
+   459→    ? await db.lead.groupBy({
+   460→        by: ['customerId'],
+   461→        where: { customerId: { in: customerIds } },
+   462→        _sum: { value: true },
+   463→      })
+   464→    : []
+   465→  const leadValueMap = new Map(leadSums.map(r => [r.customerId, r._sum.value || 0]))
+   466→
+   467→  // Also check conversations outside range for total lead value per customer
+   468→  const allCustomerLeadSums = customerIds.length > 0
+   469→    ? await db.lead.groupBy({
+   470→        by: ['customerId'],
+   471→        where: { customerId: { in: customerIds } },
+   472→        _sum: { value: true },
+   473→      })
+   474→    : []
+   475→  // (reuse leadSums since we already have all leads for these customers)
+   476→
+   477→  // Group conversations by customer
+   478→  const byCustomer = new Map<string, { name: string; convs: typeof convs; totalMsgs: number; lastActive: Date; channels: Map<string, number> }>()
+   479→  for (const c of convs) {
+   480→    const existing = byCustomer.get(c.customerId)
+   481→    if (existing) {
+   482→      existing.convs.push(c)
+   483→      existing.totalMsgs += msgCountMap.get(c.id) || 0
+   484→      if (c.createdAt > existing.lastActive) existing.lastActive = c.createdAt
+   485→      const cnt = existing.channels.get(c.channel) || 0
+   486→      existing.channels.set(c.channel, cnt + 1)
+   487→    } else {
+   488→      const channels = new Map<string, number>()
+   489→      channels.set(c.channel, 1)
+   490→      byCustomer.set(c.customerId, {
+   491→        name: c.customer.name,
+   492→        convs: [c],
+   493→        totalMsgs: msgCountMap.get(c.id) || 0,
+   494→        lastActive: c.createdAt,
+   495→        channels,
+   496→      })
+   497→    }
+   498→  }
+   499→
+   500→  // Get the latest message time across ALL conversations for each customer
+   501→  const custLastActive = new Map<string, Date>()
+   502→  for (const c of convs) {
+   503→    const msgTime = convLastMsg.get(c.id) || c.createdAt
+   504→    const existing = custLastActive.get(c.customerId)
+   505→    if (!existing || msgTime > existing) {
+   506→      custLastActive.set(c.customerId, msgTime)
+   507→    }
+   508→  }
+   509→
+   510→  return Array.from(byCustomer.entries())
+   511→    .sort((a, b) => b[1].convs.length - a[1].convs.length)
+   512→    .map(([custId, data]) => {
+   513→      // Primary channel = most used
+   514→      let primaryChannel = 'website'
+   515→      let maxCh = 0
+   516→      for (const [ch, cnt] of data.channels) {
+   517→        if (cnt > maxCh) { maxCh = cnt; primaryChannel = ch }
+   518→      }
+   519→
+   520→      return {
+   521→        id: custId,
+   522→        name: data.name,
+   523→        conversations: data.convs.length,
+   524→        messages: data.totalMsgs,
+   525→        lastActive: timeAgo(custLastActive.get(custId) || data.lastActive),
+   526→        primaryChannel,
+   527→        value: formatValue(leadValueMap.get(custId)),
+   528→      }
+   529→    })
+   530→}
+   531→
+   532→// ═══════════════════════════════════════════
+   533→// ─── 6. Messages Report ───
+   534→// ═══════════════════════════════════════════
+   535→
+   536→async function getMessagesReport(start: Date, end: Date) {
+   537→  const hourlyData = Array.from({ length: 24 }, (_, i) => ({
+   538→    period: `${String(i).padStart(2, '0')}:00`,
+   539→    incoming: 0,
+   540→    outgoing: 0,
+   541→    total: 0,
+   542→  }))
+   543→
+   544→  const messages = await db.message.findMany({
+   545→    where: {
+   546→      createdAt: { gte: start, lt: end },
+   547→      senderType: { in: ['customer', 'agent', 'bot'] },
+   548→    },
+   549→    select: { senderType: true, createdAt: true },
+   550→  })
+   551→
+   552→  for (const msg of messages) {
+   553→    const hour = msg.createdAt.getHours()
+   554→    const isCustomer = msg.senderType === 'customer'
+   555→    hourlyData[hour].incoming += isCustomer ? 1 : 0
+   556→    hourlyData[hour].outgoing += isCustomer ? 0 : 1
+   557→    hourlyData[hour].total += 1
+   558→  }
+   559→
+   560→  const peakHour = hourlyData.reduce((max, cur) => cur.total > max.total ? cur : max, hourlyData[0]).period
+   561→
+   562→  return { hourly: hourlyData, peakHour }
+   563→}
+   564→
+   565→// ═══════════════════════════════════════════
+   566→// ─── 7. Response Time Report ───
+   567→// ═══════════════════════════════════════════
+   568→
+   569→async function getResponseTimeReport(start: Date, end: Date) {
+   570→  const { responseTimes } = await fetchConvData(start, end)
+   571→  const rtValues = Array.from(responseTimes.values())
+   572→
+   573→  const bucketDefs = [
+   574→    { bucket: '< 1 min', minMs: 0, maxMs: 60_000 },
+   575→    { bucket: '1-3 min', minMs: 60_000, maxMs: 180_000 },
+   576→    { bucket: '3-5 min', minMs: 180_000, maxMs: 300_000 },
+   577→    { bucket: '5-10 min', minMs: 300_000, maxMs: 600_000 },
+   578→    { bucket: '10-30 min', minMs: 600_000, maxMs: 1_800_000 },
+   579→    { bucket: '> 30 min', minMs: 1_800_000, maxMs: Infinity },
+   580→  ]
+   581→
+   582→  const total = rtValues.length
+   583→  const buckets = bucketDefs.map(b => {
+   584→    const matching = rtValues.filter(rt => rt >= b.minMs && rt < b.maxMs)
+   585→    return {
+   586→      bucket: b.bucket,
+   587→      count: matching.length,
+   588→      percentage: total > 0 ? `${((matching.length / total) * 100).toFixed(1)}%` : '0.0%',
+   589→      avgSatisfaction: '0.0',
+   590→    }
+   591→  })
+   592→
+   593→  const avgRt = avg(rtValues)
+   594→  return {
+   595→    buckets,
+   596→    stats: {
+   597→      avg: formatDuration(avgRt),
+   598→      p50: formatDuration(percentile(rtValues, 50)),
+   599→      p90: formatDuration(percentile(rtValues, 90)),
+   600→      p99: formatDuration(percentile(rtValues, 99)),
+   601→    },
+   602→  }
+   603→}
+   604→
+   605→// ═══════════════════════════════════════════
+   606→// ─── 8. Bot Performance Report ───
+   607→// ═══════════════════════════════════════════
+   608→
+   609→async function getBotPerformanceReport(start: Date, end: Date) {
+   610→  const { convs, msgsByConv, responseTimes, resolutionTimes } = await fetchConvData(start, end)
+   611→
+   612→  // Bot messages: count all bot messages in range
+   613→  const botMsgCount = await db.message.count({
+   614→    where: {
+   615→      senderType: 'bot',
+   616→      createdAt: { gte: start, lt: end },
+   617→    },
+   618→  })
+   619→
+   620→  // Conversations with bot activity
+   621→  const botConvIds = new Set<string>()
+   622→  const agentConvIds = new Set<string>()
+   623→  for (const [convId, msgs] of msgsByConv) {
+   624→    const hasBot = msgs.some(m => m.senderType === 'bot')
+   625→    const hasAgent = msgs.some(m => m.senderType === 'agent')
+   626→    if (hasBot) botConvIds.add(convId)
+   627→    if (hasAgent) agentConvIds.add(convId)
+   628→  }
+   629→
+   630→  // Handoff: conversations with both bot and agent messages
+   631→  const handoffConvIds = [...botConvIds].filter(id => agentConvIds.has(id))
+   632→  const handoffRate = botConvIds.size > 0
+   633→    ? ((handoffConvIds.length / botConvIds.size) * 100).toFixed(1) + '%'
+   634→    : '0.0%'
+   635→
+   636→  // Conversations saved: bot-only conversations (no agent messages)
+   637→  const savedConvs = [...botConvIds].filter(id => !agentConvIds.has(id)).length
+   638→
+   639→  // Avg resolution time for bot conversations
+   640→  const botResTimes = [...botConvIds]
+   641→    .map(id => resolutionTimes.get(id))
+   642→    .filter((v): v is number => v != null)
+   643→  const avgResTime = avg(botResTimes)
+   644→
+   645→  // Accuracy: % of bot conversations that didn't need handoff
+   646→  const accuracy = botConvIds.size > 0
+   647→    ? ((savedConvs / botConvIds.size) * 100).toFixed(1) + '%'
+   648→    : '0.0%'
+   649→
+   650→  return {
+   651→    metrics: [
+   652→      { metric: 'totalHandled', value: String(botMsgCount), trend: 'stable' as const },
+   653→      { metric: 'handoffRate', value: handoffRate, trend: 'stable' as const },
+   654→      { metric: 'avgResolutionTime', value: formatDuration(avgResTime), trend: 'stable' as const },
+   655→      { metric: 'customerSatisfaction', value: '0.0', trend: 'stable' as const },
+   656→      { metric: 'conversationsSaved', value: String(savedConvs), trend: 'stable' as const },
+   657→      { metric: 'accuracy', value: accuracy, trend: 'stable' as const },
+   658→    ],
+   659→  }
+   660→}
+   661→
+   662→// ═══════════════════════════════════════════
+   663→// ─── 9. Tags Report ───
+   664→// ═══════════════════════════════════════════
+   665→
+   666→async function getTagsReport(start: Date, end: Date) {
+   667→  // Get all tags with their conversation associations in the date range
+   668→  const convTags = await db.conversationTag.findMany({
+   669→    where: {
+   670→      conversation: { createdAt: { gte: start, lt: end } },
+   671→    },
+   672→    select: {
+   673→      id: true,
+   674→      tagId: true,
+   675→      conversationId: true,
+   676→      tag: { select: { id: true, name: true } },
+   677→      conversation: { select: { id: true, createdAt: true, updatedAt: true, status: true } },
+   678→    },
+   679→  })
+   680→
+   681→  // Get response/resolution times for tagged conversations
+   682→  const taggedConvIds = [...new Set(convTags.map(ct => ct.conversationId))]
+   683→  const { responseTimes, resolutionTimes } = await fetchConvData(start, end)
+   684→
+   685→  // Group by tag
+   686→  const byTag = new Map<string, {
+   687→    tagId: string; tagName: string; count: number;
+   688→    convIds: Set<string>; resTimes: number[];
+   689→  }>()
+   690→
+   691→  for (const ct of convTags) {
+   692→    const existing = byTag.get(ct.tagId)
+   693→    const res = resolutionTimes.get(ct.conversationId)
+   694→    if (existing) {
+   695→      existing.count++
+   696→      existing.convIds.add(ct.conversationId)
+   697→      if (res != null) existing.resTimes.push(res)
+   698→    } else {
+   699→      const resTimes: number[] = []
+   700→      if (res != null) resTimes.push(res)
+   701→      byTag.set(ct.tagId, {
+   702→        tagId: ct.tag.id,
+   703→        tagName: ct.tag.name,
+   704→        count: 1,
+   705→        convIds: new Set([ct.conversationId]),
+   706→        resTimes,
+   707→      })
+   708→    }
+   709→  }
+   710→
+   711→  return Array.from(byTag.values()).map(data => ({
+   712→    id: data.tagId,
+   713→    tag: data.tagName,
+   714→    count: data.count,
+   715→    conversations: data.convIds.size,
+   716→    avgResolution: formatDuration(avg(data.resTimes)),
+   717→    satisfaction: '0.0',
+   718→  }))
+   719→}
+   720→
+   721→// ═══════════════════════════════════════════
+   722→// ─── 10. Resolution Trends Report ───
+   723→// ═══════════════════════════════════════════
+   724→
+   725→async function getResolutionTrendsReport(start: Date, end: Date) {
+   726→  const { convs, resolutionTimes } = await fetchConvData(start, end)
+   727→
+   728→  // Build date range array
+   729→  const dates: Date[] = []
+   730→  const cur = new Date(start)
+   731→  while (cur < end) {
+   732→    dates.push(new Date(cur))
+   733→    cur.setDate(cur.getDate() + 1)
+   734→  }
+   735→
+   736→  // Group by date
+   737→  const byDate = new Map<string, ConvRow[]>()
+   738→  for (const c of convs) {
+   739→    const key = getDateKey(c.createdAt)
+   740→    const list = byDate.get(key) || []
+   741→    list.push(c)
+   742→    byDate.set(key, list)
+   743→  }
+   744→
+   745→  // Chunk into weeks (7-day groups)
+   746→  const weeks: { period: string; total: number; resolved: number; rate: string; avgTime: string }[] = []
+   747→  for (let w = 0; w < dates.length; w += 7) {
+   748→    const weekDates = dates.slice(w, w + 7)
+   749→    if (weekDates.length === 0) continue
+   750→
+   751→    const periodLabel = `${getDateKey(weekDates[0])} ~ ${getDateKey(weekDates[weekDates.length - 1])}`
+   752→
+   753→    let total = 0
+   754→    let resolved = 0
+   755→    const resTimes: number[] = []
+   756→
+   757→    for (const d of weekDates) {
+   758→      const dayConvs = byDate.get(getDateKey(d)) || []
+   759→      total += dayConvs.length
+   760→      for (const c of dayConvs) {
+   761→        if (c.status === 'resolved' || c.status === 'closed') resolved++
+   762→        const rt = resolutionTimes.get(c.id)
+   763→        if (rt != null) resTimes.push(rt)
+   764→      }
+   765→    }
+   766→
+   767→    weeks.push({
+   768→      period: periodLabel,
+   769→      total,
+   770→      resolved,
+   771→      rate: total > 0 ? `${((resolved / total) * 100).toFixed(1)}%` : '0.0%',
+   772→      avgTime: formatDuration(avg(resTimes)),
+   773→    })
+   774→  }
+   775→
+   776→  return weeks
+   777→}
+   778→
+   779→// ═══════════════════════════════════════════
+   780→// ─── Detail Endpoints ───
+   781→// ═══════════════════════════════════════════
+   782→
+   783→async function handleDetail(
+   784→  detailType: string,
+   785→  detailId: string,
+   786→  start: Date,
+   787→  end: Date,
+   788→) {
+   789→  switch (detailType) {
+   790→    case 'conversations': return getConversationDetail(detailId)
+   791→    case 'agents': return getAgentDetail(detailId, start, end)
+   792→    case 'channels': return getChannelDetail(detailId, start, end)
+   793→    case 'customers': return getCustomerDetail(detailId, start, end)
+   794→    case 'tags': return getTagDetail(detailId, start, end)
+   795→    default: return { error: 'Unknown detail type' }
+   796→  }
+   797→}
+   798→
+   799→// Helper: build a conversation row for detail views
+   800→async function buildConvDetailRow(c: {
+   801→  id: string; createdAt: Date; updatedAt: Date; status: string; channel: string; customerId: string; ownerId: string | null
+   802→}) {
+   803→  const customer = await db.customer.findUnique({
+   804→    where: { id: c.customerId },
+   805→    select: { name: true },
+   806→  })
+   807→  const owner = c.ownerId
+   808→    ? await db.user.findUnique({ where: { id: c.ownerId }, select: { name: true } })
+   809→    : null
+   810→
+   811→  const msgCount = await db.message.count({ where: { conversationId: c.id } })
+   812→
+   813→  // Wait time (first response time)
+   814→  const msgs = await db.message.findMany({
+   815→    where: { conversationId: c.id, senderType: { in: ['customer', 'agent', 'bot'] } },
+   816→    orderBy: { createdAt: 'asc' },
+   817→    select: { senderType: true, createdAt: true },
+   818→  })
+   819→  let waitTimeMs: number | null = null
+   820→  let firstCust: Date | null = null
+   821→  for (const m of msgs) {
+   822→    if (m.senderType === 'customer') { firstCust = m.createdAt; break }
+   823→  }
+   824→  if (firstCust) {
+   825→    for (const m of msgs) {
+   826→      if ((m.senderType === 'agent' || m.senderType === 'bot') && m.createdAt > firstCust) {
+   827→        waitTimeMs = m.createdAt.getTime() - firstCust.getTime()
+   828→        break
+   829→      }
+   830→    }
+   831→  }
+   832→
+   833→  // Resolution time
+   834→  let resTimeMs: number | null = null
+   835→  if (c.status === 'resolved' || c.status === 'closed') {
+   836→    resTimeMs = c.updatedAt.getTime() - c.createdAt.getTime()
+   837→  }
+   838→
+   839→  return {
+   840→    id: c.id,
+   841→    customer: customer?.name || 'Unknown',
+   842→    channel: getChannelName(c.channel),
+   843→    status: c.status,
+   844→    agent: owner?.name || '-',
+   845→    messages: msgCount,
+   846→    waitTime: formatDuration(waitTimeMs || 0),
+   847→    resolutionTime: formatDuration(resTimeMs || 0),
+   848→    satisfaction: '0.0',
+   849→  }
+   850→}
+   851→
+   852→// ─── Conversations Detail ───
+   853→async function getConversationDetail(dateStr: string) {
+   854→  const convStart = new Date(dateStr + 'T00:00:00')
+   855→  const convEnd = new Date(dateStr + 'T00:00:00')
+   856→  convEnd.setDate(convEnd.getDate() + 1)
+   857→
+   858→  const convs = await db.conversation.findMany({
+   859→    where: { createdAt: { gte: convStart, lt: convEnd } },
+   860→    select: {
+   861→      id: true, createdAt: true, updatedAt: true, status: true,
+   862→      channel: true, customerId: true, ownerId: true,
+   863→    },
+   864→    orderBy: { createdAt: 'desc' },
+   865→  })
+   866→
+   867→  const rows = await Promise.all(convs.map(c => buildConvDetailRow(c)))
+   868→  return { type: 'conversations', date: dateStr, conversations: rows }
+   869→}
+   870→
+   871→// ─── Agents Detail ───
+   872→async function getAgentDetail(agentId: string, start: Date, end: Date) {
+   873→  const agent = await db.user.findUnique({
+   874→    where: { id: agentId },
+   875→    select: { id: true, name: true },
+   876→  })
+   877→  if (!agent) return { error: 'Agent not found' }
+   878→
+   879→  const agentConvs = await db.conversation.findMany({
+   880→    where: { ownerId: agentId, createdAt: { gte: start, lt: end } },
+   881→    select: {
+   882→      id: true, createdAt: true, updatedAt: true, status: true,
+   883→      channel: true, customerId: true, ownerId: true,
+   884→    },
+   885→    orderBy: { createdAt: 'desc' },
+   886→    take: 10,
+   887→  })
+   888→
+   889→  const convCount = await db.conversation.count({
+   890→    where: { ownerId: agentId, createdAt: { gte: start, lt: end } },
+   891→  })
+   892→  const resolvedCount = await db.conversation.count({
+   893→    where: { ownerId: agentId, createdAt: { gte: start, lt: end }, status: 'resolved' },
+   894→  })
+   895→  const msgCount = await db.message.count({
+   896→    where: { senderId: agentId, senderType: 'agent', createdAt: { gte: start, lt: end } },
+   897→  })
+   898→
+   899→  // Active hours
+   900→  const agentMsgs = await db.message.findMany({
+   901→    where: { senderId: agentId, senderType: 'agent', createdAt: { gte: start, lt: end } },
+   902→    select: { createdAt: true },
+   903→  })
+   904→  const hourSet = new Set(agentMsgs.map(m => {
+   905→    const d = m.createdAt
+   906→    return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}-${d.getHours()}`
+   907→  }))
+   908→
+   909→  // Avg response time
+   910→  const allConvs = await db.conversation.findMany({
+   911→    where: { ownerId: agentId, createdAt: { gte: start, lt: end } },
+   912→    select: { id: true },
+   913→  })
+   914→  const allConvIds = allConvs.map(c => c.id)
+   915→  const agentMsgsForRt = allConvIds.length > 0
+   916→    ? await db.message.findMany({
+   917→        where: {
+   918→          conversationId: { in: allConvIds },
+   919→          senderType: { in: ['customer', 'agent', 'bot'] },
+   920→        },
+   921→        orderBy: { createdAt: 'asc' },
+   922→        select: { conversationId: true, senderType: true, createdAt: true },
+   923→      })
+   924→    : []
+   925→  const msgsByConv = new Map<string, typeof agentMsgsForRt>()
+   926→  for (const m of agentMsgsForRt) {
+   927→    const list = msgsByConv.get(m.conversationId) || []
+   928→    list.push(m)
+   929→    msgsByConv.set(m.conversationId, list)
+   930→  }
+   931→  const rts: number[] = []
+   932→  for (const [convId, cMsgs] of msgsByConv) {
+   933→    let fc: Date | null = null
+   934→    for (const m of cMsgs) {
+   935→      if (m.senderType === 'customer') { fc = m.createdAt; break }
+   936→    }
+   937→    if (fc) {
+   938→      for (const m of cMsgs) {
+   939→        if ((m.senderType === 'agent' || m.senderType === 'bot') && m.createdAt > fc) {
+   940→          rts.push(m.createdAt.getTime() - fc.getTime())
+   941→          break
+   942→        }
+   943→      }
+   944→    }
+   945→  }
+   946→
+   947→  const recentConvs = await Promise.all(
+   948→    agentConvs.map(async (c) => {
+   949→      const customer = await db.customer.findUnique({
+   950→        where: { id: c.customerId }, select: { name: true },
+   951→      })
+   952→      const msgCnt = await db.message.count({ where: { conversationId: c.id } })
+   953→      return {
+   954→        id: c.id,
+   955→        customer: customer?.name || 'Unknown',
+   956→        channel: getChannelName(c.channel),
+   957→        status: c.status,
+   958→        messages: msgCnt,
+   959→        satisfaction: '0.0',
+   960→      }
+   961→    })
+   962→  )
+   963→
+   964→  return {
+   965→    type: 'agents',
+   966→    agent: {
+   967→      name: agent.name,
+   968→      conversations: convCount,
+   969→      messages: msgCount,
+   970→      avgResponseTime: formatDuration(avg(rts)),
+   971→      resolved: resolvedCount,
+   972→      satisfaction: '0.0',
+   973→      activeHours: `${hourSet.size}h`,
+   974→    },
+   975→    recentConversations: recentConvs,
+   976→  }
+   977→}
+   978→
+   979→// ─── Channels Detail ───
+   980→async function getChannelDetail(channelKey: string, start: Date, end: Date) {
+   981→  // Channel stats for the full range
+   982→  const channelConvs = await db.conversation.findMany({
+   983→    where: { channel: channelKey, createdAt: { gte: start, lt: end } },
+   984→    select: {
+   985→      id: true, createdAt: true, updatedAt: true, status: true, channel: true,
+   986→    },
+   987→  })
+   988→  const convIds = channelConvs.map(c => c.id)
+   989→
+   990→  const totalMsgs = convIds.length > 0
+   991→    ? await db.message.count({ where: { conversationId: { in: convIds } } })
+   992→    : 0
+   993→  const resolved = channelConvs.filter(c => c.status === 'resolved' || c.status === 'closed').length
+   994→
+   995→  // Response times
+   996→  const rtMsgs = convIds.length > 0
+   997→    ? await db.message.findMany({
+   998→        where: { conversationId: { in: convIds }, senderType: { in: ['customer', 'agent', 'bot'] } },
+   999→        orderBy: { createdAt: 'asc' },
+  1000→        select: { conversationId: true, senderType: true, createdAt: true },
+  1001→      })
+  1002→    : []
+  1003→  const byC = new Map<string, typeof rtMsgs>()
+  1004→  for (const m of rtMsgs) {
+  1005→    if (!byC.has(m.conversationId)) byC.set(m.conversationId, [])
+  1006→    byC.get(m.conversationId)!.push(m)
+  1007→  }
+  1008→  const rts: number[] = []
+  1009→  for (const [, cMsgs] of byC) {
+  1010→    let fc: Date | null = null
+  1011→    for (const m of cMsgs) { if (m.senderType === 'customer') { fc = m.createdAt; break } }
+  1012→    if (fc) {
+  1013→      for (const m of cMsgs) {
+  1014→        if ((m.senderType === 'agent' || m.senderType === 'bot') && m.createdAt > fc) {
+  1015→          rts.push(m.createdAt.getTime() - fc.getTime()); break
+  1016→        }
+  1017→      }
+  1018→    }
+  1019→  }
+  1020→
+  1021→  // Daily breakdown for last 7 days
+  1022→  const now = new Date()
+  1023→  const sevenDaysAgo = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6)
+  1024→  const sevenDaysEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1)
+  1025→
+  1026→  const dailyConvs = await db.conversation.findMany({
+  1027→    where: { channel: channelKey, createdAt: { gte: sevenDaysAgo, lt: sevenDaysEnd } },
+  1028→    select: { id: true, createdAt: true, status: true },
+  1029→  })
+  1030→  const dailyConvIds = dailyConvs.map(c => c.id)
+  1031→
+  1032→  const dailyMsgCounts = dailyConvIds.length > 0
+  1033→    ? await db.message.groupBy({
+  1034→        by: ['conversationId'],
+  1035→        where: { conversationId: { in: dailyConvIds } },
+  1036→        _count: { id: true },
+  1037→      })
+  1038→    : []
+  1039→  const dailyMsgMap = new Map(dailyMsgCounts.map(r => [r.conversationId, r._count.id]))
+  1040→
+  1041→  const dailyBreakdown: { date: string; conversations: number; resolved: number; messages: number }[] = []
+  1042→  const dayCur = new Date(sevenDaysAgo)
+  1043→  while (dayCur < sevenDaysEnd) {
+  1044→    const dayKey = getDateKey(dayCur)
+  1045→    const dayConvs = dailyConvs.filter(c => getDateKey(c.createdAt) === dayKey)
+  1046→    dailyBreakdown.push({
+  1047→      date: dayKey,
+  1048→      conversations: dayConvs.length,
+  1049→      resolved: dayConvs.filter(c => c.status === 'resolved' || c.status === 'closed').length,
+  1050→      messages: dayConvs.reduce((s, c) => s + (dailyMsgMap.get(c.id) || 0), 0),
+  1051→    })
+  1052→    dayCur.setDate(dayCur.getDate() + 1)
+  1053→  }
+  1054→
+  1055→  return {
+  1056→    type: 'channels',
+  1057→    channel: {
+  1058→      name: getChannelName(channelKey),
+  1059→      conversations: channelConvs.length,
+  1060→      messages: totalMsgs,
+  1061→      avgResponseTime: formatDuration(avg(rts)),
+  1062→      resolutionRate: channelConvs.length > 0
+  1063→        ? `${Math.round((resolved / channelConvs.length) * 100)}%`
+  1064→        : '0%',
+  1065→      satisfaction: '0.0',
+  1066→    },
+  1067→    dailyBreakdown,
+  1068→  }
+  1069→}
+  1070→
+  1071→// ─── Customers Detail ───
+  1072→async function getCustomerDetail(customerId: string, start: Date, end: Date) {
+  1073→  const customer = await db.customer.findUnique({
+  1074→    where: { id: customerId },
+  1075→    select: { id: true, name: true },
+  1076→  })
+  1077→  if (!customer) return { error: 'Customer not found' }
+  1078→
+  1079→  // Get ALL conversations for this customer (not just date range, for full history)
+  1080→  const allConvs = await db.conversation.findMany({
+  1081→    where: { customerId },
+  1082→    select: { id: true, createdAt: true, updatedAt: true, status: true, channel: true, ownerId: true },
+  1083→    orderBy: { createdAt: 'desc' },
+  1084→  })
+  1085→  const allConvIds = allConvs.map(c => c.id)
+  1086→
+  1087→  const totalMsgs = allConvIds.length > 0
+  1088→    ? await db.message.count({ where: { conversationId: { in: allConvIds } } })
+  1089→    : 0
+  1090→
+  1091→  // Last active: latest message
+  1092→  const latestMsg = allConvIds.length > 0
+  1093→    ? await db.message.findFirst({
+  1094→        where: { conversationId: { in: allConvIds } },
+  1095→        orderBy: { createdAt: 'desc' },
+  1096→        select: { createdAt: true },
+  1097→      })
+  1098→    : null
+  1099→
+  1100→  // Primary channel
+  1101→  const channelCounts = new Map<string, number>()
+  1102→  for (const c of allConvs) {
+  1103→    channelCounts.set(c.channel, (channelCounts.get(c.channel) || 0) + 1)
+  1104→  }
+  1105→  let primaryChannel = 'website'
+  1106→  let maxCh = 0
+  1107→  for (const [ch, cnt] of channelCounts) {
+  1108→    if (cnt > maxCh) { maxCh = cnt; primaryChannel = ch }
+  1109→  }
+  1110→
+  1111→  // Value from leads
+  1112→  const leadSum = await db.lead.aggregate({
+  1113→    where: { customerId },
+  1114→    _sum: { value: true },
+  1115→  })
+  1116→
+  1117→  // Conversation history (limited)
+  1118→  const historyConvs = allConvs.slice(0, 20)
+  1119→  const historyIds = historyConvs.map(c => c.id)
+  1120→  const histMsgCounts = historyIds.length > 0
+  1121→    ? await db.message.groupBy({
+  1122→        by: ['conversationId'],
+  1123→        where: { conversationId: { in: historyIds } },
+  1124→        _count: { id: true },
+  1125→      })
+  1126→    : []
+  1127→  const histMsgMap = new Map(histMsgCounts.map(r => [r.conversationId, r._count.id]))
+  1128→
+  1129→  const conversationHistory = await Promise.all(
+  1130→    historyConvs.map(async (c) => {
+  1131→      const owner = c.ownerId
+  1132→        ? await db.user.findUnique({ where: { id: c.ownerId }, select: { name: true } })
+  1133→        : null
+  1134→      let resTimeMs: number | null = null
+  1135→      if (c.status === 'resolved' || c.status === 'closed') {
+  1136→        resTimeMs = c.updatedAt.getTime() - c.createdAt.getTime()
+  1137→      }
+  1138→      return {
+  1139→        id: c.id,
+  1140→        date: getDateKey(c.createdAt),
+  1141→        channel: getChannelName(c.channel),
+  1142→        status: c.status,
+  1143→        agent: owner?.name || '-',
+  1144→        messages: histMsgMap.get(c.id) || 0,
+  1145→        resolutionTime: formatDuration(resTimeMs || 0),
+  1146→      }
+  1147→    })
+  1148→  )
+  1149→
+  1150→  return {
+  1151→    type: 'customers',
+  1152→    customer: {
+  1153→      name: customer.name,
+  1154→      conversations: allConvs.length,
+  1155→      messages: totalMsgs,
+  1156→      lastActive: latestMsg ? timeAgo(latestMsg.createdAt) : 'N/A',
+  1157→      primaryChannel,
+  1158→      value: formatValue(leadSum._sum.value),
+  1159→    },
+  1160→    conversationHistory,
+  1161→  }
+  1162→}
+  1163→
+  1164→// ─── Tags Detail ───
+  1165→async function getTagDetail(tagId: string, start: Date, end: Date) {
+  1166→  const tag = await db.tag.findUnique({
+  1167→    where: { id: tagId },
+  1168→    select: { id: true, name: true },
+  1169→  })
+  1170→  if (!tag) return { error: 'Tag not found' }
+  1171→
+  1172→  const convTags = await db.conversationTag.findMany({
+  1173→    where: { tagId },
+  1174→    select: {
+  1175→      conversation: {
+  1176→        select: {
+  1177→          id: true, createdAt: true, updatedAt: true, status: true,
+  1178→          channel: true, customerId: true, ownerId: true,
+  1179→        },
+  1180→      },
+  1181→    },
+  1182→  })
+  1183→
+  1184→  const conversations = await Promise.all(
+  1185→    convTags.map(ct => buildConvDetailRow(ct.conversation))
+  1186→  )
+  1187→
+  1188→  return { type: 'tags', tag: tag.name, conversations }
+  1189→}
+  1190→
+  1191→// ═══════════════════════════════════════════
+  1192→// ─── Main GET Handler ───
+  1193→// ═══════════════════════════════════════════
+  1194→
+  1195→export async function GET(request: Request) {
+  1196→  const { searchParams } = new URL(request.url)
+  1197→  const type = searchParams.get('type') || 'conversations'
+  1198→  const days = parseInt(searchParams.get('days') || '7')
+  1199→  const startDate = searchParams.get('startDate')
+  1200→  const endDate = searchParams.get('endDate')
+  1201→  const detailType = searchParams.get('detailType')
+  1202→  const detailId = searchParams.get('detailId')
+  1203→
+  1204→  const { start, end } = getDateRange(startDate, endDate, days)
+  1205→
+  1206→  // Detail endpoint
+  1207→  if (detailType && detailId) {
+  1208→    return NextResponse.json(await handleDetail(detailType, detailId, start, end))
+  1209→  }
+  1210→
+  1211→  // Report types
+  1212→  switch (type) {
+  1213→    case 'conversations':
+  1214→      return NextResponse.json(await getConversationsReport(start, end))
+  1215→    case 'agents':
+  1216→      return NextResponse.json(await getAgentsReport(start, end))
+  1217→    case 'sla':
+  1218→      return NextResponse.json(await getSlaReport(start, end))
+  1219→    case 'channels':
+  1220→      return NextResponse.json(await getChannelsReport(start, end))
+  1221→    case 'customers':
+  1222→      return NextResponse.json(await getCustomersReport(start, end))
+  1223→    case 'messages':
+  1224→      return NextResponse.json(await getMessagesReport(start, end))
+  1225→    case 'responseTime':
+  1226→      return NextResponse.json(await getResponseTimeReport(start, end))
+  1227→    case 'botPerformance':
+  1228→      return NextResponse.json(await getBotPerformanceReport(start, end))
+  1229→    case 'tags':
+  1230→      return NextResponse.json(await getTagsReport(start, end))
+  1231→    case 'resolutionTrends':
+  1232→      return NextResponse.json(await getResolutionTrendsReport(start, end))
+  1233→    default:
+  1234→      return NextResponse.json({ error: 'Unknown report type' }, { status: 400 })
+  1235→  }
+  1236→}
+  1237→

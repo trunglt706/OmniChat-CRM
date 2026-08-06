@@ -5,13 +5,16 @@ import type { NextRequest } from 'next/server'
 const SECRET = process.env.NEXTAUTH_SECRET || 'omnichat-dev-secret-change-in-production'
 
 interface SessionUser {
-  id: string
+  id: number
+  uuid: string
   name: string
   email: string
   role: string
   avatar: string | null
-  phone: string
+  phone: string | null
+  bio: string | null
   status: string
+  settings: string | null
 }
 
 /**
@@ -27,20 +30,26 @@ export async function getAuthUser(req: NextRequest): Promise<SessionUser | null>
 
   if (!token || !token.sub) return null
 
+  const userId = Number(token.sub)
+  if (isNaN(userId)) return null
+
   const user = await db.user.findUnique({
-    where: { id: token.sub as string },
-    select: { id: true, name: true, email: true, role: true, avatar: true, status: true },
+    where: { id: userId },
+    select: { id: true, uuid: true, name: true, email: true, role: true, avatar: true, phone: true, bio: true, status: true, settings: true },
   })
 
   if (!user) return null
 
   return {
     id: user.id,
+    uuid: user.uuid,
     name: user.name,
     email: user.email,
     role: user.role,
     avatar: user.avatar,
-    phone: '', // Phone not in User model, kept for compat
+    phone: user.phone,
+    bio: user.bio,
     status: user.status,
+    settings: user.settings,
   }
 }

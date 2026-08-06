@@ -1,0 +1,502 @@
+   501→              <TableHead className="text-xs font-semibold text-right">{t('reports.conversations.col.open')}</TableHead>
+   502→              <TableHead className="text-xs font-semibold text-right">{t('reports.conversations.col.resolved')}</TableHead>
+   503→              <TableHead className="text-xs font-semibold text-right">{t('reports.conversations.col.closed')}</TableHead>
+   504→              <TableHead className="text-xs font-semibold text-right">{t('reports.conversations.col.avgResponse')}</TableHead>
+   505→              <TableHead className="text-xs font-semibold text-right">{t('reports.conversations.col.avgResolution')}</TableHead>
+   506→            </TableRow>
+   507→          </TableHeader>
+   508→          <TableBody>
+   509→            {conversationsData.map((row, i) => (
+   510→              <TableRow
+   511→                key={i}
+   512→                className="text-xs cursor-pointer hover:bg-foreground/[0.04] transition-colors"
+   513→                onClick={() => handleRowClick('conversations', row.date, row.date)}
+   514→              >
+   515→                <TableCell className="font-medium">{row.date}</TableCell>
+   516→                <TableCell className="text-right tabular-nums font-semibold">{row.total}</TableCell>
+   517→                <TableCell className="text-right tabular-nums">
+   518→                  <Badge variant="secondary" className="text-[10px] h-5 px-1.5 bg-amber-500/10 text-amber-600 dark:text-amber-400 hover:bg-amber-500/15">{row.open}</Badge>
+   519→                </TableCell>
+   520→                <TableCell className="text-right tabular-nums">
+   521→                  <Badge variant="secondary" className="text-[10px] h-5 px-1.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/15">{row.resolved}</Badge>
+   522→                </TableCell>
+   523→                <TableCell className="text-right tabular-nums">{row.closed}</TableCell>
+   524→                <TableCell className="text-right tabular-nums text-muted-foreground">{row.avgResponseTime}</TableCell>
+   525→                <TableCell className="text-right tabular-nums text-muted-foreground">{row.avgResolutionTime}</TableCell>
+   526→              </TableRow>
+   527→            ))}
+   528→          </TableBody>
+   529→        </Table>
+   530→      </div>
+   531→      {conversationsData.length === 0 && !loading && (
+   532→        <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+   533→          <MessageSquare className="h-8 w-8 mb-2 opacity-40" />
+   534→          <p className="text-xs">{t('reports.noData')}</p>
+   535→        </div>
+   536→      )}
+   537→    </div>
+   538→  )
+   539→
+   540→  const renderAgentsTable = () => (
+   541→    <div className="glass-card rounded-2xl p-4 md:p-5">
+   542→      <div className="overflow-x-auto">
+   543→        <Table>
+   544→          <TableHeader>
+   545→            <TableRow className="hover:bg-transparent">
+   546→              <TableHead className="text-xs font-semibold">{t('reports.agents.col.name')}</TableHead>
+   547→              <TableHead className="text-xs font-semibold text-right">{t('reports.agents.col.conversations')}</TableHead>
+   548→              <TableHead className="text-xs font-semibold text-right">{t('reports.agents.col.messages')}</TableHead>
+   549→              <TableHead className="text-xs font-semibold text-right">{t('reports.agents.col.avgResponse')}</TableHead>
+   550→              <TableHead className="text-xs font-semibold text-right">{t('reports.agents.col.resolved')}</TableHead>
+   551→              <TableHead className="text-xs font-semibold text-right">{t('reports.agents.col.satisfaction')}</TableHead>
+   552→              <TableHead className="text-xs font-semibold text-right">{t('reports.agents.col.activeHours')}</TableHead>
+   553→            </TableRow>
+   554→          </TableHeader>
+   555→          <TableBody>
+   556→            {agentsData.map((row, i) => (
+   557→              <TableRow
+   558→                key={i}
+   559→                className="text-xs cursor-pointer hover:bg-foreground/[0.04] transition-colors"
+   560→                onClick={() => handleRowClick('agents', row.id, row.name)}
+   561→              >
+   562→                <TableCell className="font-medium">
+   563→                  <div className="flex items-center gap-2">
+   564→                    <div className={cn(
+   565→                      'h-2 w-2 rounded-full flex-shrink-0',
+   566→                      row.status === 'online' ? 'bg-emerald-500' : row.status === 'busy' ? 'bg-amber-500' : 'bg-gray-400'
+   567→                    )} />
+   568→                    {row.name}
+   569→                  </div>
+   570→                </TableCell>
+   571→                <TableCell className="text-right tabular-nums">{row.conversations}</TableCell>
+   572→                <TableCell className="text-right tabular-nums">{row.messages}</TableCell>
+   573→                <TableCell className="text-right tabular-nums text-muted-foreground">{row.avgResponseTime}</TableCell>
+   574→                <TableCell className="text-right tabular-nums">
+   575→                  <Badge variant="secondary" className="text-[10px] h-5 px-1.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/15">{row.resolved}</Badge>
+   576→                </TableCell>
+   577→                <TableCell className="text-right tabular-nums">
+   578→                  <span className={cn(
+   579→                    'font-semibold',
+   580→                    parseFloat(row.satisfaction) >= 4.5 ? 'text-emerald-500' : parseFloat(row.satisfaction) >= 4.0 ? 'text-amber-500' : 'text-rose-500'
+   581→                  )}>
+   582→                    {row.satisfaction} ★
+   583→                  </span>
+   584→                </TableCell>
+   585→                <TableCell className="text-right tabular-nums text-muted-foreground">{row.activeHours}</TableCell>
+   586→              </TableRow>
+   587→            ))}
+   588→          </TableBody>
+   589→        </Table>
+   590→      </div>
+   591→    </div>
+   592→  )
+   593→
+   594→  const renderSlaTable = () => (
+   595→    <div className="glass-card rounded-2xl p-4 md:p-5">
+   596→      <div className="overflow-x-auto">
+   597→        <Table>
+   598→          <TableHeader>
+   599→            <TableRow className="hover:bg-transparent">
+   600→              <TableHead className="text-xs font-semibold">{t('reports.sla.col.metric')}</TableHead>
+   601→              <TableHead className="text-xs font-semibold text-center">{t('reports.sla.col.target')}</TableHead>
+   602→              <TableHead className="text-xs font-semibold text-center">{t('reports.sla.col.actual')}</TableHead>
+   603→              <TableHead className="text-xs font-semibold text-right">{t('reports.sla.col.compliance')}</TableHead>
+   604→            </TableRow>
+   605→          </TableHeader>
+   606→          <TableBody>
+   607→            {slaData.map((row, i) => {
+   608→              const complianceNum = parseInt(row.compliance) || 0
+   609→              return (
+   610→                <TableRow key={i} className="text-xs">
+   611→                  <TableCell className="font-medium">{row.metric}</TableCell>
+   612→                  <TableCell className="text-center">
+   613→                    <Badge variant="outline" className="text-[10px] h-5 px-2 font-mono">{row.target}</Badge>
+   614→                  </TableCell>
+   615→                  <TableCell className="text-center tabular-nums font-medium">{row.actual}</TableCell>
+   616→                  <TableCell className="text-right">
+   617→                    <Badge variant="secondary" className={cn(
+   618→                      'text-[10px] h-5 px-2 font-mono font-semibold',
+   619→                      complianceNum >= 85 ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/15'
+   620→                        : complianceNum >= 70 ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 hover:bg-amber-500/15'
+   621→                        : 'bg-rose-500/10 text-rose-600 dark:text-rose-400 hover:bg-rose-500/15'
+   622→                    )}>
+   623→                      {row.compliance}
+   624→                    </Badge>
+   625→                  </TableCell>
+   626→                </TableRow>
+   627→              )
+   628→            })}
+   629→          </TableBody>
+   630→        </Table>
+   631→      </div>
+   632→    </div>
+   633→  )
+   634→
+   635→  const renderChannelsTable = () => (
+   636→    <div className="glass-card rounded-2xl p-4 md:p-5">
+   637→      <div className="overflow-x-auto">
+   638→        <Table>
+   639→          <TableHeader>
+   640→            <TableRow className="hover:bg-transparent">
+   641→              <TableHead className="text-xs font-semibold">{t('reports.channels.col.channel')}</TableHead>
+   642→              <TableHead className="text-xs font-semibold text-right">{t('reports.channels.col.conversations')}</TableHead>
+   643→              <TableHead className="text-xs font-semibold text-right">{t('reports.channels.col.messages')}</TableHead>
+   644→              <TableHead className="text-xs font-semibold text-right">{t('reports.channels.col.avgResponse')}</TableHead>
+   645→              <TableHead className="text-xs font-semibold text-right">{t('reports.channels.col.resolution')}</TableHead>
+   646→              <TableHead className="text-xs font-semibold text-right">{t('reports.channels.col.satisfaction')}</TableHead>
+   647→            </TableRow>
+   648→          </TableHeader>
+   649→          <TableBody>
+   650→            {channelsData.map((row, i) => (
+   651→              <TableRow
+   652→                key={i}
+   653→                className="text-xs cursor-pointer hover:bg-foreground/[0.04] transition-colors"
+   654→                onClick={() => handleRowClick('channels', row.id, row.channel)}
+   655→              >
+   656→                <TableCell className="font-medium">{row.channel}</TableCell>
+   657→                <TableCell className="text-right tabular-nums">{row.conversations}</TableCell>
+   658→                <TableCell className="text-right tabular-nums">{row.messages}</TableCell>
+   659→                <TableCell className="text-right tabular-nums text-muted-foreground">{row.avgResponseTime}</TableCell>
+   660→                <TableCell className="text-right tabular-nums">{row.resolutionRate}</TableCell>
+   661→                <TableCell className="text-right tabular-nums">
+   662→                  <span className={cn(
+   663→                    'font-semibold',
+   664→                    parseFloat(row.satisfaction) >= 4.5 ? 'text-emerald-500' : parseFloat(row.satisfaction) >= 4.0 ? 'text-amber-500' : 'text-rose-500'
+   665→                  )}>
+   666→                    {row.satisfaction} ★
+   667→                  </span>
+   668→                </TableCell>
+   669→              </TableRow>
+   670→            ))}
+   671→          </TableBody>
+   672→        </Table>
+   673→      </div>
+   674→    </div>
+   675→  )
+   676→
+   677→  const renderCustomersTable = () => (
+   678→    <div className="glass-card rounded-2xl p-4 md:p-5">
+   679→      <div className="overflow-x-auto">
+   680→        <Table>
+   681→          <TableHeader>
+   682→            <TableRow className="hover:bg-transparent">
+   683→              <TableHead className="text-xs font-semibold">{t('reports.customers.col.name')}</TableHead>
+   684→              <TableHead className="text-xs font-semibold text-right">{t('reports.customers.col.conversations')}</TableHead>
+   685→              <TableHead className="text-xs font-semibold text-right">{t('reports.customers.col.messages')}</TableHead>
+   686→              <TableHead className="text-xs font-semibold text-right">{t('reports.customers.col.lastActive')}</TableHead>
+   687→              <TableHead className="text-xs font-semibold text-center">{t('reports.customers.col.channel')}</TableHead>
+   688→              <TableHead className="text-xs font-semibold text-right">{t('reports.customers.col.value')}</TableHead>
+   689→            </TableRow>
+   690→          </TableHeader>
+   691→          <TableBody>
+   692→            {customersData.map((row, i) => (
+   693→              <TableRow
+   694→                key={i}
+   695→                className="text-xs cursor-pointer hover:bg-foreground/[0.04] transition-colors"
+   696→                onClick={() => handleRowClick('customers', row.id, row.name)}
+   697→              >
+   698→                <TableCell className="font-medium">{row.name}</TableCell>
+   699→                <TableCell className="text-right tabular-nums">{row.conversations}</TableCell>
+   700→                <TableCell className="text-right tabular-nums">{row.messages}</TableCell>
+   701→                <TableCell className="text-right tabular-nums text-muted-foreground">{row.lastActive}</TableCell>
+   702→                <TableCell className="text-center">
+   703→                  <Badge variant="outline" className="text-[10px] h-5 px-1.5">{CHANNEL_NAMES_MAP[row.primaryChannel] || row.primaryChannel}</Badge>
+   704→                </TableCell>
+   705→                <TableCell className="text-right tabular-nums font-semibold text-emerald-600 dark:text-emerald-400">{row.value}</TableCell>
+   706→              </TableRow>
+   707→            ))}
+   708→          </TableBody>
+   709→        </Table>
+   710→      </div>
+   711→    </div>
+   712→  )
+   713→
+   714→  const renderMessagesTab = () => (
+   715→    <div className="space-y-4">
+   716→      {messagesData && (
+   717→        <div className="glass-card rounded-2xl p-4 md:p-5 flex items-center gap-3">
+   718→          <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center shadow-sm">
+   719→            <TrendingUp className="h-4.5 w-4.5 text-white" />
+   720→          </div>
+   721→          <div>
+   722→            <p className="text-[11px] text-muted-foreground font-medium">{t('reports.messages.peakHour')}</p>
+   723→            <p className="text-sm font-bold tabular-nums">{messagesData.peakHour}</p>
+   724→          </div>
+   725→        </div>
+   726→      )}
+   727→      <div id="chart-messages" ref={chartRefMessages} className="glass-card rounded-2xl p-4 md:p-5">
+   728→        <p className="text-xs font-semibold mb-4">{t('reports.messages.byHour')}</p>
+   729→        {messagesData && messagesData.hourly && (
+   730→          <div className="h-64 md:h-80">
+   731→            <ResponsiveContainer width="100%" height="100%">
+   732→              <BarChart data={messagesData.hourly} margin={{ top: 4, right: 4, left: -20, bottom: 4 }}>
+   733→                <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
+   734→                <XAxis dataKey="period" tick={{ fontSize: 10 }} interval={2} />
+   735→                <YAxis tick={{ fontSize: 10 }} />
+   736→                <Tooltip contentStyle={{ fontSize: 12, borderRadius: 12, border: '1px solid oklch(0 0 0 / 0.06)', boxShadow: '0 4px 12px oklch(0 0 0 / 0.08)' }} />
+   737→                <Legend wrapperStyle={{ fontSize: 11 }} />
+   738→                <Bar dataKey="incoming" name={t('reports.messages.col.incoming')} fill="#10b981" radius={[3, 3, 0, 0]} />
+   739→                <Bar dataKey="outgoing" name={t('reports.messages.col.outgoing')} fill="#8b5cf6" radius={[3, 3, 0, 0]} />
+   740→              </BarChart>
+   741→            </ResponsiveContainer>
+   742→          </div>
+   743→        )}
+   744→      </div>
+   745→      <div className="glass-card rounded-2xl p-4 md:p-5">
+   746→        <div className="overflow-x-auto max-h-96 overflow-y-auto">
+   747→          <Table>
+   748→            <TableHeader>
+   749→              <TableRow className="hover:bg-transparent">
+   750→                <TableHead className="text-xs font-semibold">{t('reports.messages.col.period')}</TableHead>
+   751→                <TableHead className="text-xs font-semibold text-right">{t('reports.messages.col.incoming')}</TableHead>
+   752→                <TableHead className="text-xs font-semibold text-right">{t('reports.messages.col.outgoing')}</TableHead>
+   753→                <TableHead className="text-xs font-semibold text-right">{t('reports.messages.col.total')}</TableHead>
+   754→              </TableRow>
+   755→            </TableHeader>
+   756→            <TableBody>
+   757→              {messagesData?.hourly?.map((row, i) => (
+   758→                <TableRow key={i} className="text-xs">
+   759→                  <TableCell className="font-medium font-mono">{row.period}</TableCell>
+   760→                  <TableCell className="text-right tabular-nums text-emerald-600 dark:text-emerald-400">{row.incoming}</TableCell>
+   761→                  <TableCell className="text-right tabular-nums text-violet-600 dark:text-violet-400">{row.outgoing}</TableCell>
+   762→                  <TableCell className="text-right tabular-nums font-semibold">{row.total}</TableCell>
+   763→                </TableRow>
+   764→              ))}
+   765→            </TableBody>
+   766→          </Table>
+   767→        </div>
+   768→      </div>
+   769→    </div>
+   770→  )
+   771→
+   772→  // ─── Response Time Distribution ───
+   773→  const renderResponseTimeTab = () => {
+   774→    if (!responseTimeData) return null
+   775→    const { buckets, stats } = responseTimeData
+   776→    return (
+   777→      <div className="space-y-4">
+   778→        {/* Percentile stats */}
+   779→        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+   780→          {[
+   781→            { label: t('reports.responseTime.avgLabel'), value: stats.avg, color: 'from-blue-500 to-cyan-500' },
+   782→            { label: t('reports.responseTime.p50'), value: stats.p50, color: 'from-emerald-500 to-teal-500' },
+   783→            { label: t('reports.responseTime.p90'), value: stats.p90, color: 'from-amber-500 to-orange-500' },
+   784→            { label: t('reports.responseTime.p99'), value: stats.p99, color: 'from-rose-500 to-pink-500' },
+   785→          ].map((s, i) => (
+   786→            <div key={i} className="glass-card rounded-xl p-3 text-center">
+   787→              <p className="text-[10px] text-muted-foreground font-medium">{s.label}</p>
+   788→              <p className="text-sm font-bold mt-1 tabular-nums">{s.value}</p>
+   789→            </div>
+   790→          ))}
+   791→        </div>
+   792→        {/* Chart */}
+   793→        <div id="chart-responseTime" ref={chartRefResponseTime} className="glass-card rounded-2xl p-4 md:p-5">
+   794→          <div className="h-56 md:h-64">
+   795→            <ResponsiveContainer width="100%" height="100%">
+   796→              <BarChart data={buckets} margin={{ top: 4, right: 4, left: -20, bottom: 4 }}>
+   797→                <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
+   798→                <XAxis dataKey="bucket" tick={{ fontSize: 10 }} />
+   799→                <YAxis tick={{ fontSize: 10 }} />
+   800→                <Tooltip contentStyle={{ fontSize: 12, borderRadius: 12, border: '1px solid oklch(0 0 0 / 0.06)' }} />
+   801→                <Bar dataKey="count" name={t('reports.responseTime.col.count')} fill="#8b5cf6" radius={[3, 3, 0, 0]} />
+   802→              </BarChart>
+   803→            </ResponsiveContainer>
+   804→          </div>
+   805→        </div>
+   806→        {/* Table */}
+   807→        <div className="glass-card rounded-2xl p-4 md:p-5">
+   808→          <div className="overflow-x-auto">
+   809→            <Table>
+   810→              <TableHeader>
+   811→                <TableRow className="hover:bg-transparent">
+   812→                  <TableHead className="text-xs font-semibold">{t('reports.responseTime.col.bucket')}</TableHead>
+   813→                  <TableHead className="text-xs font-semibold text-right">{t('reports.responseTime.col.count')}</TableHead>
+   814→                  <TableHead className="text-xs font-semibold text-right">{t('reports.responseTime.col.percentage')}</TableHead>
+   815→                  <TableHead className="text-xs font-semibold text-right">{t('reports.responseTime.col.avgSatisfaction')}</TableHead>
+   816→                </TableRow>
+   817→              </TableHeader>
+   818→              <TableBody>
+   819→                {buckets.map((row: any, i: number) => (
+   820→                  <TableRow key={i} className="text-xs">
+   821→                    <TableCell className="font-medium">{row.bucket}</TableCell>
+   822→                    <TableCell className="text-right tabular-nums font-semibold">{row.count}</TableCell>
+   823→                    <TableCell className="text-right tabular-nums">{row.percentage}</TableCell>
+   824→                    <TableCell className="text-right tabular-nums">
+   825→                      <span className={cn(
+   826→                        'font-semibold',
+   827→                        parseFloat(row.avgSatisfaction) >= 4.5 ? 'text-emerald-500' : parseFloat(row.avgSatisfaction) >= 4.0 ? 'text-amber-500' : 'text-rose-500'
+   828→                      )}>
+   829→                        {row.avgSatisfaction} ★
+   830→                      </span>
+   831→                    </TableCell>
+   832→                  </TableRow>
+   833→                ))}
+   834→              </TableBody>
+   835→            </Table>
+   836→          </div>
+   837→        </div>
+   838→      </div>
+   839→    )
+   840→  }
+   841→
+   842→  // ─── Bot Performance ───
+   843→  const renderBotPerformanceTab = () => {
+   844→    if (!botPerformanceData) return null
+   845→    const trendIcon = (trend: string) => {
+   846→      if (trend === 'up') return <ArrowUpRight className="h-3.5 w-3.5 text-emerald-500" />
+   847→      if (trend === 'down') return <ArrowDownRight className="h-3.5 w-3.5 text-rose-500" />
+   848→      return <Minus className="h-3.5 w-3.5 text-amber-500" />
+   849→    }
+   850→    const metricLabel = (key: string) => {
+   851→      const map: Record<string, string> = {
+   852→        totalHandled: t('reports.botPerformance.totalHandled'),
+   853→        handoffRate: t('reports.botPerformance.handoffRate'),
+   854→        avgResolutionTime: t('reports.botPerformance.avgResolutionTime'),
+   855→        customerSatisfaction: t('reports.botPerformance.customerSatisfaction'),
+   856→        conversationsSaved: t('reports.botPerformance.conversationsSaved'),
+   857→        accuracy: t('reports.botPerformance.accuracy'),
+   858→      }
+   859→      return map[key] || key
+   860→    }
+   861→    return (
+   862→      <div className="glass-card rounded-2xl p-4 md:p-5">
+   863→        <div className="overflow-x-auto">
+   864→          <Table>
+   865→            <TableHeader>
+   866→              <TableRow className="hover:bg-transparent">
+   867→                <TableHead className="text-xs font-semibold">{t('reports.botPerformance.col.metric')}</TableHead>
+   868→                <TableHead className="text-xs font-semibold text-right">{t('reports.botPerformance.col.value')}</TableHead>
+   869→                <TableHead className="text-xs font-semibold text-center">{t('reports.botPerformance.col.trend')}</TableHead>
+   870→              </TableRow>
+   871→            </TableHeader>
+   872→            <TableBody>
+   873→              {botPerformanceData.metrics.map((row: any, i: number) => (
+   874→                <TableRow key={i} className="text-xs">
+   875→                  <TableCell className="font-medium">{metricLabel(row.metric)}</TableCell>
+   876→                  <TableCell className="text-right tabular-nums font-semibold">{row.value}</TableCell>
+   877→                  <TableCell className="text-center">
+   878→                    <div className="flex items-center justify-center gap-1.5">
+   879→                      {trendIcon(row.trend)}
+   880→                      <span className="text-[10px] text-muted-foreground">{t(`reports.botPerformance.trend.${row.trend}`)}</span>
+   881→                    </div>
+   882→                  </TableCell>
+   883→                </TableRow>
+   884→              ))}
+   885→            </TableBody>
+   886→          </Table>
+   887→        </div>
+   888→      </div>
+   889→    )
+   890→  }
+   891→
+   892→  // ─── Tags Analysis ───
+   893→  const renderTagsTable = () => (
+   894→    <div className="glass-card rounded-2xl p-4 md:p-5">
+   895→      <div className="overflow-x-auto">
+   896→        <Table>
+   897→          <TableHeader>
+   898→            <TableRow className="hover:bg-transparent">
+   899→              <TableHead className="text-xs font-semibold">{t('reports.tags.col.tag')}</TableHead>
+   900→              <TableHead className="text-xs font-semibold text-right">{t('reports.tags.col.count')}</TableHead>
+   901→              <TableHead className="text-xs font-semibold text-right">{t('reports.tags.col.conversations')}</TableHead>
+   902→              <TableHead className="text-xs font-semibold text-right">{t('reports.tags.col.avgResolution')}</TableHead>
+   903→              <TableHead className="text-xs font-semibold text-right">{t('reports.tags.col.satisfaction')}</TableHead>
+   904→            </TableRow>
+   905→          </TableHeader>
+   906→          <TableBody>
+   907→            {tagsData.map((row, i) => (
+   908→              <TableRow
+   909→                key={i}
+   910→                className="text-xs cursor-pointer hover:bg-foreground/[0.04] transition-colors"
+   911→                onClick={() => handleRowClick('tags', row.id, row.tag)}
+   912→              >
+   913→                <TableCell className="font-medium">
+   914→                  <div className="flex items-center gap-1.5">
+   915→                    <Tag className="h-3 w-3 text-violet-500" />
+   916→                    {row.tag}
+   917→                  </div>
+   918→                </TableCell>
+   919→                <TableCell className="text-right tabular-nums">{row.count}</TableCell>
+   920→                <TableCell className="text-right tabular-nums font-semibold">{row.conversations}</TableCell>
+   921→                <TableCell className="text-right tabular-nums text-muted-foreground">{row.avgResolution}</TableCell>
+   922→                <TableCell className="text-right tabular-nums">
+   923→                  <span className={cn(
+   924→                    'font-semibold',
+   925→                    parseFloat(row.satisfaction) >= 4.5 ? 'text-emerald-500' : parseFloat(row.satisfaction) >= 4.0 ? 'text-amber-500' : 'text-rose-500'
+   926→                  )}>
+   927→                    {row.satisfaction} ★
+   928→                  </span>
+   929→                </TableCell>
+   930→              </TableRow>
+   931→            ))}
+   932→          </TableBody>
+   933→        </Table>
+   934→      </div>
+   935→    </div>
+   936→  )
+   937→
+   938→  // ─── Resolution Trends ───
+   939→  const renderResolutionTrendsTab = () => (
+   940→    <div className="space-y-4">
+   941→      <div id="chart-resolutionTrends" ref={chartRefResolutionTrends} className="glass-card rounded-2xl p-4 md:p-5">
+   942→        <div className="h-64 md:h-72">
+   943→          <ResponsiveContainer width="100%" height="100%">
+   944→            <LineChart data={resolutionTrendsData} margin={{ top: 4, right: 4, left: -20, bottom: 4 }}>
+   945→              <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
+   946→              <XAxis dataKey="period" tick={{ fontSize: 9 }} interval={0} angle={-15} textAnchor="end" height={50} />
+   947→              <YAxis tick={{ fontSize: 10 }} />
+   948→              <Tooltip contentStyle={{ fontSize: 12, borderRadius: 12, border: '1px solid oklch(0 0 0 / 0.06)' }} />
+   949→              <Legend wrapperStyle={{ fontSize: 11 }} />
+   950→              <Line type="monotone" dataKey="total" name={t('reports.resolutionTrends.col.total')} stroke="#8b5cf6" strokeWidth={2} dot={{ r: 3 }} />
+   951→              <Line type="monotone" dataKey="resolved" name={t('reports.resolutionTrends.col.resolved')} stroke="#10b981" strokeWidth={2} dot={{ r: 3 }} />
+   952→            </LineChart>
+   953→          </ResponsiveContainer>
+   954→        </div>
+   955→      </div>
+   956→      <div className="glass-card rounded-2xl p-4 md:p-5">
+   957→        <div className="overflow-x-auto">
+   958→          <Table>
+   959→            <TableHeader>
+   960→              <TableRow className="hover:bg-transparent">
+   961→                <TableHead className="text-xs font-semibold">{t('reports.resolutionTrends.col.period')}</TableHead>
+   962→                <TableHead className="text-xs font-semibold text-right">{t('reports.resolutionTrends.col.total')}</TableHead>
+   963→                <TableHead className="text-xs font-semibold text-right">{t('reports.resolutionTrends.col.resolved')}</TableHead>
+   964→                <TableHead className="text-xs font-semibold text-right">{t('reports.resolutionTrends.col.rate')}</TableHead>
+   965→                <TableHead className="text-xs font-semibold text-right">{t('reports.resolutionTrends.col.avgTime')}</TableHead>
+   966→              </TableRow>
+   967→            </TableHeader>
+   968→            <TableBody>
+   969→              {resolutionTrendsData.map((row, i) => (
+   970→                <TableRow key={i} className="text-xs">
+   971→                  <TableCell className="font-medium font-mono text-[11px]">{row.period}</TableCell>
+   972→                  <TableCell className="text-right tabular-nums font-semibold">{row.total}</TableCell>
+   973→                  <TableCell className="text-right tabular-nums text-emerald-600 dark:text-emerald-400">{row.resolved}</TableCell>
+   974→                  <TableCell className="text-right tabular-nums">
+   975→                    <Badge variant="secondary" className={cn(
+   976→                      'text-[10px] h-5 px-1.5 font-mono font-semibold',
+   977→                      parseFloat(row.rate) >= 80 ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/15'
+   978→                        : parseFloat(row.rate) >= 60 ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 hover:bg-amber-500/15'
+   979→                        : 'bg-rose-500/10 text-rose-600 dark:text-rose-400 hover:bg-rose-500/15'
+   980→                    )}>
+   981→                      {row.rate}
+   982→                    </Badge>
+   983→                  </TableCell>
+   984→                  <TableCell className="text-right tabular-nums text-muted-foreground">{row.avgTime}</TableCell>
+   985→                </TableRow>
+   986→              ))}
+   987→            </TableBody>
+   988→          </Table>
+   989→        </div>
+   990→      </div>
+   991→    </div>
+   992→  )
+   993→
+   994→  // ═══════════════════════════════════════════
+   995→  // ─── Detail view renderer ───
+   996→  // ═══════════════════════════════════════════
+   997→
+   998→  const renderConversationDetail = () => {
+   999→    if (!detailData) return null
+  1000→    return (
+
+[showing lines 501-1000 of 1467; use offset=1001 with limit to continue reading]

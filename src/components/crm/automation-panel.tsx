@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef, useMemo } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -22,45 +22,33 @@ import {
   MessageCircle, TagIcon, Wand2, Users, XCircle, CheckCircle2, MoreVertical,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useCRMStore } from '@/store/crm-store'
+import { apiFetch, apiPost, apiPut, generateIdempotencyKey } from '@/lib/api-client'
 import type { Agent, Tag as TagType } from '@/lib/types'
 import { useT } from '@/i18n/useT'
-
-interface AutomationRule {
-  id: string
-  name: string
-  keyword: string
-  replyMessage: string | null
-  assignTo: { id: string; name: string } | null
-  tag: { id: string; name: string; color: string } | null
-  enabled: boolean
-  createdAt: string
-}
-
-type ActionType = 'auto_reply' | 'assign_agent' | 'tag' | 'auto_reply_assign' | 'auto_reply_tag'
-
-const ACTION_TYPES: { key: ActionType; labelKey: string; icon: React.ElementType; descKey: string }[] = [
-  { key: 'auto_reply', labelKey: 'auto.type.autoReply', icon: Bot, descKey: 'auto.type.autoReplyDesc' },
-  { key: 'assign_agent', labelKey: 'auto.type.assignAgent', icon: UserPlus, descKey: 'auto.type.assignAgentDesc' },
-  { key: 'tag', labelKey: 'auto.type.tag', icon: Tag, descKey: 'auto.type.tagDesc' },
-  { key: 'auto_reply_assign', labelKey: 'auto.type.replyAssign', icon: Wand2, descKey: 'auto.type.replyAssignDesc' },
-  { key: 'auto_reply_tag', labelKey: 'auto.type.replyTag', icon: Sparkles, descKey: 'auto.type.replyTagDesc' },
-]
-
-function getActionTypeInfo(type: string) {
-  return ACTION_TYPES.find(a => a.key === type) || ACTION_TYPES[0]
-}
+import { type AutomationRule, type ActionType, ACTION_TYPES } from '@/lib/const/automation'
 
 export default function AutomationPanel() {
   const { t } = useT()
+  const storeAgents = useCRMStore((s) => s.agents)
+  const setAgents = useCRMStore((s) => s.setAgents)
   const [rules, setRules] = useState<AutomationRule[]>([])
-  const [agents, setAgents] = useState<Agent[]>([])
   const [tags, setTags] = useState<TagType[]>([])
   const [showCreate, setShowCreate] = useState(false)
   const [editing, setEditing] = useState<AutomationRule | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
-  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
+
+  // Debounce automation search: filter uses debouncedSearch, not searchQuery
+  useEffect(() => {
+    clearTimeout(searchTimerRef.current)
+    searchTimerRef.current = setTimeout(() => setDebouncedSearch(searchQuery), 300)
+    return () => clearTimeout(searchTimerRef.current)
+  }, [searchQuery])
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | number | null>(null)
   const [deleting, setDeleting] = useState(false)
 
   // Form state
@@ -71,16 +59,29 @@ export default function AutomationPanel() {
   const [formTag, setFormTag] = useState('')
   const [formActionType, setFormActionType] = useState<ActionType>('auto_reply')
 
-  const fetchData = async () => {
+  const fetchRules = async () => {
     try {
-      const [rulesRes, agentsRes, tagsRes] = await Promise.all([
+      const res = await fetch('/api/automation/rules')
+      setRules(await res.json())
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  const fetchInitialData = async () => {
+    try {
+      const [rulesRes, tagsRes] = await Promise.all([
         fetch('/api/automation/rules'),
-        fetch('/api/agents'),
         fetch('/api/tags'),
       ])
       setRules(await rulesRes.json())
-      setAgents(await agentsRes.json())
       setTags(await tagsRes.json())
+      // Load agents from store if empty
+      if (storeAgents.length === 0) {
+        const agentsRes = await fetch('/api/agents')
+        const agentsData = await agentsRes.json()
+        if (Array.isArray(agentsData)) setAgents(agentsData)
+      }
     } catch (e) {
       console.error(e)
     } finally {
@@ -88,7 +89,7 @@ export default function AutomationPanel() {
     }
   }
 
-  useEffect(() => { fetchData() }, [])
+  useEffect(() => { fetchInitialData() }, [])
 
   const resetForm = () => {
     setFormName(''); setFormKeyword(''); setFormReply(''); setFormAgent(''); setFormTag(''); setFormActionType('auto_reply')
@@ -106,8 +107,8 @@ export default function AutomationPanel() {
     setFormName(rule.name)
     setFormKeyword(rule.keyword)
     setFormReply(rule.replyMessage || '')
-    setFormAgent(rule.assignTo?.id || '')
-    setFormTag(rule.tag?.id || '')
+    setFormAgent(rule.assignTo?.id ? String(rule.assignTo.id) : '')
+    setFormTag(rule.tag?.id ? String(rule.tag.id) : '')
     // Determine action type
     const hasReply = !!rule.replyMessage
     const hasAssign = !!rule.assignTo
@@ -141,13 +142,18 @@ export default function AutomationPanel() {
         payload.enabled = editing.enabled
       }
 
-      await fetch('/api/automation/rules', {
-        method: editing ? 'PUT' : 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
+      if (editing) {
+        const updated = await apiPut<AutomationRule>('/api/automation/rules', payload)
+        if (updated) {
+          setRules((prev) => prev.map((r) => (r.id === updated.id ? updated : r)))
+        }
+      } else {
+        const created = await apiPost<AutomationRule>('/api/automation/rules', payload, { idempotencyKey: generateIdempotencyKey() })
+        if (created) {
+          setRules((prev) => [created, ...prev])
+        }
+      }
       resetForm()
-      fetchData()
     } catch (e) {
       console.error(e)
     } finally {
@@ -155,40 +161,49 @@ export default function AutomationPanel() {
     }
   }
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = async (id: number) => {
     setDeleting(true)
-    await fetch(`/api/automation/rules?id=${id}`, { method: 'DELETE' })
-    setDeleteConfirmId(null)
-    fetchData()
-    setDeleting(false)
+    try {
+      await apiFetch(`/api/automation/rules?id=${id}`, { method: 'DELETE' })
+      setRules((prev) => prev.filter((r) => r.id !== id))
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setDeleteConfirmId(null)
+      setDeleting(false)
+    }
   }
 
   const handleToggle = async (rule: AutomationRule) => {
-    await fetch('/api/automation/rules', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: rule.id, enabled: !rule.enabled, name: rule.name, keyword: rule.keyword }),
-    })
-    fetchData()
+    // Optimistic toggle
+    setRules((prev) => prev.map((r) => (r.id === rule.id ? { ...r, enabled: !r.enabled } : r)))
+    try {
+      await apiPut('/api/automation/rules', { id: rule.id, enabled: !rule.enabled, name: rule.name, keyword: rule.keyword })
+    } catch (e) {
+      // Revert if error
+      setRules((prev) => prev.map((r) => (r.id === rule.id ? { ...r, enabled: rule.enabled } : r)))
+      console.error(e)
+    }
   }
 
-  const filteredRules = rules.filter(r => {
-    if (!searchQuery) return true
-    const q = searchQuery.toLowerCase()
-    return r.name.toLowerCase().includes(q) || r.keyword.toLowerCase().includes(q)
-  })
-
-  const enabledCount = rules.filter(r => r.enabled).length
-  const disabledCount = rules.length - enabledCount
+  const { filteredRules, enabledCount, disabledCount } = useMemo(() => {
+    const filtered = rules.filter(r => {
+      if (!debouncedSearch) return true
+      const q = debouncedSearch.toLowerCase()
+      return r.name.toLowerCase().includes(q) || r.keyword.toLowerCase().includes(q)
+    })
+    const enabled = rules.filter(r => r.enabled).length
+    return { filteredRules: filtered, enabledCount: enabled, disabledCount: rules.length - enabled }
+  }, [rules, debouncedSearch])
 
   return (
-    <div className="h-full min-h-0 overflow-y-auto">
-      <div className="p-4 md:p-6 max-w-[900px] mx-auto space-y-5">
+    <div className="h-full overflow-y-auto">
+      <div className="max-w-[900px] mx-auto p-4 md:p-6 space-y-6 animate-slide-up">
         {/* Header */}
-        <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center justify-between gap-4">
           <div>
-            <h1 className="text-lg md:text-xl font-bold flex items-center gap-2.5">
-              <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-lg shadow-orange-500/20">
+            <h1 className="text-xl font-bold flex items-center gap-2.5">
+              <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-lg shadow-orange-500/20 animate-breathe">
                 <Zap className="h-5 w-5 text-white" />
               </div>
               {t('auto.title')}
@@ -203,17 +218,21 @@ export default function AutomationPanel() {
                   { name: 'Khiếu nại', keyword: 'phàn nàn', replyMessage: 'Chúng tôi xin lỗi về trải nghiệm không tốt. Chúng tôi sẽ kiểm tra và phản hồi bạn sớm nhất trong 30 phút.', assignToId: null, tagId: null, enabled: true },
                   { name: 'Hỗ trợ kỹ thuật', keyword: 'lỗi', replyMessage: null, assignToId: null, tagId: null, enabled: true },
                 ]
+                const createdList: AutomationRule[] = []
                 for (const r of defaults) {
-                  await fetch('/api/automation/rules', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(r) })
+                  const created = await apiPost<AutomationRule>('/api/automation/rules', r, { idempotencyKey: generateIdempotencyKey() })
+                  if (created) createdList.push(created)
                 }
-                fetchData()
+                if (createdList.length > 0) {
+                  setRules((prev) => [...createdList, ...prev])
+                }
               }} className="text-xs rounded-xl">
                 {t('auto.createSample')}
               </Button>
             )}
             <Popover>
               <PopoverTrigger asChild>
-                <Button size="sm" className="text-xs gap-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 shadow-md shadow-orange-500/20">
+                <Button size="sm" className="text-xs gap-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 shadow-md shadow-orange-500/20 transition-all hover:scale-105">
                   <Plus className="h-3.5 w-3.5" /> {t('auto.create')}
                 </Button>
               </PopoverTrigger>
@@ -228,7 +247,7 @@ export default function AutomationPanel() {
                       <button
                         key={action.key}
                         onClick={() => openCreateForType(action.key)}
-                        className="w-full flex items-center gap-2.5 px-2.5 py-2.5 rounded-lg text-xs hover:bg-foreground/[0.04] transition-colors text-left group"
+                        className="w-full flex items-center gap-2.5 px-2.5 py-2.5 rounded-lg text-xs hover:bg-foreground/[0.04] transition-all text-left group"
                       >
                         <div className="h-7 w-7 rounded-lg bg-primary/5 group-hover:bg-primary/10 flex items-center justify-center transition-colors">
                           <Icon className="h-3.5 w-3.5 text-primary" />
@@ -249,15 +268,15 @@ export default function AutomationPanel() {
         {/* Stats */}
         {rules.length > 0 && (
           <div className="grid grid-cols-3 gap-3">
-            <div className="glass-card rounded-xl p-3.5 text-center">
+            <div className="glass-card card-lift rounded-xl p-3.5 text-center transition-all duration-300 hover:shadow-lg">
               <p className="text-2xl font-bold tabular-nums">{rules.length}</p>
               <p className="text-[11px] text-muted-foreground/60 mt-0.5 font-medium">{t('auto.total')}</p>
             </div>
-            <div className="glass-card rounded-xl p-3.5 text-center">
+            <div className="glass-card card-lift rounded-xl p-3.5 text-center transition-all duration-300 hover:shadow-lg hover:border-emerald-500/30">
               <p className="text-2xl font-bold tabular-nums text-emerald-600 dark:text-emerald-400">{enabledCount}</p>
               <p className="text-[11px] text-muted-foreground/60 mt-0.5 font-medium">{t('auto.enabled')}</p>
             </div>
-            <div className="glass-card rounded-xl p-3.5 text-center">
+            <div className="glass-card card-lift rounded-xl p-3.5 text-center transition-all duration-300 hover:shadow-lg">
               <p className="text-2xl font-bold tabular-nums text-muted-foreground/40">{disabledCount}</p>
               <p className="text-[11px] text-muted-foreground/60 mt-0.5 font-medium">{t('auto.disabled')}</p>
             </div>
@@ -283,8 +302,8 @@ export default function AutomationPanel() {
             <Loader2 className="h-5 w-5 animate-spin text-primary" />
           </div>
         ) : filteredRules.length === 0 ? (
-          <div className="glass-card rounded-2xl p-12 text-center">
-            <div className="h-16 w-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-amber-100 to-orange-100 dark:from-amber-950/30 dark:to-orange-950/30 flex items-center justify-center">
+          <div className="glass-card card-lift rounded-2xl p-12 text-center">
+            <div className="h-16 w-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-amber-100 to-orange-100 dark:from-amber-950/30 dark:to-orange-950/30 flex items-center justify-center animate-breathe">
               <Zap className="h-7 w-7 text-amber-500" />
             </div>
             <p className="text-sm font-semibold">{t('auto.empty')}</p>
@@ -423,7 +442,7 @@ export default function AutomationPanel() {
                 <Select value={formAgent} onValueChange={setFormAgent}>
                   <SelectTrigger className="h-9 text-sm rounded-xl"><SelectValue placeholder={t('auto.selectAgent')} /></SelectTrigger>
                   <SelectContent>
-                    {agents.map((a) => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
+                    {storeAgents.map((a) => <SelectItem key={a.id} value={String(a.id)}>{a.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
@@ -435,7 +454,7 @@ export default function AutomationPanel() {
                   <SelectTrigger className="h-9 text-sm rounded-xl"><SelectValue placeholder={t('auto.selectTag')} /></SelectTrigger>
                   <SelectContent>
                     {tags.map((tg) => (
-                      <SelectItem key={tg.id} value={tg.id}>
+                      <SelectItem key={tg.id} value={String(tg.id)}>
                         <div className="flex items-center gap-2">
                           <div className="h-2 w-2 rounded-full" style={{ backgroundColor: tg.color }} />
                           {tg.name}

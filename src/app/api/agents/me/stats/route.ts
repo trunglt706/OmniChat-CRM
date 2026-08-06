@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
     // For each agent message, find the preceding customer message in same conversation
     let totalResponseMs = 0
     let responseCount = 0
-    const processedConversations = new Set<string>()
+    const processedConversations = new Set<number>()
 
     // Group agent messages by conversation and only take first reply per customer message
     for (const agentMsg of agentMessages) {

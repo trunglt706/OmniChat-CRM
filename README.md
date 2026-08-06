@@ -219,7 +219,3 @@ Copy `.env.example` to `.env` và chỉnh sửa:
 ## License
 
 Private
-
-
-
-    // "dev": "NODE_OPTIONS='--max-old-space-size=2560' next dev -p 3000 2>&1 | tee dev.log",

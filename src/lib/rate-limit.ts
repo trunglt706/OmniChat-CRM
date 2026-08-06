@@ -1,4 +1,5 @@
 import { getRedis, getSecurityEnv } from './redis'
+import { addToBlacklist } from './security'
 
 /**
  * Rate limiter using Redis (or in-memory fallback).
@@ -152,4 +153,37 @@ export function rateLimitResponse(result: RateLimitResult) {
       },
     }
   )
+}
+
+/**
+ * Check if an IP should be auto-blacklisted due to repeated rate limit violations.
+ * Called after rate limit is exceeded. If IP has been rate-limited > 5 times in 10 minutes,
+ * auto-add to blacklist to protect the system.
+ */
+export async function checkAutoBlacklist(ip: string): Promise<boolean> {
+  // Never auto-blacklist loopback/localhost IPs
+  if (ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1' || ip === 'localhost') {
+    return false
+  }
+  try {
+    const redis = getRedis()
+    const key = `rl:violations:${ip}`
+    const count = await redis.incr(key)
+    if (count === 1) await redis.expire(key, 600) // 10-minute window
+
+    // Auto-blacklist after 5 rate limit violations in 10 minutes
+    if (count >= 5) {
+      await addToBlacklist({
+        type: 'ip',
+        value: ip,
+        reason: `Auto-blacklisted: ${count} rate limit violations in 10 minutes`,
+        addedAt: new Date().toISOString(),
+        addedBy: 'system:auto-blacklist',
+      })
+      return true // now blacklisted
+    }
+    return false
+  } catch {
+    return false
+  }
 }

@@ -8,7 +8,10 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await params;
+  const { id: idStr } = await params;
+  const id = Number(idStr);
+  if (isNaN(id)) return NextResponse.json({ error: 'Invalid ID' }, { status: 400 });
+
   const { searchParams } = new URL(request.url);
   const limit = Math.min(Math.max(parseInt(searchParams.get('limit') || '0') || DEFAULT_LIMIT, 1), 50);
   const before = searchParams.get('before'); // ISO date cursor
@@ -41,7 +44,10 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await params;
+  const { id: idStr } = await params;
+  const id = Number(idStr);
+  if (isNaN(id)) return NextResponse.json({ error: 'Invalid ID' }, { status: 400 });
+
   const body = await request.json();
   const {
     content,
@@ -71,7 +77,7 @@ export async function POST(
     data: {
       conversationId: id,
       senderType: actualSenderType,
-      senderId: actualSenderType === 'agent' ? (authUser?.id || null) : null,
+      senderId: actualSenderType === 'agent' ? (authUser?.id ?? null) : null,
       senderName: actualSenderName,
       messageType,
       content: content || null,
