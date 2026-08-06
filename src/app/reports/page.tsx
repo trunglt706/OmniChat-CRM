@@ -14,8 +14,8 @@ import { toPng } from 'html-to-image'
 
 // ─── Constants & Types ───
 import {
-  type ReportTab, type PresetKey, type DetailView, type TFn,
-  getDateLocale, REPORT_TABS, CHART_TABS, SUMMARY_CARDS, DATE_PRESETS, BOT_METRIC_KEYS,
+  type ReportTab, type PresetKey, type DetailView,
+  getDateLocale, REPORT_TABS, SUMMARY_CARDS, DATE_PRESETS, BOT_METRIC_KEYS,
 } from '@/lib/const/report'
 import { CHANNEL_NAME_KEYS } from '@/lib/const/setting'
 
@@ -40,6 +40,8 @@ import { AgentDetail } from './details/agent-detail'
 import { ChannelDetail } from './details/channel-detail'
 import { CustomerDetail } from './details/customer-detail'
 import { TagDetail } from './details/tag-detail'
+
+import logger from '@/lib/logger'
 
 export default function ReportsPage() {
   const { t, locale } = useT()
@@ -152,7 +154,7 @@ export default function ReportsPage() {
         case 'resolutionTrends': setResolutionTrendsData(Array.isArray(data) ? data : []); break
       }
     } catch (e) {
-      console.error('Reports fetch error', e)
+      logger.error('Reports fetch error', { context: 'ReportsPage', error: e })
     } finally {
       setLoading(false)
     }
@@ -169,7 +171,7 @@ export default function ReportsPage() {
       const data = await res.json()
       setDetailData(data)
     } catch (e) {
-      console.error('Detail fetch error', e)
+      logger.error('Detail fetch error', { context: 'ReportsPage', error: e })
     } finally {
       setDetailLoading(false)
     }
@@ -371,7 +373,7 @@ export default function ReportsPage() {
       link.href = dataUrl
       link.click()
     }).catch((err) => {
-      console.error('Chart image export error', err)
+      logger.error('Chart image export error', { context: 'ReportsPage', error: err })
     })
   }, [activeTab, detailView, getDateRangeLabel])
 

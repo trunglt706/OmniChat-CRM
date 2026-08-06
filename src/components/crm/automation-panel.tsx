@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef, useMemo } from 'react'
 import { Button } from '@/components/ui/button'
+import { logger } from '@/lib/logger'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
@@ -11,20 +12,19 @@ import {
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog'
 import {
   Popover, PopoverContent, PopoverTrigger,
 } from '@/components/ui/popover'
 import {
   Zap, Plus, Trash2, Pencil, Bot, UserPlus, Tag, ArrowRight,
-  Clock, AlertTriangle, Sparkles, Search, Filter, Loader2, ChevronDown,
-  MessageCircle, TagIcon, Wand2, Users, XCircle, CheckCircle2, MoreVertical,
+  Search, Loader2, Wand2, XCircle, CheckCircle2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useCRMStore } from '@/store/crm-store'
 import { apiFetch, apiPost, apiPut, generateIdempotencyKey } from '@/lib/api-client'
-import type { Agent, Tag as TagType } from '@/lib/types'
+import type { Tag as TagType } from '@/lib/types'
 import { useT } from '@/i18n/useT'
 import { type AutomationRule, type ActionType, ACTION_TYPES } from '@/lib/const/automation'
 
@@ -59,15 +59,6 @@ export default function AutomationPanel() {
   const [formTag, setFormTag] = useState('')
   const [formActionType, setFormActionType] = useState<ActionType>('auto_reply')
 
-  const fetchRules = async () => {
-    try {
-      const res = await fetch('/api/automation/rules')
-      setRules(await res.json())
-    } catch (e) {
-      console.error(e)
-    }
-  }
-
   const fetchInitialData = async () => {
     try {
       const [rulesRes, tagsRes] = await Promise.all([
@@ -83,7 +74,7 @@ export default function AutomationPanel() {
         if (Array.isArray(agentsData)) setAgents(agentsData)
       }
     } catch (e) {
-      console.error(e)
+      logger.error('Failed to fetch initial automation data', 'AutomationPanel', e)
     } finally {
       setLoading(false)
     }
@@ -155,7 +146,7 @@ export default function AutomationPanel() {
       }
       resetForm()
     } catch (e) {
-      console.error(e)
+      logger.error('Failed to save rule', 'AutomationPanel', e)
     } finally {
       setSaving(false)
     }
@@ -167,7 +158,7 @@ export default function AutomationPanel() {
       await apiFetch(`/api/automation/rules?id=${id}`, { method: 'DELETE' })
       setRules((prev) => prev.filter((r) => r.id !== id))
     } catch (e) {
-      console.error(e)
+      logger.error('Failed to delete rule', 'AutomationPanel', e)
     } finally {
       setDeleteConfirmId(null)
       setDeleting(false)
@@ -182,7 +173,7 @@ export default function AutomationPanel() {
     } catch (e) {
       // Revert if error
       setRules((prev) => prev.map((r) => (r.id === rule.id ? { ...r, enabled: rule.enabled } : r)))
-      console.error(e)
+      logger.error('Failed to toggle rule', 'AutomationPanel', e)
     }
   }
 

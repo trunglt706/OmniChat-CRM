@@ -9,16 +9,15 @@ import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { apiPut, apiPost, apiFetch } from '@/lib/api-client'
 import { cn } from '@/lib/utils'
 import { useT } from '@/i18n/useT'
 import type { Agent } from '@/lib/types'
 import {
-  UserCheck, Shield, Clock, Star, MoreVertical, Pencil, Plus,
-  Trash2, X, Check, Loader2, MessageSquare, ChevronDown, Send,
+  Clock, Star, MoreVertical, Plus,
+  Trash2, X, Check, MessageSquare, ChevronDown, Send,
 } from 'lucide-react'
-import { SettingRow, SectionHeader } from './shared'
 import { cachedFetch } from './cached-fetch'
+import logger from '@/lib/logger'
 import { GRADIENT_CLASSES } from '@/lib/const/setting'
 
 export default function StaffTab() {
@@ -59,7 +58,7 @@ export default function StaffTab() {
       try {
         const data = await cachedFetch('/api/agents')
         if (Array.isArray(data)) { setAgents(data) }
-      } catch (e) { console.error('Failed', e) }
+      } catch (e) { logger.error('Failed to load agents', { context: 'StaffTab', error: e }) }
       finally { setLoading(false) }
     }
     load()

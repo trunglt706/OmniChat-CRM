@@ -1,5 +1,6 @@
 import { useCRMStore } from '@/store/crm-store'
 import { getWsConfig, type WsTransport } from './ws-config'
+import { logger } from './logger'
 
 type EventCallback = (data: any) => void
 
@@ -100,7 +101,7 @@ class SocketService {
   // ─── Native WebSocket Transport ───
   private _createWebSocket(url: string, heartbeatMs: number) {
     if (!url) {
-      console.warn('[Socket] WS_TRANSPORT=websocket but WS_URL is not set, falling back to SSE')
+      logger.warn('WS_TRANSPORT=websocket but WS_URL is not set, falling back to SSE', 'Socket')
       this._transport = 'sse'
       this._createSSE(getWsConfig().ssePollInterval)
       return
@@ -163,7 +164,7 @@ class SocketService {
   // ─── Socket.IO Transport (lazy-loaded) ───
   private async _createSocketIO(url: string, heartbeatMs: number) {
     if (!url) {
-      console.warn('[Socket] WS_TRANSPORT=socketio but WS_URL is not set, falling back to SSE')
+      logger.warn('WS_TRANSPORT=socketio but WS_URL is not set, falling back to SSE', 'Socket')
       this._transport = 'sse'
       this._createSSE(getWsConfig().ssePollInterval)
       return
@@ -206,7 +207,7 @@ class SocketService {
         this._setConnected(false)
       })
     } catch (e) {
-      console.error('[Socket] Socket.IO load failed, falling back to SSE:', e)
+      logger.error('Socket.IO load failed, falling back to SSE', 'Socket', e)
       this._transport = 'sse'
       this._createSSE(getWsConfig().ssePollInterval)
     }
@@ -222,7 +223,7 @@ class SocketService {
   private _scheduleReconnect() {
     const config = getWsConfig()
     if (config.maxReconnectAttempts > 0 && this._reconnectAttempts >= config.maxReconnectAttempts) {
-      console.warn(`[Socket] Max reconnect attempts (${config.maxReconnectAttempts}) reached, giving up`)
+      logger.warn(`Max reconnect attempts (${config.maxReconnectAttempts}) reached, giving up`, 'Socket')
       return
     }
 
@@ -233,7 +234,7 @@ class SocketService {
     const delay = backoff + jitter
 
     this._reconnectAttempts++
-    console.log(`[Socket] Reconnecting in ${Math.round(delay)}ms (attempt ${this._reconnectAttempts})`)
+    logger.info(`Reconnecting in ${Math.round(delay)}ms (attempt ${this._reconnectAttempts})`, 'Socket')
     this.reconnectTimer = setTimeout(() => this._createConnection(), delay)
   }
 
@@ -322,7 +323,7 @@ class SocketService {
           }),
         })
       } catch (e) {
-        console.error('[Socket] emit error:', e)
+        logger.error('emit error', 'Socket', e)
       }
     }
   }
@@ -331,7 +332,7 @@ class SocketService {
     const set = this.listeners.get(event)
     if (set) {
       set.forEach((cb) => {
-        try { cb(data) } catch (e) { console.error(`[Socket] error in ${event} handler:`, e) }
+        try { cb(data) } catch (e) { logger.error(`error in ${event} handler`, 'Socket', e) }
       })
     }
   }

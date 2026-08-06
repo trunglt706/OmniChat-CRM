@@ -11,7 +11,7 @@ import { Separator } from '@/components/ui/separator'
 import { apiPut } from '@/lib/api-client'
 import { cn } from '@/lib/utils'
 import { useT } from '@/i18n/useT'
-import { LOCALE_LABELS, LOCALES, type Locale } from '@/i18n/translations'
+import { LOCALE_LABELS, LOCALES } from '@/i18n/translations'
 import { Volume2, Monitor, Mail, Maximize2, Eye, Globe, UserCheck, Moon, Sun, Bell, Trash2, Check, X } from 'lucide-react'
 import { SettingRow, SectionHeader } from './shared'
 

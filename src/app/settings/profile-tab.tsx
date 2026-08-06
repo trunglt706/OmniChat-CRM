@@ -18,7 +18,7 @@ import {
   Camera, Check, X, Shield, Clock, MessageSquare, User, Pencil, Loader2,
 } from 'lucide-react'
 import { GRADIENT_CLASSES, STATUS_OPTIONS } from '@/lib/const/setting'
-import { SettingRow, SectionHeader } from './shared'
+import { SectionHeader } from './shared'
 import { cachedFetch } from './cached-fetch'
 
 interface AgentStats {

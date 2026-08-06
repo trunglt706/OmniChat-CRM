@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useCRMStore, type UserProfile } from '@/store/crm-store'
-import { apiPut, apiPost } from '@/lib/api-client'
+import { apiPut } from '@/lib/api-client'
+import logger from '@/lib/logger'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -11,7 +12,7 @@ import { Separator } from '@/components/ui/separator'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
 import {
-  User, Mail, Phone, Briefcase, MessageSquare, Camera, Check, X, Shield, Clock, Loader2,
+  User, MessageSquare, Camera, Check, X, Shield, Clock, Loader2,
 } from 'lucide-react'
 import { useT } from '@/i18n/useT'
 
@@ -34,8 +35,6 @@ interface AgentStats {
 export default function ProfilePanel() {
   const currentUser = useCRMStore((s) => s.currentUser)
   const setCurrentUser = useCRMStore((s) => s.setCurrentUser)
-  const settings = useCRMStore((s) => s.settings)
-  const setOpenSheet = useCRMStore((s) => s.setOpenSheet)
   const { t } = useT()
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -77,7 +76,7 @@ export default function ProfilePanel() {
       })
       setEditing(false)
     } catch (e) {
-      console.error('Failed to save profile', e)
+      logger.error('Failed to save profile', { context: 'ProfilePanel', error: e })
     } finally {
       setSaving(false)
     }
@@ -96,7 +95,7 @@ export default function ProfilePanel() {
       await apiPut('/api/auth/me', { status })
       setCurrentUser({ ...currentUser, status })
     } catch (e) {
-      console.error('Failed to update status', e)
+      logger.error('Failed to update status', { context: 'ProfilePanel', error: e })
     }
   }
 

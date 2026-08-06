@@ -16,10 +16,7 @@ import { getRedis } from './redis'
 import { db } from './db'
 import type { NextRequest } from 'next/server'
 
-const WS_AUTH_PREFIX = 'ws:auth:'
-const WS_CHANNEL_PREFIX = 'ws:ch:'
 const WS_PRESENCE_PREFIX = 'ws:presence:'
-const WS_AUTH_TTL = 86400 // 24h (matches session)
 
 interface WsUser {
   id: number

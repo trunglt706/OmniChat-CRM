@@ -1,10 +1,9 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { getToken } from 'next-auth/jwt'
-import { randomBytes } from 'crypto'
 
 // ─── Security imports ───
-import { getRedis, getSecurityEnv } from '@/lib/redis'
+import { getSecurityEnv } from '@/lib/redis'
 import { checkApiRateLimit, rateLimitResponse, checkBotRateLimit, checkAutoBlacklist } from '@/lib/rate-limit'
 import { generateCsrfToken, csrfCookieValue, validateCsrfToken, CSRF_HEADER } from '@/lib/csrf'
 import { extractIdempotencyKey, getIdempotencyResult, idempotencyResponse } from '@/lib/idempotency'
@@ -26,7 +25,7 @@ const RATE_LIMITED_API_PREFIXES = [
 ]
 
 export async function proxy(request: NextRequest) {
-  const { pathname, searchParams } = request.nextUrl
+  const { pathname } = request.nextUrl
   const method = request.method
   const env = getSecurityEnv()
   const ip =

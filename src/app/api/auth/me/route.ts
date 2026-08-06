@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthUser } from '@/lib/session'
 import { db } from '@/lib/db'
+import { logger } from '@/lib/logger'
 
 export async function GET(req: NextRequest) {
   try {
@@ -10,7 +11,7 @@ export async function GET(req: NextRequest) {
     }
     return NextResponse.json(user)
   } catch (error) {
-    console.error('Auth me error:', error)
+    logger.error('Auth me error', error)
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })
   }
 }
@@ -47,7 +48,7 @@ export async function PUT(req: NextRequest) {
 
     return NextResponse.json(updated)
   } catch (error) {
-    console.error('Auth me update error:', error)
+    logger.error('Auth me update error', error)
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })
   }
 }

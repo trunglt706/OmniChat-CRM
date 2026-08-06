@@ -13,7 +13,6 @@ export async function GET() {
     totalMessages,
     todayMessages,
     unresolvedBreach,
-    allConversations,
     channelStats,
     agentStats,
     leads,

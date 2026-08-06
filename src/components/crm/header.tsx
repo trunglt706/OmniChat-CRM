@@ -4,9 +4,9 @@ import { useState, useCallback, useMemo, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useCRMStore } from '@/store/crm-store'
 import { apiPost } from '@/lib/api-client'
+import logger from '@/lib/logger'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { Badge } from '@/components/ui/badge'
 import {
   Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
 } from '@/components/ui/tooltip'
@@ -89,7 +89,7 @@ export function Header() {
         await apiPost('/api/simulation', { action: 'start_auto' })
         setSimulationRunning(true)
       }
-    } catch (e) { console.error('Simulation error', e) }
+    } catch (e) { logger.error('Simulation error', { context: 'Header', error: e }) }
     finally { setSimLoading(false) }
   }
 

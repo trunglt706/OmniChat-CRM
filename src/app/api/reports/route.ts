@@ -7,11 +7,11 @@ import { db } from '@/lib/db'
 
 const CHANNEL_DISPLAY: Record<string, string> = {
   facebook_messenger: 'Facebook Messenger',
-  facebook_comment: 'Facebook Comment',
+  // facebook_comment: 'Facebook Comment',
   zalo: 'Zalo',
   telegram: 'Telegram',
-  website: 'Website',
-  email: 'Email',
+  // website: 'Website',
+  // email: 'Email',
   chatwork: 'Chatwork',
 }
 

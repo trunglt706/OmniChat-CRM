@@ -7,7 +7,7 @@ import { Separator } from '@/components/ui/separator'
 import { cn } from '@/lib/utils'
 import {
   MessageSquare, UserCheck, AlertTriangle, AtSign, Info,
-  CheckCheck, Trash2, BellOff, Sparkles, ArrowRight,
+  CheckCheck, Trash2, BellOff, Sparkles,
 } from 'lucide-react'
 import { useT } from '@/i18n/useT'
 
@@ -69,7 +69,6 @@ export default function NotificationPanel() {
   const notifications = useCRMStore((s) => s.notifications)
   const markNotificationRead = useCRMStore((s) => s.markNotificationRead)
   const markAllNotificationsRead = useCRMStore((s) => s.markAllNotificationsRead)
-  const clearNotification = useCRMStore((s) => s.clearNotification)
   const clearAllNotifications = useCRMStore((s) => s.clearAllNotifications)
   const setOpenSheet = useCRMStore((s) => s.setOpenSheet)
   const setSelectedConversationId = useCRMStore((s) => s.setSelectedConversationId)

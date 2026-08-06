@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthUser } from '@/lib/session'
 import { db } from '@/lib/db'
+import { logger } from '@/lib/logger'
 
 export async function GET(req: NextRequest) {
   try {
@@ -44,7 +45,6 @@ export async function GET(req: NextRequest) {
     // Group agent messages by conversation and only take first reply per customer message
     for (const agentMsg of agentMessages) {
       const convId = agentMsg.conversationId
-      const key = `${convId}_${agentMsg.createdAt.getTime()}`
       if (processedConversations.has(convId)) continue
 
       const prevCustomerMsg = await db.message.findFirst({
@@ -87,7 +87,7 @@ export async function GET(req: NextRequest) {
       totalConversations,
     })
   } catch (error) {
-    console.error('Agent stats error:', error)
+    logger.error('Agent stats error', error)
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })
   }
 }

@@ -64,7 +64,6 @@ function CRMPage() {
   const activeView = useCRMStore((s) => s.activeView)
   const setActiveViewRaw = useCRMStore((s) => s.setActiveView)
   const mobileView = useCRMStore((s) => s.mobileView)
-  const router = useRouter()
   const searchParams = useSearchParams()
   const showRightPanel = useCRMStore((s) => s.showRightPanel)
   const incrementUnread = useCRMStore((s) => s.incrementUnread)

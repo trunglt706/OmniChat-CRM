@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { channelRegistry } from '@/lib/channels'
 import { db } from '@/lib/db'
+import { logger } from '@/lib/logger'
 
 /**
  * Universal webhook receiver for all channels.
@@ -58,7 +59,7 @@ export async function POST(
     const result = channelRegistry.handleWebhook(channel, payload, channel)
     return NextResponse.json(result)
   } catch (e) {
-    console.error(`[Webhook ${channel}] Parse error:`, e)
+    logger.error(`[Webhook ${channel}] Parse error`, e)
     return NextResponse.json({ error: 'Invalid payload' }, { status: 400 })
   }
 }

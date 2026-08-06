@@ -1,4 +1,5 @@
 import Redis from 'ioredis'
+import { logger } from './logger'
 
 /**
  * Redis singleton client.
@@ -117,7 +118,7 @@ export function getRedis(): RedisClient {
     })
 
     _redisInstance.on('error', (err) => {
-      console.error('[Redis] Connection error:', err.message)
+      logger.error(`Connection error: ${err.message}`, 'Redis', err)
     })
 
     // Wrap Redis to match RedisClient interface

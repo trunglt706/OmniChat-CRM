@@ -12,6 +12,7 @@
 
 import { PrismaClient } from '@prisma/client'
 import { getDbConfig } from './db-env'
+import { logger } from './logger'
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined
@@ -29,7 +30,7 @@ function createPrismaClient(): PrismaClient {
   }).$on('query', (e: any) => {
     const duration = e.duration
     if (duration > SLOW_QUERY_MS) {
-      console.warn(`[SLOW QUERY] ${duration}ms > ${SLOW_QUERY_MS}ms\n${e.query}`)
+      logger.warn(`Slow database query (${duration}ms)`, 'DB', { duration, query: e.query })
     }
   })
 }
@@ -73,8 +74,9 @@ export async function getDb(): Promise<PrismaClient> {
 
         const adapter = new PrismaMySQL(pool)
 
-        console.log(
-          `[db] MySQL connected: ${config.connectionUrl.replace(/:([^@]+)@/, ':***@')}`
+        logger.info(
+          `MySQL connected: ${config.connectionUrl.replace(/:([^@]+)@/, ':***@')}`,
+          'DB'
         )
 
         const client = new PrismaClient({
@@ -85,11 +87,12 @@ export async function getDb(): Promise<PrismaClient> {
         globalForPrisma.prisma = client
         return client
       } catch (err) {
-        console.error(
-          `[db] MySQL init failed. Install: bun add @prisma/adapter-mysql mysql2\n`,
+        logger.error(
+          `MySQL init failed. Install: bun add @prisma/adapter-mysql mysql2`,
+          'DB',
           err
         )
-        console.warn('[db] Falling back to SQLite...')
+        logger.warn('Falling back to SQLite...', 'DB')
         return db
       }
     })()
@@ -101,7 +104,8 @@ export async function getDb(): Promise<PrismaClient> {
 // Log database provider on startup (server-side only)
 if (typeof window === 'undefined') {
   const cfg = getDbConfig()
-  console.log(
-    `[db] Provider: ${cfg.provider}, URL: ${cfg.connectionUrl.replace(/:([^@]+)@/, ':***@')}`
+  logger.info(
+    `Provider: ${cfg.provider}, URL: ${cfg.connectionUrl.replace(/:([^@]+)@/, ':***@')}`,
+    'DB'
   )
 }

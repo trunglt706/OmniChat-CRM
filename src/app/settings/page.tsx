@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useCRMStore } from '@/store/crm-store'
 import { Button } from '@/components/ui/button'
@@ -48,7 +48,7 @@ function SettingsPage() {
   })
 
   // Load current user on mount (skip if already loaded)
-  useState(() => {
+  useEffect(() => {
     if (useCRMStore.getState().currentUser) {
       setAuthenticated(true)
       return
@@ -67,8 +67,8 @@ function SettingsPage() {
           initSettingsFromDB(typeof user.settings === 'string' ? user.settings : JSON.stringify(user.settings))
         }
       })
-      .catch(() => { window.location.href = '/login' })
-  })
+      .catch(() => { router.push('/login') })
+  }, [router, setAuthenticated, setCurrentUser])
 
   const ActiveTabComponent = TAB_COMPONENTS[activeTab]
 

@@ -2,14 +2,13 @@
 
 import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
-import { Separator } from '@/components/ui/separator'
-import { Badge } from '@/components/ui/badge'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
-import { apiPut, apiPost, apiFetch } from '@/lib/api-client'
+import { apiPost, apiFetch } from '@/lib/api-client'
+import logger from '@/lib/logger'
 import { cn } from '@/lib/utils'
 import { useT } from '@/i18n/useT'
-import { Database, Download, Upload, RefreshCw, Trash2, RotateCcw, Plus, HardDrive, Loader2, Check, AlertTriangle } from 'lucide-react'
-import { SettingRow, SectionHeader } from './shared'
+import { Database, Download, RefreshCw, Trash2, HardDrive, Loader2, Check, AlertTriangle } from 'lucide-react'
+import { SectionHeader } from './shared'
 import { cachedFetch } from './cached-fetch'
 
 interface BackupItem { id: string; filename: string; size: number; createdAt: string; type: string }
@@ -29,7 +28,7 @@ export default function BackupTab() {
     try {
       const data = await cachedFetch('/api/backup', { forceFresh })
       setBackups(data.data || [])
-    } catch (e) { console.error(e) }
+    } catch (e) { logger.error('Failed to load backups', { context: 'BackupTab', error: e }) }
     finally { setLoading(false) }
   }
 

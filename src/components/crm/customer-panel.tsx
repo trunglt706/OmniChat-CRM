@@ -3,24 +3,16 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useCRMStore } from '@/store/crm-store'
 import { useT } from '@/i18n/useT'
+import { logger } from '@/lib/logger'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-// Native scroll
-import { Separator } from '@/components/ui/separator'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/components/ui/select'
 import { CHANNEL_CONFIG, LEAD_STATUS_CONFIG, type InternalNote } from '@/lib/types'
 import { LOCALE_MAP, GRADIENT_CLASSES } from '@/lib/const/chat'
 import {
-  User, Phone, Mail, Building, MapPin, Calendar, MessageCircle, Send,
-  Globe, Pin, Plus, Loader2, X, ChevronRight, ExternalLink,
-  Copy, CheckCircle2, Clock, Sparkles, Target, TrendingUp,
-  Pencil, Trash2, MoreHorizontal, PinOff, Check, Ban,
+  User, Phone, Mail, Building, MapPin, Calendar, MessageCircle,
+  Pin, Plus, Loader2, Target, Pencil, Trash2, PinOff, Check, Ban,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { apiFetch, apiPost, apiPut, generateIdempotencyKey } from '@/lib/api-client'
@@ -168,7 +160,7 @@ function NotesTab() {
       const data = await apiFetch(`/api/conversations/${selectedConversationId}/notes`)
       setNotes(data)
     } catch (e) {
-      console.error(e)
+      logger.error('Failed to fetch notes', 'CustomerPanel', e)
     }
   }
 
@@ -184,7 +176,7 @@ function NotesTab() {
       addNote(note)
       setNewNote('')
     } catch (e) {
-      console.error(e)
+      logger.error('Failed to add note', 'CustomerPanel', e)
     } finally {
       setIsSubmitting(false)
     }
@@ -203,7 +195,7 @@ function NotesTab() {
       updateNote(editingId, updated)
       setEditingId(null)
     } catch (e) {
-      console.error(e)
+      logger.error('Failed to save edit note', 'CustomerPanel', e)
     } finally {
       setActionLoadingId(null)
     }
@@ -221,7 +213,7 @@ function NotesTab() {
       const updated = await apiPut(`/api/conversations/${selectedConversationId}/notes`, { noteId: note.id, isPinned: !note.isPinned })
       updateNote(note.id, updated)
     } catch (e) {
-      console.error(e)
+      logger.error('Failed to toggle pin note', 'CustomerPanel', e)
     } finally {
       setActionLoadingId(null)
     }
@@ -235,7 +227,7 @@ function NotesTab() {
       deleteNote(noteId)
       setDeleteConfirmId(null)
     } catch (e) {
-      console.error(e)
+      logger.error('Failed to delete note', 'CustomerPanel', e)
     } finally {
       setActionLoadingId(null)
     }
