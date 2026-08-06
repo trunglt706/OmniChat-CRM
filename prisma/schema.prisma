@@ -32,6 +32,7 @@ model User {
   bio            String?
   role           String         @default("agent") // admin, supervisor, agent, viewer
   status         String         @default("online") // online, offline, busy, away
+  isActive       Boolean        @default(true) // For locking/blocking user
   settings       String         @default("{}") // JSON: user preferences (sound, notifications, language, etc.)
   organizationId Int?
   organization   Organization?  @relation(fields: [organizationId], references: [id])
@@ -41,6 +42,7 @@ model User {
   notifications   Notification[]
   ownedLeads     Lead[]          @relation("LeadOwner")
   autoAssignRules AutomationRule[] @relation("AutoAssign")
+  sessions       UserSession[]
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
 }
@@ -257,3 +259,15 @@ model SystemSetting {
   value     String   @db.Text
   updatedAt DateTime @updatedAt
 }
+
+model UserSession {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique // Session token / JWT ID
+  ipAddress String?
+  userAgent String?
+  device    String?  // Desktop, Mobile, Browser info
+  lastActive DateTime @default(now())
+  createdAt DateTime @default(now())
+}

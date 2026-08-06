@@ -20,6 +20,8 @@ import { cachedFetch } from './cached-fetch'
 import logger from '@/lib/logger'
 import { GRADIENT_CLASSES } from '@/lib/const/setting'
 
+import { StaffDetailSheet } from './staff-detail-sheet'
+
 export default function StaffTab() {
   const agents = useCRMStore((s) => s.agents)
   const setAgents = useCRMStore((s) => s.setAgents)
@@ -202,82 +204,20 @@ export default function StaffTab() {
         )}
       </div>
 
-      {/* Edit Staff Dialog */}
-      <Dialog open={!!editingAgent} onOpenChange={(open) => { if (!open) { setEditingAgent(null); setDeleteConfirm(false) } }}>
-        <DialogContent className="sm:max-w-md rounded-2xl">
-          <DialogHeader>
-            <DialogTitle className="text-base">{t('staff.edit')}</DialogTitle>
-            <DialogDescription className="text-xs text-muted-foreground/60">
-              {editingAgent?.name}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3.5 py-1">
-            <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-muted-foreground/70">{t('staff.name')}</Label>
-              <Input value={editForm.name} onChange={(e) => setEditForm(f => ({ ...f, name: e.target.value }))} className="rounded-xl glass-input h-10 text-sm" />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-muted-foreground/70">{t('staff.emailLabel')}</Label>
-              <Input value={editForm.email} onChange={(e) => setEditForm(f => ({ ...f, email: e.target.value }))} type="email" className="rounded-xl glass-input h-10 text-sm" />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-muted-foreground/70">{t('staff.role')}</Label>
-                <Select value={editForm.role} onValueChange={(v) => setEditForm(f => ({ ...f, role: v }))}>
-                  <SelectTrigger className="h-10 rounded-xl text-sm"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="admin">{t('user.role.admin')}</SelectItem>
-                    <SelectItem value="supervisor">{t('user.role.supervisor')}</SelectItem>
-                    <SelectItem value="agent">{t('user.role.agent')}</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-muted-foreground/70">{t('staff.status')}</Label>
-                <Select value={editForm.status} onValueChange={(v) => setEditForm(f => ({ ...f, status: v }))}>
-                  <SelectTrigger className="h-10 rounded-xl text-sm"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="online">{t('profile.status.online')}</SelectItem>
-                    <SelectItem value="busy">{t('profile.status.busy')}</SelectItem>
-                    <SelectItem value="away">{t('profile.status.away')}</SelectItem>
-                    <SelectItem value="offline">{t('profile.status.offline')}</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </div>
-          <DialogFooter className="flex-col gap-2 sm:flex-row sm:justify-between">
-            {!deleteConfirm ? (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 h-8 rounded-lg text-xs"
-                onClick={() => setDeleteConfirm(true)}
-              >
-                <Trash2 className="h-3.5 w-3.5 mr-1.5" /> {t('staff.delete')}
-              </Button>
-            ) : (
-              <div className="flex items-center gap-2">
-                <span className="text-[11px] text-red-500 font-medium">{t('staff.deleteConfirm')}</span>
-                <Button variant="ghost" size="sm" className="h-8 rounded-lg text-xs" onClick={() => setDeleteConfirm(false)}>
-                  <X className="h-3 w-3 mr-1" /> {t('staff.cancelEdit')}
-                </Button>
-                <Button variant="destructive" size="sm" className="h-8 rounded-lg text-xs" onClick={handleDelete}>
-                  <Trash2 className="h-3 w-3 mr-1" /> {t('staff.delete')}
-                </Button>
-              </div>
-            )}
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" className="h-8 rounded-lg text-xs" onClick={() => { setEditingAgent(null); setDeleteConfirm(false) }}>
-                {t('staff.cancelEdit')}
-              </Button>
-              <Button size="sm" className="h-8 rounded-lg text-xs bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600" onClick={handleSaveEdit}>
-                <Check className="h-3.5 w-3.5 mr-1" /> {t('staff.save')}
-              </Button>
-            </div>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Replace old Edit Staff Dialog with StaffDetailSheet */}
+      <StaffDetailSheet
+        userId={editingAgent ? editingAgent.id : null}
+        onClose={() => {
+          setEditingAgent(null)
+          setDeleteConfirm(false)
+        }}
+        onUpdated={() => {
+          // Re-fetch agents to update the list
+          cachedFetch('/api/agents', {}, true).then(data => {
+            if (Array.isArray(data)) setAgents(data)
+          })
+        }}
+      />
     </div>
   )
 }
