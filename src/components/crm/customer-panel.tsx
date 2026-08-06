@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { CHANNEL_CONFIG, LEAD_STATUS_CONFIG, type InternalNote } from '@/lib/types'
 import { LOCALE_MAP, GRADIENT_CLASSES } from '@/lib/const/chat'
+import { formatDateTime, formatDateOnly } from '@/lib/format-time'
 import {
   User, Phone, Mail, Building, MapPin, Calendar, MessageCircle,
   Pin, Plus, Loader2, Target, Pencil, Trash2, PinOff, Check, Ban,
@@ -71,9 +72,9 @@ function InfoTab() {
           </div>
           <div className="min-w-0 flex-1">
             <h3 className="font-bold text-[15px] truncate tracking-tight">{customer.name}</h3>
-            <p className="text-[11px] text-muted-foreground/50 mt-0.5 font-medium">
-              {t('panel.customerSince', { date: new Date(customer.createdAt).toLocaleDateString(LOCALE_MAP[locale] || 'vi-VN') })}
-            </p>
+            <div className="mt-2 text-[11px] text-muted-foreground/60 font-medium">
+              {t('panel.customerSince', { date: formatDateOnly(customer.createdAt) })}
+            </div>
           </div>
         </div>
       </div>
@@ -275,7 +276,7 @@ function NotesTab() {
             )}
             <p className="text-[13px] leading-relaxed text-foreground/80 whitespace-pre-wrap">{note.content}</p>
             <div className="flex items-center justify-between mt-2">
-              <p className="text-[10px] text-muted-foreground/50 font-medium">{note.author?.name || 'Unknown'} · {new Date(note.createdAt).toLocaleString(LOCALE_MAP[locale] || 'vi-VN')}</p>
+              <p className="text-[10px] text-muted-foreground/50 font-medium">{note.author?.name || 'Unknown'} · {formatDateTime(note.createdAt)}</p>
               <div className={cn('flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200', deleteConfirmId === note.id && 'opacity-100')}>
                 {deleteConfirmId === note.id ? (
                   <>
@@ -397,7 +398,7 @@ function LeadTab() {
                 <span className="text-[10px] text-muted-foreground/50 font-medium uppercase tracking-wider">{t('lead.followup')}</span>
                 <p className="font-semibold text-xs mt-0.5">
                   {lead.nextFollowup
-                    ? new Date(lead.nextFollowup).toLocaleDateString(LOCALE_MAP[locale] || 'vi-VN')
+                    ? formatDateOnly(lead.nextFollowup)
                     : '-'}
                 </p>
               </div>

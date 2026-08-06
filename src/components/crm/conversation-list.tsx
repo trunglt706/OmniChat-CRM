@@ -18,10 +18,10 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { socket } from '@/lib/socket'
+import { LOCALE_MAP } from '@/lib/const/chat'
+import { formatDateOnly } from '@/lib/format-time'
 import { useT } from '@/i18n/useT'
 import { logger } from '@/lib/logger'
-
-const LOCALE_MAP: Record<string, string> = { vi: 'vi-VN', en: 'en-US', zh: 'zh-CN' }
 
 const FILTER_TABS = [
   { key: 'all', labelKey: 'convo.channel.all' as const, icon: Filter },
@@ -57,7 +57,7 @@ function formatTime(d: string, t: (key: string, params?: Record<string, string |
   if (m < 60) return t('convo.time.minutes', { count: m })
   if (h < 24) return t('convo.time.hours', { count: h })
   if (days < 7) return t('convo.time.days', { count: days })
-  return date.toLocaleDateString(LOCALE_MAP[locale] || 'vi-VN')
+  return formatDateOnly(d)
 }
 
 function getSLA(convo: Conversation) {

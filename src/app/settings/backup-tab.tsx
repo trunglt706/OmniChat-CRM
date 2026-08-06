@@ -7,6 +7,8 @@ import { apiPost, apiFetch } from '@/lib/api-client'
 import logger from '@/lib/logger'
 import { cn } from '@/lib/utils'
 import { useT } from '@/i18n/useT'
+import { formatFileSize } from '@/lib/utils'
+import { LoadingBlock } from '@/components/ui/loading'
 import { Database, Download, RefreshCw, Trash2, HardDrive, Loader2, Check, AlertTriangle } from 'lucide-react'
 import { SectionHeader } from './shared'
 import { cachedFetch } from './cached-fetch'
@@ -82,18 +84,8 @@ export default function BackupTab() {
     }
   }
 
-  const formatSize = (bytes: number) => {
-    if (bytes < 1024) return `${bytes} B`
-    if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`
-    return `${(bytes / 1048576).toFixed(1)} MB`
-  }
-
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground/40" />
-      </div>
-    )
+    return <LoadingBlock spinnerSize="xl" className="py-20 text-muted-foreground/40" />
   }
 
   return (
@@ -154,7 +146,7 @@ export default function BackupTab() {
                         <span className="text-xs font-medium truncate">{backup.id}</span>
                       </div>
                       <div className="flex items-center gap-3 mt-0.5">
-                        <span className="text-[10px] text-muted-foreground/40">{formatSize(backup.size)}</span>
+                        <span className="text-[10px] text-muted-foreground/40">{formatFileSize(backup.size)}</span>
                         <span className="text-[10px] text-muted-foreground/30">
                           {new Date(backup.createdAt).toLocaleString()}
                         </span>

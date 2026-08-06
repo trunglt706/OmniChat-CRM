@@ -105,6 +105,7 @@ function CRMPage() {
           status: user.status || 'online', bio: user.bio || '',
         })
         useCRMStore.getState().initSettingsFromDB(user.settings)
+        useCRMStore.getState().loadSystemSettings()
         useCRMStore.getState().loadNotifications()
       })
       .catch(() => { window.location.href = '/login' })

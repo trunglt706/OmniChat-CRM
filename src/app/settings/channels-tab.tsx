@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
+import { LoadingBlock } from '@/components/ui/loading'
 import { Label } from '@/components/ui/label'
 import { apiPut, apiPost } from '@/lib/api-client'
 import { cn } from '@/lib/utils'
@@ -84,11 +85,7 @@ export default function ChannelsTab() {
   }
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground/40" />
-      </div>
-    )
+    return <LoadingBlock className="py-20 text-muted-foreground/40" />
   }
 
   return (

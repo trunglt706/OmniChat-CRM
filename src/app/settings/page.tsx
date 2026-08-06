@@ -12,6 +12,7 @@ import ProfileTab from './profile-tab'
 import SystemTab from './system-tab'
 import ChannelsTab from './channels-tab'
 import StaffTab from './staff-tab'
+import SeoTab from './seo-tab'
 import SecurityTab from './security-tab'
 import BackupTab from './backup-tab'
 
@@ -20,6 +21,7 @@ const TAB_COMPONENTS: Record<SettingsTab, React.ComponentType> = {
   system: SystemTab,
   channels: ChannelsTab,
   staff: StaffTab,
+  seo: SeoTab,
   security: SecurityTab,
   backup: BackupTab,
 }
@@ -41,7 +43,7 @@ function SettingsPage() {
 
   const [activeTab, setActiveTab] = useState<SettingsTab>(() => {
     const tabParam = searchParams.get('tab')
-    if (tabParam && ['profile', 'system', 'channels', 'staff', 'security', 'backup'].includes(tabParam)) {
+    if (tabParam && ['profile', 'system', 'channels', 'staff', 'seo', 'security', 'backup'].includes(tabParam)) {
       return tabParam as SettingsTab
     }
     return 'profile'
@@ -63,9 +65,11 @@ function SettingsPage() {
           status: user.status || 'online', bio: user.bio || '',
         })
         if (user.settings) {
-          const { initSettingsFromDB } = useCRMStore.getState()
+          const { initSettingsFromDB, loadSystemSettings } = useCRMStore.getState()
           initSettingsFromDB(typeof user.settings === 'string' ? user.settings : JSON.stringify(user.settings))
+          loadSystemSettings()
         }
+        setLoading(false)
       })
       .catch(() => { router.push('/login') })
   }, [router, setAuthenticated, setCurrentUser])

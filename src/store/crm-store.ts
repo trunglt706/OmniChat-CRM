@@ -153,6 +153,10 @@ interface CRMState {
   updateSettings: (patch: Partial<AppSettings>) => void
   initSettingsFromDB: (settingsJson: string | null) => void
 
+  systemSettings: Record<string, string>
+  setSystemSettings: (settings: Record<string, string>) => void
+  loadSystemSettings: () => Promise<void>
+
   // ─── UI Sheets ───
   openSheet: OpenSheet
   setOpenSheet: (s: OpenSheet) => void
@@ -439,6 +443,18 @@ export const useCRMStore = create<CRMState>((set, get) => ({
       const parsed = settingsJson ? JSON.parse(settingsJson) : {}
       const merged = { ...DEFAULT_SETTINGS, ...parsed }
       set({ settings: merged })
+    } catch {}
+  },
+
+  systemSettings: {},
+  setSystemSettings: (s) => set({ systemSettings: s }),
+  loadSystemSettings: async () => {
+    try {
+      const res = await fetch('/api/settings')
+      if (res.ok) {
+        const data = await res.json()
+        set({ systemSettings: data })
+      }
     } catch {}
   },
 

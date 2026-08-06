@@ -1,47 +1,61 @@
 import NextAuth, { type NextAuthOptions } from 'next-auth'
 import GoogleProvider from 'next-auth/providers/google'
+import CredentialsProvider from 'next-auth/providers/credentials'
+import { db } from '@/lib/db'
+import bcrypt from 'bcryptjs'
 
-// For MVP, we use a mock session when GOOGLE_CLIENT_ID is not set.
-// When GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are configured,
-// real Google OAuth will be used.
+const providers: any[] = [
+  CredentialsProvider({
+    name: 'Credentials',
+    credentials: {
+      email: { label: "Email", type: "email", placeholder: "admin@omnichat.vn" },
+      password: { label: "Password", type: "password" }
+    },
+    async authorize(credentials) {
+      if (!credentials?.email || !credentials?.password) {
+        throw new Error('Vui lòng nhập đầy đủ email và mật khẩu')
+      }
+      const user = await db.user.findUnique({
+        where: { email: credentials.email }
+      })
+      if (!user) {
+        throw new Error('Tài khoản không tồn tại')
+      }
+      if (!user.password) {
+        throw new Error('Tài khoản này không thiết lập mật khẩu')
+      }
+      const isPasswordValid = await bcrypt.compare(credentials.password, user.password)
+      if (!isPasswordValid) {
+        throw new Error('Mật khẩu không chính xác')
+      }
+      return {
+        id: String(user.id),
+        email: user.email,
+        name: user.name,
+        picture: user.avatar,
+        role: user.role
+      } as any
+    }
+  })
+]
 
-const useMockAuth = !process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET
+if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
+  providers.push(GoogleProvider({
+    clientId: process.env.GOOGLE_CLIENT_ID,
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+  }))
+}
 
 export const authOptions: NextAuthOptions = {
-  providers: useMockAuth
-    ? [
-        {
-          id: 'mock',
-          name: 'Demo Login',
-          type: 'oauth',
-          clientId: 'mock',
-          clientSecret: 'mock',
-          authorization: { url: `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/auth/mock/authorize`, params: {} },
-          token: { url: `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/auth/mock/token` },
-          userinfo: { url: `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/auth/mock/userinfo` },
-          profile: (profile: any) => ({
-            id: profile.sub,
-            name: profile.name,
-            email: profile.email,
-            image: profile.picture,
-          }),
-          checks: ['none'],
-        } as any,
-      ]
-    : [
-        GoogleProvider({
-          clientId: process.env.GOOGLE_CLIENT_ID!,
-          clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-        }),
-      ],
+  providers,
   callbacks: {
-    async jwt({ token, account, profile }) {
-      if (useMockAuth) {
-        token.id = 'user_01'
-        token.role = 'admin'
-        token.email = 'admin@omnichat.vn'
-        return token
+    async jwt({ token, user, account, profile }) {
+      // Khi user login qua credentials, `user` object sẽ được truyền vào đây lần đầu
+      if (user) {
+        token.id = user.id
+        token.role = (user as any).role || 'agent'
       }
+      // Khi login qua Google
       if (account && profile) {
         (token as any).id = (profile as any).sub || token.sub
         ;(token as any).picture = (profile as any).picture

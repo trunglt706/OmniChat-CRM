@@ -26,7 +26,8 @@ import {
   Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { useT } from '@/i18n/useT'
-import { EMOJI_LIST, GRADIENT_CLASSES, MESSAGES_PER_PAGE, shouldShowDate, formatFullDate, formatFileSize } from '@/lib/const/chat'
+import { EMOJI_LIST, GRADIENT_CLASSES, MESSAGES_PER_PAGE, shouldShowDate, formatFullDate } from '@/lib/const/chat'
+import { formatFileSize } from '@/lib/utils'
 import { TypingIndicator } from './chat/typing-indicator'
 import { MessageBubble } from './chat/message-bubble'
 

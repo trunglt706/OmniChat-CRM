@@ -12,8 +12,9 @@ import { apiPut } from '@/lib/api-client'
 import { cn } from '@/lib/utils'
 import { useT } from '@/i18n/useT'
 import { LOCALE_LABELS, LOCALES } from '@/i18n/translations'
-import { Volume2, Monitor, Mail, Maximize2, Eye, Globe, UserCheck, Moon, Sun, Bell, Trash2, Check, X } from 'lucide-react'
+import { Volume2, Monitor, Mail, Maximize2, Eye, Globe, UserCheck, Moon, Sun, Bell, Trash2, Check, X, Clock, Calendar } from 'lucide-react'
 import { SettingRow, SectionHeader } from './shared'
+import { TIMEZONE_OPTIONS, TIME_FORMAT_OPTIONS } from '@/lib/const/setting'
 
 export default function SystemTab() {
   const settings = useCRMStore((s) => s.settings)
@@ -32,6 +33,28 @@ export default function SystemTab() {
       const newSettings = { ...useCRMStore.getState().settings, ...patch }
       await apiPut('/api/auth/me/settings', newSettings)
       setStatusModal({ type: 'success', text: t('settings.saveSuccess') })
+    } catch {
+      setStatusModal({ type: 'error', text: t('settings.saveFailed') })
+    }
+  }
+
+  const systemSettings = useCRMStore((s) => s.systemSettings)
+  const setSystemSettings = useCRMStore((s) => s.setSystemSettings)
+
+  const handleUpdateSystemSetting = async (patch: Record<string, string>) => {
+    const newSystemSettings = { ...systemSettings, ...patch }
+    setSystemSettings(newSystemSettings)
+    try {
+      const res = await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patch),
+      })
+      if (res.ok) {
+        setStatusModal({ type: 'success', text: t('settings.saveSuccess') })
+      } else {
+        setStatusModal({ type: 'error', text: t('settings.saveFailed') })
+      }
     } catch {
       setStatusModal({ type: 'error', text: t('settings.saveFailed') })
     }
@@ -66,6 +89,33 @@ export default function SystemTab() {
           <Separator className="opacity-30 my-1" />
           <SettingRow icon={Maximize2} label={t('settings.compactMode')} description={t('settings.compactModeDesc')}>
             <Switch checked={settings.compactMode} onCheckedChange={(v) => handleUpdateSetting({ compactMode: v })} />
+          </SettingRow>
+        </div>
+      </div>
+
+      <div className="space-y-1">
+        <SectionHeader title={t('settings.timeConfig') || "Thời gian & Múi giờ"} />
+        <div className="glass-card rounded-2xl p-5">
+          <SettingRow icon={Globe} label={t('settings.timezone') || "Múi giờ hệ thống"} description={t('settings.timezoneDesc') || "Áp dụng chung cho tất cả thành viên"}>
+            <Select value={systemSettings.sys_timezone || 'Asia/Ho_Chi_Minh'} onValueChange={(v) => handleUpdateSystemSetting({ sys_timezone: v })}>
+              <SelectTrigger className="w-40 h-8 rounded-lg text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {TIMEZONE_OPTIONS.map((tz) => (
+                  <SelectItem key={tz.value} value={tz.value} className="text-xs">{tz.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </SettingRow>
+          <Separator className="opacity-30 my-1" />
+          <SettingRow icon={Calendar} label={t('settings.timeFormat') || "Định dạng thời gian"} description={t('settings.timeFormatDesc') || "Cách hiển thị ngày giờ"}>
+            <Select value={systemSettings.sys_time_format || 'dd/MM/yyyy HH:mm'} onValueChange={(v) => handleUpdateSystemSetting({ sys_time_format: v })}>
+              <SelectTrigger className="w-48 h-8 rounded-lg text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {TIME_FORMAT_OPTIONS.map((fmt) => (
+                  <SelectItem key={fmt.value} value={fmt.value} className="text-xs">{fmt.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </SettingRow>
         </div>
       </div>

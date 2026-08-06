@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label'
 import { useTheme } from 'next-themes'
 import { Sun, Moon } from 'lucide-react'
 import { useT } from '@/i18n/useT'
+import { signIn } from 'next-auth/react'
 
 function LoginForm() {
   const { t } = useT()
@@ -24,28 +25,35 @@ function LoginForm() {
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
 
-  const doLogin = useCallback(async (loginEmail?: string) => {
+  const doLogin = useCallback(async (loginEmail?: string, loginPassword?: string) => {
     setError('')
     setLoading(true)
     try {
       const callbackUrl = searchParams.get('callbackUrl') || '/'
-      const res = await fetch('/api/auth/mock/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: loginEmail || email || 'admin@omnichat.vn' }),
+      const res = await signIn('credentials', {
+        redirect: false,
+        email: loginEmail || email,
+        password: loginPassword || password,
+        callbackUrl,
       })
-      if (!res.ok) {
-        setError(t('login.error'))
+      
+      if (res?.error) {
+        setError(res.error)
         setLoading(false)
         return
       }
-      router.push(callbackUrl)
+      
+      if (res?.url) {
+        router.push(res.url)
+      } else {
+        router.push(callbackUrl)
+      }
       router.refresh()
     } catch {
       setError(t('login.error'))
       setLoading(false)
     }
-  }, [email, searchParams, router, t])
+  }, [email, password, searchParams, router, t])
 
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -81,7 +89,7 @@ function LoginForm() {
           <div className="text-center space-y-1">
             <h2 className="text-lg font-bold tracking-tight">{t('login.title')}</h2>
             <p className="text-xs text-muted-foreground/50 font-medium">
-              {t('login.demoDesc')}
+              Đăng nhập bằng tài khoản quản trị
             </p>
           </div>
 
@@ -127,7 +135,7 @@ function LoginForm() {
             </div>
 
             {error && (
-              <p className="text-xs text-destructive/80 font-medium flex items-center gap-1.5">
+               <p className="text-xs text-destructive/80 font-medium flex items-center gap-1.5">
                 <Shield className="h-3 w-3" /> {error}
               </p>
             )}
@@ -159,7 +167,7 @@ function LoginForm() {
           {/* Quick demo login */}
           <Button
             variant="outline"
-            onClick={() => doLogin()}
+            onClick={() => doLogin('admin@omnichat.vn', 'password123')}
             disabled={loading}
             className="w-full h-11 text-sm font-medium gap-2 rounded-xl border-border/40 hover:border-primary/30 hover:bg-primary/5 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]"
           >
@@ -168,7 +176,7 @@ function LoginForm() {
             ) : (
               <Headphones className="h-4 w-4" />
             )}
-            {t('login.demoBtn')}
+            Demo (admin@omnichat.vn / password123)
           </Button>
         </div>
 

@@ -11,6 +11,7 @@ import { apiPut, apiPost, apiFetch } from '@/lib/api-client'
 import { cn } from '@/lib/utils'
 import { useT } from '@/i18n/useT'
 import { ShieldAlert, Zap, Clock, Ban, Trash2, Check, X, Loader2 } from 'lucide-react'
+import { LoadingBlock } from '@/components/ui/loading'
 import { SettingRow, SectionHeader } from './shared'
 import logger from '@/lib/logger'
 import { cachedFetch } from './cached-fetch'
@@ -116,11 +117,7 @@ export default function SecurityTab() {
   }
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground/40" />
-      </div>
-    )
+    return <LoadingBlock spinnerSize="xl" className="py-20 text-muted-foreground/40" />
   }
 
   return (
