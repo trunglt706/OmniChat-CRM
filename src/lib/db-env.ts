@@ -11,7 +11,7 @@
  *   console.log(dbConfig.connectionUrl)  // full connection URL
  */
 
-export type DatabaseProvider = 'sqlite' | 'mysql'
+export type DatabaseProvider = 'sqlite' | 'mysql' | 'postgresql'
 
 import logger from '@/lib/logger'
 
@@ -30,6 +30,8 @@ export interface DatabaseConfig {
   get isMySQL(): boolean
   /** Whether this is a SQLite connection */
   get isSQLite(): boolean
+  /** Whether this is a PostgreSQL connection */
+  get isPostgreSQL(): boolean
 }
 
 function envStr(key: string, fallback: string): string {
@@ -50,10 +52,11 @@ function envInt(key: string, fallback: number): number {
 function parseProvider(): DatabaseProvider {
   const raw = (process.env.DATABASE_PROVIDER || 'sqlite').toLowerCase().trim()
   if (raw === 'mysql') return 'mysql'
+  if (raw === 'postgresql' || raw === 'postgres' || raw === 'pg') return 'postgresql'
   if (raw === 'sqlite') return 'sqlite'
   logger.warn(
     `DATABASE_PROVIDER="${raw}" không hợp lệ. Sử dụng mặc định: sqlite. ` +
-    `Giá trị hợp lệ: sqlite, mysql`,
+    `Giá trị hợp lệ: sqlite, mysql, postgresql`,
     { context: 'db-env' }
   )
   return 'sqlite'
@@ -66,7 +69,9 @@ function parseProvider(): DatabaseProvider {
 function buildDbConfig(): DatabaseConfig {
   const provider = parseProvider()
   const connectionUrl = envStr('DATABASE_URL',
-    provider === 'sqlite' ? 'file:./db/custom.db' : 'mysql://root:password@localhost:3306/omnichat'
+    provider === 'sqlite' ? 'file:./db/custom.db' : 
+    provider === 'postgresql' ? 'postgresql://postgres:password@localhost:5432/omnichat' : 
+    'mysql://root:password@localhost:3306/omnichat'
   )
 
   const config: DatabaseConfig = {
@@ -77,6 +82,7 @@ function buildDbConfig(): DatabaseConfig {
     connectionTimeout: envInt('DATABASE_CONNECTION_TIMEOUT', 30),
     get isMySQL() { return this.provider === 'mysql' },
     get isSQLite() { return this.provider === 'sqlite' },
+    get isPostgreSQL() { return this.provider === 'postgresql' },
   }
 
   return config
