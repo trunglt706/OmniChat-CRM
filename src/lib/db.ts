@@ -3,11 +3,17 @@
  *
  * SQLite (default): Standard PrismaClient, zero extra dependencies.
  * MySQL: Uses @prisma/adapter-mysql + mysql2 (lazy-loaded at runtime).
+ * PostgreSQL: Uses @prisma/adapter-pg + pg (lazy-loaded at runtime).
  *
  * Setup for MySQL:
  *   1. bun add @prisma/adapter-mysql mysql2
  *   2. Set DATABASE_PROVIDER=mysql in .env
  *   3. Set DATABASE_URL=mysql://user:pass@host:3306/dbname
+ * 
+ * Setup for PostgreSQL:
+ *   1. bun add @prisma/adapter-pg pg
+ *   2. Set DATABASE_PROVIDER=postgresql in .env
+ *   3. Set DATABASE_URL=postgresql://user:pass@host:5432/dbname
  */
 
 import { PrismaClient } from '@prisma/client'
@@ -46,6 +52,7 @@ export const db = globalForPrisma.prisma ?? (globalForPrisma.prisma = createPris
  * - MySQL: lazy-loads mysql2 adapter on first call via dynamic require().
  */
 let _mysqlPromise: Promise<PrismaClient> | null = null
+let _postgresPromise: Promise<PrismaClient> | null = null
 
 export async function getDb(): Promise<PrismaClient> {
   const config = getDbConfig()
@@ -55,12 +62,52 @@ export async function getDb(): Promise<PrismaClient> {
     return db
   }
 
+  // PostgreSQL: lazy-init adapter
+  if (config.isPostgreSQL) {
+    if (!_postgresPromise) {
+      _postgresPromise = (async () => {
+        try {
+          const pg = await new Function('return import("pg")')()
+          const { PrismaPg } = await new Function('return import("@prisma/adapter-pg")')()
+
+          const pool = new pg.Pool({
+            connectionString: config.connectionUrl,
+            max: config.poolMax,
+            connectionTimeoutMillis: config.connectionTimeout * 1000,
+          })
+
+          const adapter = new PrismaPg(pool)
+
+          logger.info(
+            `PostgreSQL connected: ${config.connectionUrl.replace(/:([^@]+)@/, ':***@')}`,
+            'DB'
+          )
+
+          const client = new PrismaClient({
+            adapter,
+            log: process.env.NODE_ENV === 'development' ? ['query'] : [],
+          }) as unknown as PrismaClient
+
+          globalForPrisma.prisma = client
+          return client
+        } catch (err) {
+          logger.error(
+            `PostgreSQL init failed. Install: bun add @prisma/adapter-pg pg`,
+            'DB',
+            { error: err instanceof Error ? err.message : String(err) }
+          )
+          logger.warn('Falling back to SQLite...', 'DB')
+          return db
+        }
+      })()
+    }
+    return _postgresPromise
+  }
+
   // MySQL: lazy-init adapter (only triggered when DATABASE_PROVIDER=mysql)
   if (!_mysqlPromise) {
     _mysqlPromise = (async () => {
       try {
-        // Use Function constructor to avoid Turbopack/webpack static analysis.
-        // This file is only reached when DATABASE_PROVIDER=mysql.
         const mysql = await new Function('return import("mysql2/promise")')()
         const { PrismaMySQL } = await new Function('return import("@prisma/adapter-mysql")')()
 
@@ -90,7 +137,7 @@ export async function getDb(): Promise<PrismaClient> {
         logger.error(
           `MySQL init failed. Install: bun add @prisma/adapter-mysql mysql2`,
           'DB',
-          err
+          { error: err instanceof Error ? err.message : String(err) }
         )
         logger.warn('Falling back to SQLite...', 'DB')
         return db
