@@ -66,7 +66,6 @@ export function Header() {
     }
     return c
   })
-  const openSheet = useCRMStore((s) => s.openSheet)
   const setOpenSheet = useCRMStore((s) => s.setOpenSheet)
   const settings = useCRMStore((s) => s.settings)
   const updateSettings = useCRMStore((s) => s.updateSettings)

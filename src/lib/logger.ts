@@ -1,5 +1,5 @@
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error'
-export type LogDriverType = 'file' | 'slack' | 'console'
+export type LogDriverType = 'file' | 'slack' | 'console' | 'sentry'
 
 export interface LogEntry {
   timestamp: string
@@ -23,6 +23,7 @@ export interface LoggerConfig {
   filePath: string
   slackWebhookUrl?: string
   slackMinLevel: LogLevel
+  sentryDsn?: string
 }
 
 const LEVEL_WEIGHTS: Record<LogLevel, number> = {
@@ -58,6 +59,7 @@ class Logger {
     const filePath = isServer ? (process.env.LOG_FILE_PATH || 'logs/app.log') : 'logs/app.log'
     const slackWebhookUrl = isServer ? (process.env.SLACK_WEBHOOK_URL || '') : ''
     const slackMinLevel = isServer ? (process.env.SLACK_MIN_LEVEL?.toLowerCase() || 'warn') as LogLevel : 'warn'
+    const sentryDsn = isServer ? (process.env.SENTRY_DSN || '') : ''
 
     this.config = {
       drivers,
@@ -65,6 +67,19 @@ class Logger {
       filePath,
       slackWebhookUrl,
       slackMinLevel: (slackMinLevel in LEVEL_WEIGHTS ? slackMinLevel : 'warn') as LogLevel,
+      sentryDsn,
+    }
+
+    if (isServer && sentryDsn) {
+      try {
+        const Sentry = eval('require')('@sentry/node')
+        Sentry.init({
+          dsn: sentryDsn,
+          tracesSampleRate: 1.0,
+        })
+      } catch (e) {
+        console.error('[Logger Sentry Init Error]', e)
+      }
     }
   }
 
@@ -175,6 +190,11 @@ class Logger {
             this.writeToSlack(entry).catch(() => {})
           }
           break
+        case 'sentry':
+          if (this.shouldLog(entry.level, 'warn')) {
+            this.writeToSentry(entry)
+          }
+          break
       }
     }
   }
@@ -266,6 +286,33 @@ class Logger {
       })
     } catch (e) {
       console.error('[Logger SlackDriver Error]', e)
+    }
+  }
+
+  private writeToSentry(entry: LogEntry) {
+    if (typeof window !== 'undefined' || !this.config.sentryDsn) return
+    try {
+      const Sentry = eval('require')('@sentry/node')
+      
+      Sentry.withScope((scope: any) => {
+        if (entry.context) scope.setTag('context', entry.context)
+        if (entry.userId) scope.setUser({ id: String(entry.userId) })
+        if (entry.meta) scope.setExtras(entry.meta)
+        
+        const sentryLevel = entry.level === 'warn' ? 'warning' : entry.level === 'error' ? 'error' : entry.level === 'info' ? 'info' : 'debug'
+        scope.setLevel(sentryLevel)
+        
+        if (entry.error) {
+          const err = new Error(entry.error.message || entry.message)
+          if (entry.error.stack) err.stack = entry.error.stack
+          if (entry.error.name) err.name = entry.error.name
+          Sentry.captureException(err)
+        } else {
+          Sentry.captureMessage(entry.message)
+        }
+      })
+    } catch (e) {
+      console.error('[Logger Sentry Driver Error]', e)
     }
   }
 

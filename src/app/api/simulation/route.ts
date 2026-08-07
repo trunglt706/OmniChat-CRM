@@ -122,7 +122,26 @@ export async function GET(request: NextRequest) {
 
           if (recentMessages.length > 0) {
             controller.enqueue(
-              encoder.encode(`data: ${JSON.stringify({ type: 'new_messages', messages: recentMessages, timestamp: new Date().toISOString() })}\n\n`)
+              encoder.encode(`event: new_messages\ndata: ${JSON.stringify({ type: 'new_messages', messages: recentMessages, timestamp: new Date().toISOString() })}\n\n`)
+            );
+          }
+
+          // Poll for typing statuses
+          const redisClient = (await import('@/lib/redis')).getRedis();
+          const typingKeys = await redisClient.keys('typing:*');
+          const typingEvents: Array<{conversationId: number, userId: number, name: string}> = [];
+          for (const key of typingKeys) {
+            const parts = key.split(':');
+            const conversationId = parseInt(parts[1], 10);
+            const userId = parseInt(parts[2], 10);
+            const name = await redisClient.get(key);
+            if (name && !isNaN(conversationId) && !isNaN(userId)) {
+              typingEvents.push({ conversationId, userId, name });
+            }
+          }
+          if (typingEvents.length > 0) {
+            controller.enqueue(
+              encoder.encode(`event: typing\ndata: ${JSON.stringify({ type: 'typing', events: typingEvents, timestamp: new Date().toISOString() })}\n\n`)
             );
           }
         } catch {

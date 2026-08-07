@@ -237,13 +237,16 @@ export const useCRMStore = create<CRMState>((set, get) => ({
   setSearchQuery: (q) => set({ searchQuery: q }),
 
   selectedConversationId: null,
-  setSelectedConversationId: (id) => set({
-    selectedConversationId: id,
-    conversationDetail: null,
-    messages: [],
-    notes: [],
-    hasMoreMessages: false,
-    isLoadingMoreMessages: false,
+  setSelectedConversationId: (id) => set((state) => {
+    if (state.selectedConversationId === id) return {}
+    return {
+      selectedConversationId: id,
+      conversationDetail: null,
+      messages: [],
+      notes: [],
+      hasMoreMessages: false,
+      isLoadingMoreMessages: false,
+    }
   }),
   conversationDetail: null,
   setConversationDetail: (d) => set({ conversationDetail: d }),

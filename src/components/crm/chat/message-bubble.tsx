@@ -69,13 +69,19 @@ export const MessageBubble = memo(function MessageBubble({ message, isLastInGrou
             </div>
           )}
           {!isImage && message.attachmentUrl && (
-            <div className="flex items-center gap-2 bg-black/10 dark:bg-white/10 rounded-lg px-3 py-2 mb-1">
+            <a 
+              href={message.attachmentUrl}
+              download={message.attachmentName || 'download'}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 bg-black/10 dark:bg-white/10 hover:bg-black/20 dark:hover:bg-white/20 transition-colors rounded-lg px-3 py-2 mb-1 cursor-pointer"
+            >
               <Upload className="h-4 w-4 opacity-70 flex-shrink-0" />
-              <div className="min-w-0">
+              <div className="min-w-0 text-left">
                 <p className="text-xs font-medium truncate">{message.attachmentName || t('common.file')}</p>
                 <p className="text-[10px] opacity-60">{message.attachmentType || t('common.file').toLowerCase()}</p>
               </div>
-            </div>
+            </a>
           )}
           {message.content && !isImage && (
             <>

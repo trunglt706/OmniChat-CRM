@@ -23,24 +23,31 @@ export async function POST(request: Request) {
     const originalName = file.name.toLowerCase()
     const ext = originalName.split('.').pop() || ''
 
-    const allowedExts = ['jpg', 'jpeg', 'png', 'gif', 'webp']
+    const allowedExts = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'csv', 'txt', 'zip', 'rar']
+    const allowedMimeTypes = [
+      'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+      'application/pdf',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.ms-excel',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'text/csv', 'text/plain',
+      'application/zip', 'application/x-rar-compressed', 'application/x-zip-compressed'
+    ]
+
     if (!ext || !allowedExts.includes(ext)) {
-      return NextResponse.json({ error: 'Loại file không được phép tải lên. Vui lòng chọn ảnh hợp lệ.' }, { status: 400 })
+      return NextResponse.json({ error: 'Loại file không được phép tải lên. Đuôi file không hợp lệ.' }, { status: 400 })
+    }
+
+    if (file.type && !allowedMimeTypes.includes(file.type) && file.type !== 'application/octet-stream') {
+      return NextResponse.json({ error: 'Loại file không được phép tải lên. Mime type không hợp lệ.' }, { status: 400 })
     }
 
     const fileName = `${uuidv4()}.${ext}`
 
-    const uploadsDir = path.join(process.cwd(), 'public', 'uploads')
-    try {
-      await mkdir(uploadsDir, { recursive: true })
-    } catch (e) {
-      // Ignore
-    }
+    const storage = (await import('@/lib/storage')).getStorageDriver()
+    const url = await storage.upload(buffer, fileName, file.type || 'application/octet-stream')
 
-    const filePath = path.join(uploadsDir, fileName)
-    await writeFile(filePath, buffer)
-
-    const url = `/uploads/${fileName}`
     return NextResponse.json({ success: true, url })
 
   } catch (error) {

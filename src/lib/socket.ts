@@ -84,6 +84,16 @@ class SocketService {
         } catch {}
       })
 
+      es.addEventListener('typing', (e) => {
+        try {
+          const data = JSON.parse(e.data)
+          this._emit('typing', data)
+          ;(data.events || []).forEach((evt: any) => {
+            this._emit(`typing:${evt.conversationId}`, evt)
+          })
+        } catch {}
+      })
+
       es.onopen = () => {
         this._setConnected(true)
       }
@@ -207,7 +217,7 @@ class SocketService {
         this._setConnected(false)
       })
     } catch (e) {
-      logger.error('Socket.IO load failed, falling back to SSE', 'Socket', e)
+      logger.error('Socket.IO load failed, falling back to SSE', 'Socket', { error: String(e) })
       this._transport = 'sse'
       this._createSSE(getWsConfig().ssePollInterval)
     }
@@ -323,7 +333,7 @@ class SocketService {
           }),
         })
       } catch (e) {
-        logger.error('emit error', 'Socket', e)
+        logger.error('emit error', 'Socket', { error: String(e) })
       }
     }
   }
@@ -332,7 +342,7 @@ class SocketService {
     const set = this.listeners.get(event)
     if (set) {
       set.forEach((cb) => {
-        try { cb(data) } catch (e) { logger.error(`error in ${event} handler`, 'Socket', e) }
+        try { cb(data) } catch (e) { logger.error(`error in ${event} handler`, 'Socket', { error: String(e) }) }
       })
     }
   }

@@ -70,7 +70,11 @@ export default function ChatArea() {
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null)
   const [assignOpen, setAssignOpen] = useState(false)
   const [assignLoading, setAssignLoading] = useState(false)
+  const [typingUsers, setTypingUsers] = useState<string[]>([])
+  
   const bottomRef = useRef<HTMLDivElement>(null)
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const lastTypingValRef = useRef<boolean>(false)
   const topSentinelRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -90,7 +94,7 @@ export default function ChatArea() {
       const json = await res.json()
       return json // { data: Message[], total, hasMore }
     } catch (e) {
-      logger.error('Failed to fetch messages', 'ChatArea', e)
+      logger.error('Failed to fetch messages', 'ChatArea', { error: String(e) })
       return null
     }
   }, [])
@@ -127,7 +131,7 @@ export default function ChatArea() {
           isInitialLoadRef.current = false
         })
       } catch (e) {
-        logger.error('Failed to fetch conversation', 'ChatArea', e)
+        logger.error('Failed to fetch conversation', 'ChatArea', { error: String(e) })
       }
     }
     loadInitial()
@@ -174,7 +178,7 @@ export default function ChatArea() {
         setHasMoreMessages(false)
       }
     } catch (e) {
-      logger.error('Failed to load older messages', 'ChatArea', e)
+      logger.error('Failed to load older messages', 'ChatArea', { error: String(e) })
     } finally {
       loadingMoreRef.current = false
       setIsLoadingMoreMessages(false)
@@ -212,8 +216,26 @@ export default function ChatArea() {
       }
     }
 
-    const unsub = socket.on(`message:${selectedConversationId}`, handleNewMessage)
-    return unsub
+    const unsubMessage = socket.on(`message:${selectedConversationId}`, handleNewMessage)
+    
+    const handleTyping = (data: any) => {
+      if (data.conversationId === selectedConversationId) {
+        setTypingUsers(prev => {
+          if (!prev.includes(data.name)) return [...prev, data.name]
+          return prev
+        })
+        // Clear them after 3s if no new event
+        setTimeout(() => {
+          setTypingUsers(prev => prev.filter(n => n !== data.name))
+        }, 3500)
+      }
+    }
+    const unsubTyping = socket.on(`typing:${selectedConversationId}`, handleTyping)
+    
+    return () => {
+      unsubMessage()
+      unsubTyping()
+    }
   }, [selectedConversationId, addMessage])
 
   // Auto-resize textarea
@@ -262,15 +284,30 @@ export default function ChatArea() {
               attachmentType: file.file?.type || 'image/*',
             }, { idempotencyKey: generateIdempotencyKey() })
           addMessage(data.message || data)
-        } else {
-          // File attachment as text reference
-          const data = await apiPost(`/api/conversations/${selectedConversationId}/messages`, {
-              content: `\u{1F4CE} ${file.name}`,
-              messageType: 'file',
-              attachmentName: file.name,
-              attachmentType: file.file?.type || 'application/octet-stream',
-            }, { idempotencyKey: generateIdempotencyKey() })
-          addMessage(data.message || data)
+        } else if (file.file) {
+          // Upload file
+          const formData = new FormData()
+          formData.append('file', file.file)
+          
+          try {
+            const uploadRes = await fetch('/api/upload', { method: 'POST', body: formData })
+            const uploadData = await uploadRes.json()
+
+            if (uploadData.url) {
+              const data = await apiPost(`/api/conversations/${selectedConversationId}/messages`, {
+                  content: `\u{1F4CE} ${file.name}`,
+                  messageType: 'file',
+                  attachmentUrl: uploadData.url,
+                  attachmentName: file.name,
+                  attachmentType: file.file?.type || 'application/octet-stream',
+                }, { idempotencyKey: generateIdempotencyKey() })
+              addMessage(data.message || data)
+            } else {
+              logger.error('File upload failed', 'ChatArea', { error: uploadData.error })
+            }
+          } catch (err: any) {
+            logger.error('File upload error', 'ChatArea', { error: err.message || err })
+          }
         }
       }
 
@@ -278,7 +315,7 @@ export default function ChatArea() {
       setAttachedFiles([])
       textareaRef.current?.focus()
     } catch (e) {
-      logger.error('Failed to send message', 'ChatArea', e)
+      logger.error('Failed to send message', 'ChatArea', { error: String(e) })
     } finally {
       setIsSendingMessage(false)
     }
@@ -338,7 +375,7 @@ export default function ChatArea() {
       const detail = await detailRes.json()
       setConversationDetail(detail)
     } catch (e) {
-      logger.error('Failed to change status', 'ChatArea', e)
+      logger.error('Failed to change status', 'ChatArea', { error: String(e) })
     }
   }
 
@@ -353,7 +390,7 @@ export default function ChatArea() {
       setConversationDetail(detail)
       setAssignOpen(false)
     } catch (e) {
-      logger.error('Failed to assign', 'ChatArea', e)
+      logger.error('Failed to assign', 'ChatArea', { error: String(e) })
     } finally {
       setAssignLoading(false)
     }
@@ -624,7 +661,7 @@ export default function ChatArea() {
               </div>
             )
           })}
-          {isBotTyping && <TypingIndicator />}
+          {(isBotTyping || typingUsers.length > 0) && <TypingIndicator names={typingUsers} isBot={isBotTyping} />}
           <div ref={bottomRef} className="h-1" />
         </div>
       </div>
@@ -720,7 +757,21 @@ export default function ChatArea() {
               <Textarea
                 ref={textareaRef}
                 value={replyText}
-                onChange={(e) => setReplyText(e.target.value)}
+                onChange={(e) => {
+                  setReplyText(e.target.value)
+                  const isTyping = e.target.value.length > 0
+                  if (lastTypingValRef.current !== isTyping) {
+                    lastTypingValRef.current = isTyping
+                    fetch('/api/typing', { method: 'POST', body: JSON.stringify({ conversationId: selectedConversationId, isTyping }) }).catch(() => {})
+                  }
+                  if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current)
+                  if (isTyping) {
+                    typingTimeoutRef.current = setTimeout(() => {
+                      lastTypingValRef.current = false
+                      fetch('/api/typing', { method: 'POST', body: JSON.stringify({ conversationId: selectedConversationId, isTyping: false }) }).catch(() => {})
+                    }, 2500)
+                  }
+                }}
                 onKeyDown={handleKeyDown}
                 onFocus={() => setIsFocused(true)}
                 onBlur={() => setIsFocused(false)}
