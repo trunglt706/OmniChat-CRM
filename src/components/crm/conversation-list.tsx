@@ -18,7 +18,6 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { socket } from '@/lib/socket'
-import { LOCALE_MAP } from '@/lib/const/chat'
 import { formatDateOnly } from '@/lib/format-time'
 import { useT } from '@/i18n/useT'
 import { logger } from '@/lib/logger'

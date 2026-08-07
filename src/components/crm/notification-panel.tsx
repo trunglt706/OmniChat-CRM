@@ -10,6 +10,7 @@ import {
   CheckCheck, Trash2, BellOff, Sparkles,
 } from 'lucide-react'
 import { useT } from '@/i18n/useT'
+import { formatDateTime, formatTimeOnly } from '@/lib/format-time'
 
 const NOTIF_CONFIG: Record<NotificationType, { icon: React.ElementType; color: string; bg: string }> = {
   new_message: { icon: MessageSquare, color: 'text-blue-500', bg: 'bg-blue-500/10' },
@@ -19,7 +20,6 @@ const NOTIF_CONFIG: Record<NotificationType, { icon: React.ElementType; color: s
   system: { icon: Info, color: 'text-slate-500', bg: 'bg-slate-500/10' },
   automation: { icon: Sparkles, color: 'text-violet-500', bg: 'bg-violet-500/10' },
 }
-import { formatDateTime, formatTimeOnly } from '@/lib/format-time'
 
 function formatNotifTime(d: string, t: (key: string, params?: Record<string, string | number>) => string, locale = 'vi') {
   const date = new Date(d), now = new Date(), diff = now.getTime() - date.getTime()

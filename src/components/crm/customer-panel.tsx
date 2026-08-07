@@ -52,7 +52,7 @@ function InfoRow({ icon: Icon, label, value }: { icon: React.ElementType; label:
 
 function InfoTab() {
   const conversationDetail = useCRMStore((s) => s.conversationDetail)
-  const { t, locale } = useT()
+  const { t } = useT()
   if (!conversationDetail) return null
 
   const customer = conversationDetail.customer
@@ -147,7 +147,7 @@ function NotesTab() {
   const addNote = useCRMStore((s) => s.addNote)
   const updateNote = useCRMStore((s) => s.updateNote)
   const deleteNote = useCRMStore((s) => s.deleteNote)
-  const { t, locale } = useT()
+  const { t } = useT()
   const [newNote, setNewNote] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
@@ -347,7 +347,7 @@ function NotesTab() {
 
 function LeadTab() {
   const conversationDetail = useCRMStore((s) => s.conversationDetail)
-  const { t, locale } = useT()
+  const { t } = useT()
   if (!conversationDetail) return null
 
   const leads = conversationDetail.leads || []

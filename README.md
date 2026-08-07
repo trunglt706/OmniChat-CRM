@@ -63,6 +63,15 @@ Thêm kênh mới: tạo 1 file trong `src/lib/channels/adapters/` + đăng ký 
 - AI Bot reply (z-ai-web-dev-sdk)
 - Automation rules (keyword → reply / assign / tag)
 
+### Storage Management
+
+- Hệ thống lưu trữ đa Driver (Abstract `StorageDriver`)
+- Hỗ trợ `LocalDriver` (lưu file trực tiếp trong thư mục `public/uploads`) và `S3Driver` (AWS S3)
+- Quản lý tập tin trực quan từ Settings (tổng dung lượng, danh sách file, tìm kiếm)
+- Hỗ trợ đồng bộ (Sync) dữ liệu qua lại giữa các driver (File <-> S3)
+- Clear toàn bộ dữ liệu an toàn qua cơ chế xác thực lại mật khẩu Admin
+- Quét và nhận diện tự động dung lượng thực tế của các driver (không cần sync DB)
+
 ### Security
 
 - CSP (Content Security Policy) headers
@@ -215,6 +224,10 @@ Copy `.env.example` to `.env` và chỉnh sửa:
 | GET/POST | `/api/automation/rules` | Automation rules CRUD |
 | GET | `/api/backup` | Create backup |
 | POST | `/api/backup/restore` | Restore backup |
+| GET | `/api/storage/files` | Get storage files & stats |
+| DELETE | `/api/storage/files` | Delete a file |
+| POST | `/api/storage/sync` | Sync files between storage drivers |
+| POST | `/api/storage/clear` | Clear all files (Admin password required) |
 
 ## License
 

@@ -14,10 +14,11 @@ import {
   Volume2, Monitor, Mail, Maximize2, Eye,
   UserCheck, Globe, Moon, Sun, Trash2, RotateCcw,
   Wifi, Loader2, CheckCircle, XCircle, AlertTriangle,
-  Radio,
+  Radio, HardDrive
 } from 'lucide-react'
 import { useT } from '@/i18n/useT'
 import { LOCALE_LABELS, LOCALES, type Locale } from '@/i18n/translations'
+import { StorageManagerDialog } from './settings/storage-manager-dialog'
 
 function SettingRow({
   icon: Icon, label, description, children,
@@ -258,6 +259,14 @@ export default function SettingsPanel() {
                 ))}
               </SelectContent>
             </Select>
+          </SettingRow>
+
+          <SettingRow
+            icon={HardDrive}
+            label={t('settings.storage')}
+            description={t('settings.storage.desc')}
+          >
+            <StorageManagerDialog />
           </SettingRow>
         </div>
 

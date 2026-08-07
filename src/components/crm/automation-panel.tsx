@@ -24,7 +24,6 @@ import {
 import { cn } from '@/lib/utils'
 import { useCRMStore } from '@/store/crm-store'
 import { apiFetch, apiPost, apiPut, generateIdempotencyKey } from '@/lib/api-client'
-import type { Tag as TagType } from '@/lib/types'
 import { useT } from '@/i18n/useT'
 import { type AutomationRule, type ActionType, ACTION_TYPES } from '@/lib/const/automation'
 
