@@ -6,7 +6,6 @@ import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
 import { Save, Loader2, UploadCloud } from 'lucide-react'
 import { toast } from 'sonner'
-import Image from 'next/image'
 import { useT } from '@/i18n/useT'
 import { apiFetch, apiPost } from '@/lib/api-client'
 
@@ -148,7 +147,7 @@ export default function SeoTab() {
             <div className="w-24 h-24 rounded-2xl border-2 border-dashed border-border/50 flex flex-col items-center justify-center overflow-hidden bg-foreground/[0.02] relative group">
               {seo.seo_logo ? (
                 <>
-                  <Image src={seo.seo_logo} alt="Logo" width={96} height={96} className="object-contain" />
+                  <img src={seo.seo_logo} alt="Logo" className="w-24 h-24 object-contain" />
                   <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                     <span className="text-[10px] text-white font-medium">{t('seoConfig.changeImage')}</span>
                   </div>
