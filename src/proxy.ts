@@ -13,7 +13,7 @@ import { logBlockedRequest } from '@/lib/api-logger'
 
 // ─── Route configuration ───
 const PUBLIC_PATHS = ['/login', '/api/auth', '/api/webhook', '/api/ws/test', '/api/realtime/test']
-const CSRF_EXEMPT_PATHS = ['/api/auth', '/api/webhook', '/api/ws/test', '/api/realtime/test'] // Auth, webhooks & tests don't need CSRF
+const CSRF_EXEMPT_PATHS = ['/api/auth', '/api/webhook', '/api/ws/test', '/api/realtime/test', '/api/typing'] // Auth, webhooks, tests & typing don't need CSRF
 const IDEMPOTENCY_METHODS = ['POST', 'PUT', 'PATCH']
 
 // API prefixes that need rate limiting
@@ -61,10 +61,13 @@ export async function proxy(request: NextRequest) {
 
   if (!isPublic) {
     try {
+      const useSecureCookies = process.env.NEXTAUTH_URL?.startsWith('https://')
+      const cookieName = useSecureCookies ? '__Secure-next-auth.session-token' : 'next-auth.session-token'
+
       const token = await getToken({
         req: request,
         secret: env.NEXTAUTH_SECRET,
-        cookieName: 'next-auth.session-token',
+        cookieName,
       })
       if (!token) {
         const loginUrl = new URL('/login', request.url)

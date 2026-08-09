@@ -26,7 +26,7 @@ const getSeoSettings = unstable_cache(
         key: { in: ['seo_title', 'seo_description', 'seo_keywords', 'seo_logo'] }
       }
     })
-    
+
     const config: Record<string, string> = {}
     settings.forEach(s => { config[s.key] = s.value })
     return config
@@ -44,7 +44,7 @@ export async function generateMetadata(): Promise<Metadata> {
       description: config.seo_description || "Multi-channel customer support CRM system | Hệ thống quản lý hội thoại đa kênh",
       keywords: config.seo_keywords || "crm, chat, omnichannel",
       icons: {
-        icon: config.seo_logo || "https://z-cdn.chatglm.cn/z-ai/static/logo.png",
+        icon: config.seo_logo || "",
       },
     }
   } catch (error) {
