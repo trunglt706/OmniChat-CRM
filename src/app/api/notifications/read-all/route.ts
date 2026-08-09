@@ -3,19 +3,15 @@ import { getToken } from 'next-auth/jwt'
 import { getSecurityEnv } from '@/lib/redis'
 import { db } from '@/lib/db'
 import { logger } from '@/lib/logger'
+import { getAuthUser } from '@/lib/session'
 
 // PATCH /api/notifications/read-all — mark all notifications as read
 export async function PATCH(req: NextRequest) {
   try {
-    const token = await getToken({
-      req,
-      secret: getSecurityEnv().NEXTAUTH_SECRET,
-      cookieName: 'next-auth.session-token',
-    })
-    if (!token?.sub) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const user = await getAuthUser(req)
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    const userId = Number(token.sub)
-    if (isNaN(userId)) return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
+    const userId = user.id
 
     await db.notification.updateMany({
       where: { userId, read: false },

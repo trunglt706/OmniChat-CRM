@@ -22,10 +22,13 @@ interface SessionUser {
  * Returns null if not authenticated.
  */
 export async function getAuthUser(req: NextRequest): Promise<SessionUser | null> {
+  const useSecureCookies = process.env.NEXTAUTH_URL?.startsWith('https://')
+  const cookieName = useSecureCookies ? '__Secure-next-auth.session-token' : 'next-auth.session-token'
+
   const token = await getToken({
     req,
     secret: SECRET,
-    cookieName: 'next-auth.session-token',
+    cookieName,
   })
 
   if (!token || !token.sub) return null

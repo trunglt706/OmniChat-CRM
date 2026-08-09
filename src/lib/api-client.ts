@@ -70,7 +70,7 @@ async function doFetch<T = any>(
   }
 
   // Auto Content-Type for JSON bodies
-  if (rest.body && !headers['Content-Type']) {
+  if (rest.body && !headers['Content-Type'] && !(rest.body instanceof FormData)) {
     headers['Content-Type'] = 'application/json'
   }
 

@@ -21,7 +21,7 @@ import {
   ArrowLeft, Info, SmilePlus, ImagePlus, X, Upload, ChevronUp, Loader2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { apiPost, generateIdempotencyKey } from '@/lib/api-client'
+import { apiPost, apiFetch, generateIdempotencyKey } from '@/lib/api-client'
 import {
   Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
 } from '@/components/ui/tooltip'
@@ -71,7 +71,7 @@ export default function ChatArea() {
   const [assignOpen, setAssignOpen] = useState(false)
   const [assignLoading, setAssignLoading] = useState(false)
   const [typingUsers, setTypingUsers] = useState<string[]>([])
-  
+
   const bottomRef = useRef<HTMLDivElement>(null)
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const lastTypingValRef = useRef<boolean>(false)
@@ -122,7 +122,7 @@ export default function ChatArea() {
         if (useCRMStore.getState().agents.length === 0) {
           fetch('/api/agents').then(r => r.json()).then(data => {
             if (data.length) useCRMStore.getState().setAgents(data)
-          }).catch(() => {})
+          }).catch(() => { })
         }
 
         // Scroll to bottom after render
@@ -217,7 +217,7 @@ export default function ChatArea() {
     }
 
     const unsubMessage = socket.on(`message:${selectedConversationId}`, handleNewMessage)
-    
+
     const handleTyping = (data: any) => {
       if (data.conversationId === selectedConversationId) {
         setTypingUsers(prev => {
@@ -231,7 +231,7 @@ export default function ChatArea() {
       }
     }
     const unsubTyping = socket.on(`typing:${selectedConversationId}`, handleTyping)
-    
+
     return () => {
       unsubMessage()
       unsubTyping()
@@ -273,34 +273,25 @@ export default function ChatArea() {
         }
       }
 
-      // Send image messages
+      // Send image and file messages
       for (const file of attachedFiles) {
-        if (file.type === 'image' && file.dataUrl) {
-          const data = await apiPost(`/api/conversations/${selectedConversationId}/messages`, {
-              messageType: 'image',
-              content: null,
-              attachmentUrl: file.dataUrl,
-              attachmentName: file.name,
-              attachmentType: file.file?.type || 'image/*',
-            }, { idempotencyKey: generateIdempotencyKey() })
-          addMessage(data.message || data)
-        } else if (file.file) {
-          // Upload file
+        if (file.file) {
+          // Upload file/image
           const formData = new FormData()
           formData.append('file', file.file)
-          
+
           try {
-            const uploadRes = await fetch('/api/upload', { method: 'POST', body: formData })
-            const uploadData = await uploadRes.json()
+            const uploadData = await apiFetch('/api/upload', { method: 'POST', body: formData })
 
             if (uploadData.url) {
+              const isImage = file.type === 'image'
               const data = await apiPost(`/api/conversations/${selectedConversationId}/messages`, {
-                  content: `\u{1F4CE} ${file.name}`,
-                  messageType: 'file',
-                  attachmentUrl: uploadData.url,
-                  attachmentName: file.name,
-                  attachmentType: file.file?.type || 'application/octet-stream',
-                }, { idempotencyKey: generateIdempotencyKey() })
+                content: isImage ? null : `\u{1F4CE} ${file.name}`,
+                messageType: isImage ? 'image' : 'file',
+                attachmentUrl: uploadData.url,
+                attachmentName: file.name,
+                attachmentType: file.file?.type || (isImage ? 'image/*' : 'application/octet-stream'),
+              }, { idempotencyKey: generateIdempotencyKey() })
               addMessage(data.message || data)
             } else {
               logger.error('File upload failed', 'ChatArea', { error: uploadData.error })
@@ -762,13 +753,13 @@ export default function ChatArea() {
                   const isTyping = e.target.value.length > 0
                   if (lastTypingValRef.current !== isTyping) {
                     lastTypingValRef.current = isTyping
-                    fetch('/api/typing', { method: 'POST', body: JSON.stringify({ conversationId: selectedConversationId, isTyping }) }).catch(() => {})
+                    fetch('/api/typing', { method: 'POST', body: JSON.stringify({ conversationId: selectedConversationId, isTyping }) }).catch(() => { })
                   }
                   if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current)
                   if (isTyping) {
                     typingTimeoutRef.current = setTimeout(() => {
                       lastTypingValRef.current = false
-                      fetch('/api/typing', { method: 'POST', body: JSON.stringify({ conversationId: selectedConversationId, isTyping: false }) }).catch(() => {})
+                      fetch('/api/typing', { method: 'POST', body: JSON.stringify({ conversationId: selectedConversationId, isTyping: false }) }).catch(() => { })
                     }, 2500)
                   }
                 }}

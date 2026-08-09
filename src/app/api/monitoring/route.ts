@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getToken } from 'next-auth/jwt'
 import { getSecurityEnv } from '@/lib/redis'
 import { getLogSummary, getRecentLogs, getAlerts, getMemoryBufferLogs } from '@/lib/request-logger'
+import { getAuthUser } from '@/lib/session'
 
 /**
  * GET /api/monitoring?view=summary|logs|alerts|memory&limit=100
@@ -11,13 +12,9 @@ import { getLogSummary, getRecentLogs, getAlerts, getMemoryBufferLogs } from '@/
 export async function GET(request: Request) {
   try {
     const env = getSecurityEnv()
-    const token = await getToken({
-      req: request as any,
-      secret: env.NEXTAUTH_SECRET,
-      cookieName: 'next-auth.session-token',
-    })
+    const user = await getAuthUser(request as any)
 
-    if (!token) {
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 

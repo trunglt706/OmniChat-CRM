@@ -63,7 +63,9 @@ export async function authenticateWsConnection(request: NextRequest): Promise<Ws
 
   // Fallback: check cookie
   try {
-    const token = await getToken({ req: request, secret, cookieName: 'next-auth.session-token' })
+    const useSecureCookies = process.env.NEXTAUTH_URL?.startsWith('https://')
+    const cookieName = useSecureCookies ? '__Secure-next-auth.session-token' : 'next-auth.session-token'
+    const token = await getToken({ req: request, secret, cookieName })
     if (!token?.sub) return null
 
     const userId = Number(token.sub)

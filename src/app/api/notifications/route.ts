@@ -1,21 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getToken } from 'next-auth/jwt'
 import { getSecurityEnv } from '@/lib/redis'
 import { db } from '@/lib/db'
 import { logger } from '@/lib/logger'
+import { getAuthUser } from '@/lib/session'
 
 // GET /api/notifications — list current user's notifications
 export async function GET(req: NextRequest) {
   try {
-    const token = await getToken({
-      req,
-      secret: getSecurityEnv().NEXTAUTH_SECRET,
-      cookieName: 'next-auth.session-token',
-    })
-    if (!token?.sub) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const user = await getAuthUser(req)
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    const userId = Number(token.sub)
-    if (isNaN(userId)) return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
+    const userId = user.id
 
     const { searchParams } = new URL(req.url)
     const unreadOnly = searchParams.get('unread') === 'true'
@@ -56,15 +51,10 @@ export async function GET(req: NextRequest) {
 // POST /api/notifications — create notification for current user
 export async function POST(req: NextRequest) {
   try {
-    const token = await getToken({
-      req,
-      secret: getSecurityEnv().NEXTAUTH_SECRET,
-      cookieName: 'next-auth.session-token',
-    })
-    if (!token?.sub) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const user = await getAuthUser(req)
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    const userId = Number(token.sub)
-    if (isNaN(userId)) return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
+    const userId = user.id
 
     const body = await req.json()
     const { type, title, body: notifBody, conversationId } = body
@@ -103,15 +93,10 @@ export async function POST(req: NextRequest) {
 // DELETE /api/notifications — clear all or single
 export async function DELETE(req: NextRequest) {
   try {
-    const token = await getToken({
-      req,
-      secret: getSecurityEnv().NEXTAUTH_SECRET,
-      cookieName: 'next-auth.session-token',
-    })
-    if (!token?.sub) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const user = await getAuthUser(req)
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    const userId = Number(token.sub)
-    if (isNaN(userId)) return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
+    const userId = user.id
 
     const { searchParams } = new URL(req.url)
     const singleIdStr = searchParams.get('id')
