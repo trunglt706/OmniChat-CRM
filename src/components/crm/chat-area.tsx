@@ -21,7 +21,7 @@ import {
   ArrowLeft, Info, SmilePlus, ImagePlus, X, Upload, ChevronUp, Loader2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { apiPost, generateIdempotencyKey } from '@/lib/api-client'
+import { apiPost, apiFetch, generateIdempotencyKey } from '@/lib/api-client'
 import {
   Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
 } from '@/components/ui/tooltip'
@@ -281,8 +281,7 @@ export default function ChatArea() {
           formData.append('file', file.file)
 
           try {
-            const uploadRes = await fetch('/api/upload', { method: 'POST', body: formData })
-            const uploadData = await uploadRes.json()
+            const uploadData = await apiFetch('/api/upload', { method: 'POST', body: formData })
 
             if (uploadData.url) {
               const isImage = file.type === 'image'
