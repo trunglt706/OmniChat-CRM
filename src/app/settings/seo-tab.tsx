@@ -8,6 +8,7 @@ import { Save, Loader2, UploadCloud } from 'lucide-react'
 import { toast } from 'sonner'
 import Image from 'next/image'
 import { useT } from '@/i18n/useT'
+import { apiFetch, apiPost } from '@/lib/api-client'
 
 export default function SeoTab() {
   const { t } = useT()
@@ -54,12 +55,11 @@ export default function SeoTab() {
     formData.append('file', file)
 
     try {
-      const res = await fetch('/api/upload', {
+      const data = await apiFetch('/api/upload', {
         method: 'POST',
         body: formData,
       })
-      const data = await res.json()
-      if (res.ok && data.url) {
+      if (data.url) {
         setSeo(prev => ({ ...prev, seo_logo: data.url }))
         toast.success(t('seoConfig.uploadSuccess'))
       } else {
@@ -74,12 +74,8 @@ export default function SeoTab() {
   const handleSave = async () => {
     setSaving(true)
     try {
-      const res = await fetch('/api/settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(seo),
-      })
-      if (res.ok) {
+      const res = await apiPost('/api/settings', seo)
+      if (res) {
         toast.success(t('seoConfig.saveSuccess'))
       } else {
         toast.error(t('seoConfig.saveError'))
