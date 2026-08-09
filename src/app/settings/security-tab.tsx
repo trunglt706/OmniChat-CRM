@@ -11,6 +11,7 @@ import { apiPut, apiPost, apiFetch } from '@/lib/api-client'
 import { cn } from '@/lib/utils'
 import { useT } from '@/i18n/useT'
 import { ShieldAlert, Zap, Clock, Ban, Trash2, Check, X, Loader2 } from 'lucide-react'
+import { toast } from 'sonner'
 import { LoadingBlock } from '@/components/ui/loading'
 import { SettingRow, SectionHeader } from './shared'
 import logger from '@/lib/logger'
@@ -98,7 +99,12 @@ export default function SecurityTab() {
       setBlacklist(prev => [data.data, ...prev])
       setNewValue('')
       setNewReason('')
-    } catch (e) { logger.error('Failed to add to blacklist', { context: 'SecurityTab', error: e }) }
+      toast.success(t('security.addSuccess') || 'Đã thêm vào danh sách đen')
+    } catch (e: any) { 
+      const errMsg = e?.data?.error || t('security.addFailed') || 'Thêm thất bại'
+      toast.error(errMsg)
+      logger.error('Failed to add to blacklist', { context: 'SecurityTab', error: e }) 
+    }
     finally { setAdding(false) }
   }
 

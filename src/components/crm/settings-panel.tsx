@@ -16,6 +16,7 @@ import {
   Wifi, Loader2, CheckCircle, XCircle, AlertTriangle,
   Radio, HardDrive
 } from 'lucide-react'
+import { apiPut } from '@/lib/api-client'
 import { useT } from '@/i18n/useT'
 import { LOCALE_LABELS, LOCALES, type Locale } from '@/i18n/translations'
 import { StorageManagerDialog } from './settings/storage-manager-dialog'
@@ -408,7 +409,7 @@ export default function SettingsPanel() {
                 compactMode: false, showPreview: true, autoAssign: true, language: settings.language,
               }
               updateSettings(defaults)
-              try { await fetch('/api/auth/me/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(defaults) }) } catch {}
+              try { await apiPut('/api/auth/me/settings', defaults) } catch {}
             }}
           >
             <RotateCcw className="h-3.5 w-3.5 mr-1.5" />

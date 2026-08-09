@@ -95,7 +95,7 @@ export function Header() {
   const handleLogout = async () => {
     setLoggingOut(true)
     try {
-      await fetch('/api/auth/mock/logout', { method: 'POST' })
+      await apiPost('/api/auth/mock/logout', {})
     } catch {}
     window.location.href = '/login'
   }

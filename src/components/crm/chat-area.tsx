@@ -753,13 +753,13 @@ export default function ChatArea() {
                   const isTyping = e.target.value.length > 0
                   if (lastTypingValRef.current !== isTyping) {
                     lastTypingValRef.current = isTyping
-                    fetch('/api/typing', { method: 'POST', body: JSON.stringify({ conversationId: selectedConversationId, isTyping }) }).catch(() => { })
+                    apiPost('/api/typing', { conversationId: selectedConversationId, isTyping }).catch(() => { })
                   }
                   if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current)
                   if (isTyping) {
                     typingTimeoutRef.current = setTimeout(() => {
                       lastTypingValRef.current = false
-                      fetch('/api/typing', { method: 'POST', body: JSON.stringify({ conversationId: selectedConversationId, isTyping: false }) }).catch(() => { })
+                      apiPost('/api/typing', { conversationId: selectedConversationId, isTyping: false }).catch(() => { })
                     }, 2500)
                   }
                 }}

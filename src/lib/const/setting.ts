@@ -15,7 +15,6 @@ export const SETTINGS_TABS = [
   { key: 'staff',    labelKey: 'settingsTab.staff',    icon: Users },
   { key: 'seo',      labelKey: 'settingsTab.seo',      icon: Globe2 },
   { key: 'security', labelKey: 'settingsTab.security', icon: ShieldAlert },
-  { key: 'backup',   labelKey: 'settingsTab.backup',   icon: Database },
 ] as const
 
 export type SettingsTab = (typeof SETTINGS_TABS)[number]['key']

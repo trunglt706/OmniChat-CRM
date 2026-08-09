@@ -14,7 +14,6 @@ import ChannelsTab from './channels-tab'
 import StaffTab from './staff-tab'
 import SeoTab from './seo-tab'
 import SecurityTab from './security-tab'
-import BackupTab from './backup-tab'
 
 const TAB_COMPONENTS: Record<SettingsTab, React.ComponentType> = {
   profile: ProfileTab,
@@ -23,7 +22,6 @@ const TAB_COMPONENTS: Record<SettingsTab, React.ComponentType> = {
   staff: StaffTab,
   seo: SeoTab,
   security: SecurityTab,
-  backup: BackupTab,
 }
 
 export default function SettingsPageWrapper() {
@@ -43,7 +41,7 @@ function SettingsPage() {
 
   const [activeTab, setActiveTab] = useState<SettingsTab>(() => {
     const tabParam = searchParams.get('tab')
-    if (tabParam && ['profile', 'system', 'channels', 'staff', 'seo', 'security', 'backup'].includes(tabParam)) {
+    if (tabParam && ['profile', 'system', 'channels', 'staff', 'seo', 'security'].includes(tabParam)) {
       return tabParam as SettingsTab
     }
     return 'profile'
