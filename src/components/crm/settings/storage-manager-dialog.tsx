@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button'
 import { HardDrive, Trash2, RefreshCw, AlertTriangle, Search } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { apiFetch, apiPost } from '@/lib/api-client'
 import { toast } from 'sonner'
 import { Separator } from '@/components/ui/separator'
 import { formatFileSize } from '@/lib/utils'
@@ -50,12 +51,11 @@ export function StorageManagerDialog() {
 
   const handleDelete = async (fileName: string) => {
     try {
-      const res = await fetch('/api/storage/files', {
+      const res = await apiFetch('/api/storage/files', {
         method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fileName })
       })
-      if (res.ok) {
+      if (res) {
         toast.success(t('settings.storage.deleted').replace('{fileName}', fileName))
         fetchData()
       } else {
@@ -72,13 +72,8 @@ export function StorageManagerDialog() {
       return
     }
     try {
-      const res = await fetch('/api/storage/clear', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: clearPassword })
-      })
-      const data = await res.json()
-      if (res.ok) {
+      const data = await apiPost('/api/storage/clear', { password: clearPassword })
+      if (data) {
         toast.success(t('settings.storage.cleared'))
         setClearPassword('')
         fetchData()
@@ -96,13 +91,8 @@ export function StorageManagerDialog() {
     
     setSyncing(true)
     try {
-      const res = await fetch('/api/storage/sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ from, to })
-      })
-      const data = await res.json()
-      if (res.ok) {
+      const data = await apiPost('/api/storage/sync', { from, to })
+      if (data) {
         toast.success(
           t('settings.storage.synced')
             .replace('{synced}', data.synced)

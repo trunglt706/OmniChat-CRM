@@ -8,7 +8,7 @@ import { Switch } from '@/components/ui/switch'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Separator } from '@/components/ui/separator'
-import { apiPut } from '@/lib/api-client'
+import { apiPut, apiPost } from '@/lib/api-client'
 import { cn } from '@/lib/utils'
 import { useT } from '@/i18n/useT'
 import { LOCALE_LABELS, LOCALES } from '@/i18n/translations'
@@ -45,12 +45,8 @@ export default function SystemTab() {
     const newSystemSettings = { ...systemSettings, ...patch }
     setSystemSettings(newSystemSettings)
     try {
-      const res = await fetch('/api/settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(patch),
-      })
-      if (res.ok) {
+      const res = await apiPost('/api/settings', patch)
+      if (res) {
         setStatusModal({ type: 'success', text: t('settings.saveSuccess') })
       } else {
         setStatusModal({ type: 'error', text: t('settings.saveFailed') })

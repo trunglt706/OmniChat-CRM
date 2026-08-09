@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useCRMStore, type UserProfile } from '@/store/crm-store'
-import { apiPut } from '@/lib/api-client'
+import { apiPut, apiFetch } from '@/lib/api-client'
 import { cn } from '@/lib/utils'
 import { useT } from '@/i18n/useT'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -82,11 +82,10 @@ export default function ProfileTab() {
     formData.append('file', file)
     
     try {
-      const res = await fetch('/api/upload', {
+      const data = await apiFetch('/api/upload', {
         method: 'POST',
         body: formData,
       })
-      const data = await res.json()
       if (data.url) {
         const updated = await apiPut('/api/auth/me', { avatar: data.url })
         setCurrentUser({ ...currentUser, ...updated })
