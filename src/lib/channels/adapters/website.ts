@@ -102,4 +102,15 @@ export class WebsiteAdapter extends BaseChannelAdapter {
     }
     return { received: 1, messages: [message] }
   }
+
+  async sendMessage(
+    to: string,
+    message: { content: string; messageType?: string; attachmentUrl?: string },
+    config: Record<string, string>
+  ): Promise<{ platformMessageId: string } | { error: string }> {
+    // Với website chat widget, tin nhắn sẽ được đẩy realtime qua Socket.io.
+    // Không cần gọi HTTP API bên ngoài. Trả về UUID nội bộ.
+    const platformMsgId = `web_${Date.now()}_${Math.random().toString(36).substring(7)}`
+    return { platformMessageId: platformMsgId }
+  }
 }

@@ -60,4 +60,34 @@ export class FacebookCommentAdapter extends FacebookMessengerAdapter {
     }
     return { received: 0, messages: [] }
   }
+
+  override async sendMessage(
+    to: string, // For comments, 'to' should be the comment_id to reply to
+    message: { content: string; messageType?: string; attachmentUrl?: string },
+    config: Record<string, string>
+  ): Promise<{ platformMessageId: string } | { error: string }> {
+    const token = config.pageAccessToken
+    if (!token) return { error: 'Thiếu Page Access Token' }
+
+    try {
+      const payload: any = {
+        message: message.content
+      }
+
+      // 'to' should be the comment ID we are replying to
+      const res = await fetch(`https://graph.facebook.com/v21.0/${to}/comments?access_token=${token}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      })
+
+      const data = await res.json()
+      if (data.error) {
+        return { error: `Facebook API lỗi: ${data.error.message}` }
+      }
+      return { platformMessageId: String(data.id) }
+    } catch (e: any) {
+      return { error: e.message || 'Lỗi mạng khi gọi Facebook API' }
+    }
+  }
 }

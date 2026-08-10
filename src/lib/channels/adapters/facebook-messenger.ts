@@ -90,4 +90,34 @@ export class FacebookMessengerAdapter extends BaseChannelAdapter {
     if (a.type === 'audio') return 'audio'
     return 'file'
   }
+
+  async sendMessage(
+    to: string,
+    message: { content: string; messageType?: string; attachmentUrl?: string },
+    config: Record<string, string>
+  ): Promise<{ platformMessageId: string } | { error: string }> {
+    const token = config.pageAccessToken
+    if (!token) return { error: 'Thiếu Page Access Token' }
+
+    try {
+      const payload: any = {
+        recipient: { id: to },
+        message: { text: message.content }
+      }
+
+      const res = await fetch(`https://graph.facebook.com/v21.0/me/messages?access_token=${token}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      })
+
+      const data = await res.json()
+      if (data.error) {
+        return { error: `Facebook API lỗi: ${data.error.message}` }
+      }
+      return { platformMessageId: String(data.message_id) }
+    } catch (e: any) {
+      return { error: e.message || 'Lỗi mạng khi gọi Facebook API' }
+    }
+  }
 }
