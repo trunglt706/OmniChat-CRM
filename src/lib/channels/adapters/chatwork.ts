@@ -91,4 +91,46 @@ export class ChatworkAdapter extends BaseChannelAdapter {
     }
     return { received: 1, messages: [message] }
   }
+
+  async sendMessage(
+    to: string,
+    message: { content: string; messageType?: string; attachmentUrl?: string },
+    config: Record<string, string>
+  ): Promise<{ platformMessageId: string } | { error: string }> {
+    const apiToken = config.apiToken
+    const roomId = config.roomId
+
+    if (!apiToken) return { error: 'Thiếu API Token' }
+    if (!roomId) return { error: 'Thiếu cấu hình Room ID mặc định' }
+
+    try {
+      // Append To mention if to exists and is not empty
+      let text = message.content
+      if (to && to.trim() !== '') {
+        text = `[To:${to}]\n${text}`
+      }
+
+      const url = `https://api.chatwork.com/v2/rooms/${roomId}/messages`
+      
+      const formData = new URLSearchParams()
+      formData.append('body', text)
+
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 
+          'X-ChatWorkToken': apiToken,
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: formData,
+      })
+      
+      const data = await res.json()
+      if (!res.ok) {
+        return { error: `Chatwork API lỗi: ${JSON.stringify(data.errors || data)}` }
+      }
+      return { platformMessageId: String(data.message_id) }
+    } catch (e: any) {
+      return { error: e.message || 'Lỗi mạng khi gọi Chatwork API' }
+    }
+  }
 }

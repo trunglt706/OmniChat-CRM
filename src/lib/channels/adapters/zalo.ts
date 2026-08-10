@@ -87,4 +87,39 @@ export class ZaloAdapter extends BaseChannelAdapter {
     }))
     return { received: messages.length, messages }
   }
+
+  async sendMessage(
+    to: string,
+    message: { content: string; messageType?: string; attachmentUrl?: string },
+    config: Record<string, string>
+  ): Promise<{ platformMessageId: string } | { error: string }> {
+    const token = config.accessToken
+    if (!token) return { error: 'Thiếu Access Token (OA Token)' }
+
+    try {
+      // Basic text message support
+      const payload: any = {
+        recipient: { user_id: to },
+        message: { text: message.content }
+      }
+
+      const res = await fetch('https://openapi.zalo.me/v3.0/oa/message/cs', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'access_token': token
+        },
+        body: JSON.stringify(payload)
+      })
+
+      const data = await res.json()
+      if (data.error !== 0) {
+        return { error: `Zalo API lỗi: ${data.message || 'Không xác định'}` }
+      }
+
+      return { platformMessageId: String(data.data?.message_id || '') }
+    } catch (e: any) {
+      return { error: e.message || 'Lỗi mạng khi gọi Zalo API' }
+    }
+  }
 }

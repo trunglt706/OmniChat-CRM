@@ -92,6 +92,55 @@ export async function POST(
     data: { updatedAt: new Date() },
   });
 
+  // Gửi tin nhắn ra nền tảng nếu người gửi là agent
+  if (actualSenderType === 'agent') {
+    const { channelRegistry } = await import('@/lib/channels');
+    const conversation = await db.conversation.findUnique({
+      where: { id },
+      include: { customer: { include: { identities: true } } }
+    });
+
+    if (conversation) {
+      const channel = conversation.channel;
+      const identity = conversation.customer.identities.find(i => i.platform === channel);
+      
+      // Với Chatwork, to có thể rỗng và dựa vào roomId
+      // Với FB comment, to có thể là platformMessageId của tin nhắn cuối
+      let to = identity?.platformUserId || '';
+      
+      if (channel === 'facebook_comment') {
+        const lastCustomerMsg = await db.message.findFirst({
+          where: { conversationId: id, senderType: 'customer', platformMessageId: { not: null } },
+          orderBy: { createdAt: 'desc' }
+        });
+        if (lastCustomerMsg?.platformMessageId) {
+          to = lastCustomerMsg.platformMessageId;
+        }
+      }
+
+      const configEntry = await db.channelConfig.findUnique({ where: { channel } });
+      const config = configEntry ? JSON.parse(configEntry.config) : {};
+
+      const adapter = channelRegistry.get(channel);
+      if (adapter && adapter.sendMessage) {
+        const result = await adapter.sendMessage(
+          to, 
+          { content: content || '', messageType, attachmentUrl }, 
+          config
+        );
+
+        if (!('error' in result) && result.platformMessageId) {
+          await db.message.update({
+            where: { id: message.id },
+            data: { platformMessageId: result.platformMessageId }
+          });
+        } else if ('error' in result) {
+          console.error(`[Outbound Message Error] Channel ${channel}:`, result.error);
+        }
+      }
+    }
+  }
+
   // Trigger automation rules for customer messages
   let automationResult: { ruleName: string; actions: string[] } | null = null;
   if (triggerAutomation && actualSenderType === 'customer' && content) {
@@ -102,7 +151,7 @@ export async function POST(
       const actions: string[] = [];
 
       if (matched.replyMessage) {
-        await db.message.create({
+        const botMessage = await db.message.create({
           data: {
             conversationId: id,
             senderType: 'bot',
@@ -112,6 +161,30 @@ export async function POST(
           },
         });
         actions.push('auto_reply');
+
+        // Gửi tin nhắn của Bot ra nền tảng
+        const { channelRegistry } = await import('@/lib/channels');
+        const conversation = await db.conversation.findUnique({
+          where: { id },
+          include: { customer: { include: { identities: true } } }
+        });
+        if (conversation) {
+          const channel = conversation.channel;
+          const identity = conversation.customer.identities.find(i => i.platform === channel);
+          let to = identity?.platformUserId || '';
+          const configEntry = await db.channelConfig.findUnique({ where: { channel } });
+          const config = configEntry ? JSON.parse(configEntry.config) : {};
+          const adapter = channelRegistry.get(channel);
+          if (adapter && adapter.sendMessage) {
+            const result = await adapter.sendMessage(to, { content: matched.replyMessage }, config);
+            if (!('error' in result) && result.platformMessageId) {
+              await db.message.update({
+                where: { id: botMessage.id },
+                data: { platformMessageId: result.platformMessageId }
+              });
+            }
+          }
+        }
       }
 
       if (matched.assignToId) {

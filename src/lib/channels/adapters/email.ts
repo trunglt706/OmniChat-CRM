@@ -90,4 +90,18 @@ export class EmailAdapter extends BaseChannelAdapter {
     }
     return { received: 1, messages: [message] }
   }
+
+  async sendMessage(
+    to: string,
+    message: { content: string; messageType?: string; attachmentUrl?: string },
+    config: Record<string, string>
+  ): Promise<{ platformMessageId: string } | { error: string }> {
+    // Tạm thời mock gửi email (in ra console)
+    // Cần cài đặt thư viện 'nodemailer' và thiết lập Transport để gửi thật
+    console.log(`[Email Mock] Sending email to: ${to}`);
+    console.log(`[Email Mock] Content: ${message.content}`);
+    console.log(`[Email Mock] Config SMTP: ${config.smtpHost}:${config.smtpPort}`);
+    
+    return { platformMessageId: `email_${Date.now()}` }
+  }
 }
