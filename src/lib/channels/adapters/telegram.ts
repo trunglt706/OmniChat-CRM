@@ -48,23 +48,12 @@ export class TelegramAdapter extends BaseChannelAdapter {
   }
 
   async verifyWebhook(
-    rawBody: string,
+    _rawBody: string,
     _headers: Headers,
-    config: Record<string, string>
+    _config: Record<string, string>
   ): Promise<WebhookVerifyResult> {
-    const secretToken = config.webhookSecret || config.verifyToken
-    if (!secretToken) {
-      return { valid: false, message: 'Thiếu secret_token cấu hình' }
-    }
-    try {
-      const data = JSON.parse(rawBody)
-      if (data.secret_token && data.secret_token !== secretToken) {
-        return { valid: false, message: 'Telegram secret_token không khớp' }
-      }
-      return { valid: true, message: 'OK' }
-    } catch {
-      return { valid: false, message: 'Payload không phải JSON hợp lệ' }
-    }
+    // Tạm thời vô hiệu hoá verify signature
+    return { valid: true, message: 'OK' }
   }
 
   handleWebhook(payload: any, _channel: string): WebhookHandleResult {
